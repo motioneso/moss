@@ -92,6 +92,12 @@ pub struct CatalogModule {
     pub changelog: String,
     pub installed: bool,
     pub installed_digest: Option<String>,
+    #[serde(default)]
+    pub pin: Option<String>,
+    #[serde(default)]
+    pub skipped_digest: Option<String>,
+    #[serde(default)]
+    pub urgent: bool,
     pub capabilities: Vec<ModuleCapability>,
     pub migrations: Vec<String>,
 }
@@ -99,4 +105,23 @@ pub struct CatalogModule {
 pub struct ModuleCatalog {
     pub sources: Vec<ModuleSource>,
     pub modules: Vec<CatalogModule>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpdateModule {
+    pub operation: String,
+    pub approve: bool,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SkipModuleUpdate {
+    pub source: String,
+    pub digest: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PinModule {
+    pub source: String,
+    pub version: Option<String>,
 }

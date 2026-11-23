@@ -31,6 +31,7 @@ struct Args {
     actor: Option<uuid::Uuid>,
     operation: Option<String>,
     mode: Mode,
+    skipped_digest: Option<String>,
     modules: Vec<String>,
 }
 
@@ -39,11 +40,14 @@ enum Mode {
     Install,
     List,
     Plan,
+    Skip,
+    Pin,
 }
 
 fn parse(raw: Vec<String>) -> Result<Args> {
     let (mut instance, mut id, mut source, mut root, mut first) = (None, None, None, None, None);
     let (mut approve, mut modules, mut mode) = (false, vec![], Mode::Install);
+    let mut skipped_digest = None;
     let mut version = None;
     let mut actor = None;
     let mut operation = None;
@@ -51,6 +55,9 @@ fn parse(raw: Vec<String>) -> Result<Args> {
     while let Some(flag) = raw.next() {
         if flag == "--approve" {
             approve = true;
+        } else if flag == "--unpin" {
+            mode = Mode::Pin;
+            version = None;
         } else if flag == "--list" {
             mode = Mode::List;
         } else if flag == "--plan" {
@@ -73,6 +80,14 @@ fn parse(raw: Vec<String>) -> Result<Args> {
                 "root-key" => root = Some(value),
                 "first-party-key" => first = Some(value),
                 "version" => version = Some(value),
+                "skip-digest" => {
+                    mode = Mode::Skip;
+                    skipped_digest = Some(value);
+                }
+                "pin-version" => {
+                    mode = Mode::Pin;
+                    version = Some(value);
+                }
                 "actor" => actor = Some(value.parse().context("Invalid actor")?),
                 "operation" => operation = Some(value),
                 _ => bail!("unknown option {flag}\n{USAGE}"),
@@ -93,6 +108,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         first_party_key: first.ok_or_else(|| need("--first-party-key"))?,
         approve,
         version,
+        skipped_digest,
         actor,
         operation,
         mode,
@@ -339,6 +355,9 @@ fn run_selected(
                     "digest": a.digest,
                     "publisher": catalog.trust.publisher(&a.publisher_key, &a.id).map(|p| p.key.clone()).unwrap_or_default(),
                     "installedDigest": installed_modules.get(&a.id).map(|m| &m.digest),
+                    "pin": installed_modules.get(&a.id).and_then(|m| m.pin.as_ref()).map(ToString::to_string),
+                    "skippedDigest": installed_modules.get(&a.id).and_then(|m| m.skipped_digest.as_ref()),
+                    "urgent": a.urgent,
                     "capabilities": a.capabilities,
                     "migrations": a.migrations,
                 })
@@ -352,6 +371,22 @@ fn run_selected(
         return Ok(());
     }
     for name in &args.modules {
+        if args.mode == Mode::Pin {
+            let old = installed_modules
+                .get(name)
+                .context("This module is not installed")?;
+            anyhow::ensure!(
+                old.local_owner.is_none() && old.registry == args.registry_id,
+                "Choose the installed module source"
+            );
+            application.installer.pin(
+                &access,
+                name,
+                args.version.as_deref().map(str::parse).transpose()?,
+            )?;
+            println!("{}", serde_json::json!({"ok":true}));
+            continue;
+        }
         let artifact: Artifact = catalog
             .index
             .modules
@@ -360,6 +395,26 @@ fn run_selected(
             .max_by(|a, b| a.version.cmp(&b.version))
             .cloned()
             .with_context(|| format!("{name} is not in the registry"))?;
+        if args.mode == Mode::Skip {
+            let old = installed_modules
+                .get(name)
+                .context("This module is not installed")?;
+            anyhow::ensure!(
+                old.local_owner.is_none() && old.registry == args.registry_id,
+                "Choose the installed module source"
+            );
+            let digest = args
+                .skipped_digest
+                .as_deref()
+                .context("Choose the update digest")?;
+            anyhow::ensure!(
+                artifact.digest == digest && artifact.version > old.manifest.version,
+                "The offered update changed; review this module again"
+            );
+            application.installer.skip_update(&access, name, digest)?;
+            println!("{}", serde_json::json!({"ok":true}));
+            continue;
+        }
         if args.mode == Mode::Plan {
             let moss = "0.1.0".parse()?;
             let package = catalog

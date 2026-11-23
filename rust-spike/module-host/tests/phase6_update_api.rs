@@ -176,6 +176,18 @@ fn phase6_update_api() {
             response.json::<Value>().unwrap_or(Value::Null),
         )
     };
+    for path in [
+        "/api/modules/update-review",
+        "/api/modules/sample.counter/update",
+        "/api/modules/sample.counter/skip",
+        "/api/modules/sample.counter/pin",
+    ] {
+        assert_eq!(
+            api(Method::POST, path, Some(json!({})), None).0,
+            401,
+            "session required: {path}"
+        );
+    }
     let review = |path: &str| {
         let (status, value) = api(
             Method::POST,
@@ -183,7 +195,7 @@ fn phase6_update_api() {
             Some(json!({"module":"sample.counter","source":"sample-registry"})),
             Some(&cookie),
         );
-        assert_eq!(status, 200, "review: {value}");
+        assert_eq!(status, 200, "review {path}: {value}");
         value
     };
     let wait = |id: &str| {
@@ -265,7 +277,11 @@ fn phase6_update_api() {
     };
     // Both kinds of growth must wait, including an urgent offer.
     for (serial, growth) in [(2, "capability"), (3, "migration")] {
-        let offered = fixtures::publish_update(&keys, &registry, "2.0.0", serial, growth);
+        if std::env::var("JS410_GROWTH").is_ok_and(|only| only != growth) {
+            continue;
+        }
+        let offered =
+            fixtures::publish_update(&keys, &registry, &format!("{serial}.0.0"), serial, growth);
         let pending = review("/api/modules/update-review");
         assert_eq!(pending["review"]["urgent"], true);
         assert_eq!(pending["review"]["previous"], first.digest);
@@ -305,7 +321,7 @@ fn phase6_update_api() {
         health();
     }
     let stale = review("/api/modules/update-review");
-    fixtures::publish_update(&keys, &registry, "2.0.0", 4, "capability");
+    fixtures::publish_update(&keys, &registry, "4.0.0", 4, "capability");
     assert_eq!(update(&stale, true).0, 202);
     assert_eq!(
         wait(stale["id"].as_str().unwrap())["stage"],
@@ -314,14 +330,15 @@ fn phase6_update_api() {
     );
     assert_eq!(installed()["installedDigest"], first.digest);
     health();
-    fixtures::publish_update(&keys, &registry, "2.0.0", 5, "unhealthy");
-    let broken = review("/api/modules/update-review");
-    assert_eq!(update(&broken, true).0, 202);
+    let same_version = review("/api/modules/update-review");
+    fixtures::publish_update(&keys, &registry, "4.0.0", 5, "migration");
+    assert_eq!(update(&same_version, true).0, 202);
     assert_eq!(
-        wait(broken["id"].as_str().unwrap())["stage"],
+        wait(same_version["id"].as_str().unwrap())["stage"],
         "failed",
-        "health failure rolls back"
+        "same version changed digest must refuse stale review"
     );
+    fixtures::publish_update(&keys, &registry, "5.0.0", 6, "capability");
     assert_eq!(installed()["installedDigest"], first.digest);
     health();
     let (status, _) = api(
@@ -332,6 +349,28 @@ fn phase6_update_api() {
     );
     assert_eq!(status, 422, "payload actor must be refused");
     let offer = installed();
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/sample.counter/skip",
+            Some(json!({"source":"sample-registry","digest":first.digest})),
+            Some(&cookie)
+        )
+        .0,
+        422,
+        "skip must name the current offer"
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/sample.counter/pin",
+            Some(json!({"source":"sample-registry","version":"9.0.0"})),
+            Some(&cookie)
+        )
+        .0,
+        422,
+        "pin must name the installed version"
+    );
     assert_eq!(
         api(
             Method::POST,
@@ -383,7 +422,7 @@ fn phase6_update_api() {
         .0,
         200
     );
-    fixtures::publish_update(&keys, &registry, "3.0.0", 5, "unhealthy");
+    fixtures::publish_update(&keys, &registry, "6.0.0", 7, "unhealthy");
     let broken = review("/api/modules/update-review");
     assert_eq!(update(&broken, true).0, 202);
     assert_eq!(
@@ -397,7 +436,7 @@ fn phase6_update_api() {
         "failed update keeps old digest"
     );
     health();
-    fixtures::publish_update(&keys, &registry, "4.0.0", 6, "capability");
+    fixtures::publish_update(&keys, &registry, "7.0.0", 8, "capability");
     let good = review("/api/modules/update-review");
     assert_eq!(update(&good, true).0, 202);
     assert_eq!(
@@ -406,23 +445,6 @@ fn phase6_update_api() {
         "approved update must work"
     );
     assert_eq!(installed()["installedDigest"], good["review"]["digest"]);
-    health();
-    fixtures::publish_update(&keys, &registry, "3.0.0", 5, "unhealthy");
-    let broken = review("/api/modules/update-review");
-    assert_eq!(update(&broken, true).0, 202);
-    assert_eq!(
-        wait(broken["id"].as_str().unwrap())["stage"],
-        "failed",
-        "health failure rolls back update"
-    );
-    assert_eq!(installed()["installedDigest"], first.digest);
-    health();
-    // A successful reviewed update proves the endpoint is not a blanket refusal.
-    let good = fixtures::publish_update(&keys, &registry, "4.0.0", 6, "capability");
-    let approved = review("/api/modules/update-review");
-    assert_eq!(update(&approved, true).0, 202);
-    assert_eq!(wait(approved["id"].as_str().unwrap())["stage"], "succeeded");
-    assert_eq!(installed()["installedDigest"], good.digest);
     health();
     drop(server);
 }

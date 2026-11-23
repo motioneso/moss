@@ -25,7 +25,10 @@ pub fn publish_update(
         manifest.capabilities[0].resources.insert("extra".into());
     }
     if growth == "migration" {
-        manifest.database.migrations.push("sql/001.sql".into());
+        manifest
+            .database
+            .migrations
+            .push("sql/001_entries.sql".into());
         manifest
             .database
             .owned_tables
@@ -46,7 +49,7 @@ pub fn publish_update(
         .replace("local.get $payload local.get $length i32.const 32 call $kv", &format!("i32.const 32 i32.const 0 i32.store i32.const 36 i32.const 256 i32.store i32.const 40 i32.const {} i32.store", reply.len()));
     files.insert("code/module.wasm".into(), wat::parse_str(source).unwrap());
     if growth == "migration" {
-        files.insert("sql/001.sql".into(), b"CREATE TABLE app.sample_counter_entries (id uuid PRIMARY KEY, owner_user_id uuid NOT NULL);".to_vec());
+        files.insert("sql/001_entries.sql".into(), b"CREATE TABLE app.sample_counter_entries (id uuid PRIMARY KEY, owner_user_id uuid NOT NULL);".to_vec());
     }
     if growth == "unhealthy" {
         files.insert(
@@ -56,6 +59,10 @@ pub fn publish_update(
     }
     let bytes = archive::pack(&files).unwrap();
     artifact.digest = trust::digest(&bytes);
+    let package =
+        archive::Package::read(&bytes, &artifact.digest, &"0.1.0".parse().unwrap()).unwrap();
+    moss_module_host::sql::check(&package, &moss_module_host::sql::LegacyInventory::default())
+        .unwrap();
     artifact.size = bytes.len() as u64;
     artifact.signature = common::Keys::sign(&keys.publisher, artifact.digest.as_bytes());
     fs::write(

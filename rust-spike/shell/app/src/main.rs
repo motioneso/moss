@@ -42,6 +42,7 @@ mod module_local;
 mod module_management;
 mod module_operation;
 mod module_sources;
+mod module_updates;
 mod modules;
 mod proactive_feedback;
 mod runner_data;

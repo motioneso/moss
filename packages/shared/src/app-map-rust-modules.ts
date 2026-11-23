@@ -13,6 +13,13 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
   },
   {
     moduleId: "core",
+    id: "rust-module-update-service",
+    runtime: "rust",
+    description:
+      "An instance administrator can review an installed registry module through POST /api/modules/update-review, then approve its saved operation through POST /api/modules/{module}/update. Even urgent offers wait for capability and migration approval. Execution refuses changed package bytes or a changed installed digest and leaves the previous module usable when activation fails. POST /api/modules/{module}/skip records the exact offered digest; later digests remain eligible. POST /api/modules/{module}/pin pins the installed version or lifts its pin with a null version. Pins prevent updates until lifted. Both choices survive restart and appear as pin and skippedDigest in the catalog alongside the urgent marker. The session supplies the actor; these configuration powers grant no access to another account's private data. These APIs add no screens."
+  },
+  {
+    moduleId: "core",
     id: "rust-module-runtime-revocation",
     runtime: "rust",
     description:
@@ -29,6 +36,14 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 
 // Management failures are HTTP statuses and saved result messages, not emitted error codes.
 export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.update_choice_refused",
+    runtime: "rust",
+    description:
+      "A missing installed module, mismatched review, unapproved update, stale digest, invalid pin or unavailable source refuses the update choice. Sign in as an instance administrator, check the saved operation and current catalog, obtain a fresh review and approve it. Lift a pin before updating; pin only the installed version. A failed update retains the previous digest: check it before trying again. Payload account fields are refused; use the signed-in account.",
+    path: "/settings?section=instmods",
+    scope: "admin"
+  },
   {
     id: "core.modules.registry_revocation",
     description:

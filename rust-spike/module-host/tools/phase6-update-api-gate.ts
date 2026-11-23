@@ -10,7 +10,13 @@ const urls = getMossDatabaseUrls();
 function cargo(args: string[], extra: Record<string, string> = {}) {
   const result = spawnSync("cargo", ["+1.95.0", ...args], {
     stdio: "inherit",
-    env: { ...process.env, ...extra }
+    env: {
+      ...process.env,
+      CARGO_BUILD_JOBS: "2",
+      CARGO_PROFILE_DEV_DEBUG: "0",
+      CARGO_PROFILE_TEST_DEBUG: "0",
+      ...extra
+    }
   });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
@@ -55,3 +61,15 @@ cargo(
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
   }
 );
+
+cargo([
+  "test",
+  "--offline",
+  "--locked",
+  "--manifest-path",
+  "rust-spike/module-host/Cargo.toml",
+  "--test",
+  "phase6_update_policy",
+  "--",
+  "--nocapture"
+]);
