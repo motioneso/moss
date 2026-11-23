@@ -1,0 +1,155 @@
+name: Rust module release and bundle
+on:
+  push:
+    branches: [main]
+    paths: ["modules/**", "rust-spike/**", ".github/workflows/rust-modules-registry.yml"]
+  pull_request:
+    paths: ["modules/**", "rust-spike/**", ".github/workflows/rust-modules-registry.yml"]
+  workflow_dispatch:
+    inputs:
+      approved_report:
+        description: Exact public review report digest from a prior manual preview (leave empty to preview)
+        required: false
+        type: string
+permissions:
+  contents: read
+# Superseded PR commits yield runners; every other run remains independent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check manual release configuration without showing secrets
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          MOSS_RUST_REGISTRY_SIGNING_KEY_ID: ${{ secrets.MOSS_RUST_REGISTRY_SIGNING_KEY_ID }}
+          MOSS_RUST_REGISTRY_SIGNING_PRIVATE_KEY: ${{ secrets.MOSS_RUST_REGISTRY_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo 'Rust module publication must dispatch from main' >&2; exit 1
+          fi
+          for name in MOSS_RUST_REGISTRY_SIGNING_KEY_ID MOSS_RUST_REGISTRY_SIGNING_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "Missing $name; Rust registry publication is disabled" >&2; exit 1
+            fi
+          done
+  packages:
+    needs: configuration
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-release-target
+      RUSTUP_HOME: ${{ github.workspace }}/.rust-release-rustup
+    steps:
+      - name: Keep source bytes identical across operating systems
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Provision the declared toolchain and Wasm targets
+        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown --target wasm32-wasip2
+      - name: Check reproducible source locations before the full build
+        run: python rust-spike/module-publisher/tools/test_repro_rustc.py
+      - name: Build every first-party package with its existing packer
+        run: python rust-spike/module-publisher/tools/build_first_party.py .rust-packages
+      - name: Record unsigned package digests
+        run: python rust-spike/module-publisher/tools/compare_digests.py write .rust-packages digests.json
+      - name: Retain unsigned build inputs for reproducibility diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-build-inputs-${{ matrix.os }}
+          path: .rust-packages/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Exercise signed release assembly using a generated key
+        run: cargo +1.95.0 run --locked --manifest-path rust-spike/module-publisher/Cargo.toml --bin moss -- release .rust-packages .rust-dry-release --dry-run
+      - name: Compile the stand-in with the generated allowlist and package signatures
+        shell: bash
+        run: |
+          MOSS_COMPILED_BUNDLE="$GITHUB_WORKSPACE/.rust-dry-release/compiled_bundle.rs" cargo +1.95.0 build --locked --manifest-path rust-spike/module-publisher/Cargo.toml --bin moss-bundle-bootstrap
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-digests-${{ matrix.os }}
+          path: digests.json
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: rust-first-party-packages
+          path: .rust-packages/*.mosspkg
+          include-hidden-files: true
+          if-no-files-found: error
+      # These are CI job handoffs, not release publication. Dry runs never call gh upload.
+      - name: Check offline bootstrap and refusal controls
+        if: runner.os == 'Linux'
+        run: bash rust-spike/module-publisher/tools/release-check.sh
+  compare:
+    needs: packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rust-digests-*
+          path: .rust-digests
+      - name: Require identical packages on all three platforms
+        run: python rust-spike/module-publisher/tools/compare_digests.py compare .rust-digests/rust-digests-ubuntu-latest/digests.json .rust-digests/rust-digests-macos-latest/digests.json .rust-digests/rust-digests-windows-latest/digests.json
+  publish:
+    # Serialize the complete previous-snapshot read/build/swap cycle.
+    concurrency:
+      group: rust-modules-publication
+      cancel-in-progress: false
+    if: github.event_name == 'workflow_dispatch'
+    needs: [packages, compare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-release-target
+      RUSTUP_HOME: ${{ github.workspace }}/.rust-release-rustup
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-first-party-packages
+          path: .rust-packages
+      - name: Provision the declared toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Read the previous complete signed snapshot if the release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python rust-spike/module-publisher/tools/previous_snapshot.py "$GITHUB_REPOSITORY" .rust-previous
+      - name: Build the publisher before supplying signing secrets
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/module-publisher/Cargo.toml --bin moss
+      - name: Sign and verify the staged registry and installer bundle
+        env:
+          MOSS_RUST_REGISTRY_SIGNING_KEY_ID: ${{ secrets.MOSS_RUST_REGISTRY_SIGNING_KEY_ID }}
+          MOSS_RUST_REGISTRY_SIGNING_PRIVATE_KEY: ${{ secrets.MOSS_RUST_REGISTRY_SIGNING_PRIVATE_KEY }}
+          MOSS_RUST_REGISTRY_APPROVED_REPORT: ${{ inputs.approved_report }}
+        run: |
+          previous=()
+          if [ -d .rust-previous ]; then previous=(.rust-previous); fi
+          "$CARGO_TARGET_DIR/debug/moss" release .rust-packages .rust-release "${previous[@]}"
+      - name: Compile the stand-in using the approved production digests
+        run: MOSS_COMPILED_BUNDLE="$GITHUB_WORKSPACE/.rust-release/compiled_bundle.rs" cargo +1.95.0 build --locked --manifest-path rust-spike/module-publisher/Cargo.toml --bin moss-bundle-bootstrap
+      - name: Upload immutable packages, then swap the complete signed registry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python rust-spike/module-publisher/tools/release_transport.py .rust-release/registry "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$CARGO_TARGET_DIR/debug/moss-bundle-bootstrap"

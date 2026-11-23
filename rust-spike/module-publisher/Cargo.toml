@@ -9,6 +9,11 @@ default-run = "moss-module-publisher"
 
 [dependencies]
 anyhow = "1"
+access-context = { path = "../access-context" }
+safety-core = { path = "../safety-core" }
+vault = { path = "../vault" }
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 moss-module-host = { path = "../module-host" }
@@ -17,8 +22,9 @@ semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
-[dev-dependencies]
 tempfile = "3"
+
+[dev-dependencies]
 wat = "=1.239.0"
 
 [profile.dev]

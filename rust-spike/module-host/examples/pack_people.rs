@@ -19,6 +19,7 @@ fn add_ui(files: &mut BTreeMap<String, Vec<u8>>, root: &Path, current: &Path) ->
                     .strip_prefix(root)?
                     .to_str()
                     .context("UI path is not UTF-8")?
+                    .replace(std::path::MAIN_SEPARATOR, "/")
             );
             ensure!(
                 moss_module_host::manifest::relative_path(&path),

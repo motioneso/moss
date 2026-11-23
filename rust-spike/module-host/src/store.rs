@@ -116,9 +116,9 @@ pub struct ModuleApproval {
     pub consent: Consent,
     pub changes: Approval,
 }
-struct Activation {
-    approved: bool,
-    pin_override: Option<Version>,
+pub(crate) struct Activation {
+    pub(crate) approved: bool,
+    pub(crate) pin_override: Option<Version>,
 }
 impl Approval {
     pub fn required(&self) -> bool {
@@ -330,7 +330,7 @@ impl Installer {
             access,
             package,
             &bytes,
-            catalog,
+            &catalog.trust,
             &artifact.publisher_key,
             Activation {
                 approved,
@@ -433,7 +433,7 @@ impl Installer {
             access,
             package,
             bytes,
-            catalog,
+            &catalog.trust,
             publisher_key,
             Activation {
                 approved,
@@ -441,12 +441,12 @@ impl Installer {
             },
         )
     }
-    fn activate(
+    pub(crate) fn activate(
         &self,
         access: &AccessContext,
         package: Package,
         bytes: &[u8],
-        catalog: &Catalog,
+        registry_trust: &trust::TrustedRegistry,
         key_id: &str,
         options: Activation,
     ) -> Result<()> {
@@ -466,11 +466,11 @@ impl Installer {
             .get(id)
             .or_else(|| state.retained.get(id))
             .cloned();
-        let publisher = catalog.trust.publisher(key_id, id)?;
+        let publisher = registry_trust.publisher(key_id, id)?;
         for (registry, seen) in &state.registries {
             ensure!(
                 seen.removed
-                    || registry == &catalog.trust.identity.id
+                    || registry == &registry_trust.identity.id
                     || seen
                         .publishers
                         .get(&publisher.prefix)
@@ -485,7 +485,7 @@ impl Installer {
             );
             ensure!(
                 old.publisher_public_key == publisher.key
-                    || old.registry == catalog.trust.identity.id
+                    || old.registry == registry_trust.identity.id
                         && publisher.replaces.contains(&old.publisher_public_key),
                 "Only the registry root may approve a publisher replacement"
             );
@@ -542,7 +542,7 @@ impl Installer {
                     digest: package.digest.clone(),
                     publisher_key: key_id.into(),
                     publisher_public_key: publisher.key.clone(),
-                    registry: catalog.trust.identity.id.clone(),
+                    registry: registry_trust.identity.id.clone(),
                     pin: pin_override.or_else(|| old.as_ref().and_then(|m| m.pin.clone())),
                     previous: old.as_ref().map(|m| m.digest.clone()),
                     disabled: old.as_ref().and_then(|m| m.disabled.clone()),

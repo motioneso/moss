@@ -261,6 +261,15 @@ pub fn verify(config: &Path, others: &[String]) -> Result<Value> {
     )
 }
 pub fn assemble(config: &Path, selection: &Path, key: &Path, output: &Path) -> Result<Value> {
+    assemble_with_key(config, selection, &read_bounded(key, 4096)?, output)
+}
+
+pub fn assemble_with_key(
+    config: &Path,
+    selection: &Path,
+    key: &[u8],
+    output: &Path,
+) -> Result<Value> {
     let mut snapshot = Snapshot::open(config)?;
     ensure!(
         !snapshot.files.contains_key("bundle.json"),
@@ -328,7 +337,7 @@ pub fn assemble(config: &Path, selection: &Path, key: &Path, output: &Path) -> R
     };
     let bytes = serde_json::to_vec(&bundle)?;
     ensure!(bytes.len() as u64 <= MAX_INDEX, "Bundle is too large");
-    let key = Ed25519KeyPair::from_pkcs8(&read_bounded(key, 4096)?)
+    let key = Ed25519KeyPair::from_pkcs8(key)
         .map_err(|_| anyhow::anyhow!("Invalid index signing key"))?;
     ensure!(
         STANDARD.encode(key.public_key().as_ref())

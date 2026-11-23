@@ -3,6 +3,30 @@ use moss_module_publisher::{artifacts, registry_artifacts};
 use std::path::Path;
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("release") {
+        if args.len() < 3 {
+            bail!("Usage: moss release PACKAGES OUTPUT [PREVIOUS_FOLDER] [--dry-run]");
+        }
+        let dry_run = args.last().map(String::as_str) == Some("--dry-run");
+        let count = args.len() - usize::from(dry_run);
+        if !(3..=4).contains(&count) {
+            bail!("Usage: moss release PACKAGES OUTPUT [PREVIOUS_FOLDER] [--dry-run]");
+        }
+        let previous = if count == 4 {
+            Some(Path::new(&args[3]))
+        } else {
+            None
+        };
+        let result = moss_module_publisher::release::build(
+            Path::new(&args[1]),
+            Path::new(&args[2]),
+            previous,
+            dry_run,
+        )?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
+
     if args.first().map(String::as_str) == Some("registry") {
         let result = match args.get(1).map(String::as_str) {
             Some("assemble") if args.len() == 6 => registry_artifacts::assemble(Path::new(&args[2]), Path::new(&args[3]), Path::new(&args[4]), Path::new(&args[5]))?,
