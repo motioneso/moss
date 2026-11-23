@@ -1,6 +1,7 @@
 //! Review proposals are recomputed from authenticated package and registry bytes on every run.
 pub mod artifacts;
 pub mod registry_artifacts;
+pub mod release;
 use anyhow::{ensure, Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 pub use moss_module_host::registry_review::ReviewRequest;

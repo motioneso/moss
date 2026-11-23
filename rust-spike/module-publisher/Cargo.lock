@@ -1326,15 +1326,20 @@ dependencies = [
 name = "moss-module-publisher"
 version = "0.1.0"
 dependencies = [
+ "access-context",
  "anyhow",
  "base64 0.22.1",
  "chrono",
  "moss-module-host",
  "ring",
+ "safety-core",
  "semver",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
+ "uuid",
+ "vault",
  "wat",
 ]
 
