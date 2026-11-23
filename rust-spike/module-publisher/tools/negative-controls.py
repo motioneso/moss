@@ -52,6 +52,12 @@ controls = [
     (lib, 'bytes.len() as u64 <= limit', 'true', ["oversized_input_is_refused"]),
     (lib, 'index\n            .serial\n            .checked_add(1)\n            .context("Index serial exhausted")?', 'index.serial.wrapping_add(1)', ["exhausted_index_serial_is_refused"]),
 
+    (lib, 'None => manifest.capabilities.clone()', 'None => Vec::new()', ["existing_publisher_new_module_needs_capability_review"]),
+    (lib, '.chain(\n            manifest\n                .credentials\n                .values()\n                .flat_map(|c| c.hosts.iter().cloned()),\n        )', '', ["credential_hosts_are_also_diffed"]),
+    (lib, '.difference(&old_hosts)', '.union(&old_hosts)', ["unchanged_and_removed_hosts_do_not_grow"]),
+    (lib, 'bytes.len() as u64 <= MAX_INDEX', 'true', ["oversized_proposed_index_is_refused"]),
+    (lib, '!seen.blocks_package(&digest, &submission.publisher_key, &publisher.key)', 'true', ["blocked_digest_is_refused", "blocked_publisher_is_refused"]),
+
 ]
 logs = Path(os.environ.get("PUBLISH_REVIEW_PROOF_DIR") or tempfile.mkdtemp(prefix="moss-publish-negative-"))
 logs.mkdir(parents=True, exist_ok=True)
@@ -69,7 +75,9 @@ for path, original, replacement, tests in controls:
             log = result.stdout + result.stderr
             log_path = logs / f"{count + 1:02d}-{test}.log"
             log_path.write_text(log)
-            if result.returncode == 0 or "test result: FAILED. 0 passed; 1 failed" not in log:
+            marker_test = test in {"fetch_host_growth_waits_and_is_marked", "credential_hosts_are_also_diffed", "unchanged_and_removed_hosts_do_not_grow"}
+            expected_failure = "Expected refusal:" in log or (marker_test and "assertion `left == right` failed" in log)
+            if result.returncode == 0 or "test result: FAILED. 0 passed; 1 failed" not in log or not expected_failure:
                 raise SystemExit(f"Control did not produce the required assertion failure: {log_path}")
             count += 1
             print(f"RED without guard: {test} ({path.name})", flush=True)

@@ -52,7 +52,7 @@ From `~/Jarv1s`, unpiped commands with explicit Rust environment:
 RUSTUP_HOME="$HOME/.rustup" CARGO_TARGET_DIR=/tmp/js405-target \
   pnpm test:rust-module-publisher
 RUSTUP_HOME="$HOME/.rustup" CARGO_TARGET_DIR=/tmp/js405-target \
-  PUBLISH_REVIEW_PROOF_DIR=/tmp/js405-negative-final \
+  PUBLISH_REVIEW_PROOF_DIR=/tmp/js405-negative-reviewed \
   python3 rust-spike/module-publisher/tools/negative-controls.py
 pnpm lint
 pnpm format:check
@@ -60,10 +60,13 @@ pnpm check:file-size
 pnpm typecheck
 ```
 
-Focused runner: **30 passed, exit 0**. The control runner uses one cargo build at a time,
+Focused runner: **37 passed, exit 0**. The control runner uses one cargo build at a time,
 `CARGO_BUILD_JOBS=2`, dev/test debug info off. It restores original source bytes in `finally`.
-**29 guard-removal controls failed at test assertions**, followed by **30 passing tests, exit 0**.
-A compiler error does not count as a successful control. An initial control trial hit a type
+**35 guard-removal controls failed at test assertions**, followed by **37 passing tests, exit 0**.
+A compiler error or a different refusal reason does not count as a successful control.
+Refusal controls require unexpected acceptance; growth-marker controls require a failed marker
+assertion. The immutable-SQL fixture declares its owned table, so removing the immutability
+guard accepts the changed SQL rather than tripping an unrelated ownership check. An initial control trial hit a type
 inference error; the final complete run corrected it and passed all controls.
 
 Controls cover archive/manifest/import/SQL/model/publisher checks, same/downgraded/non-latest
@@ -72,6 +75,23 @@ review and signed growth markers, valid human signatures bound to wrong digest/d
 candidate/base, untrusted reviewer, forged signature, candidate compatibility, wrong registry,
 expired base, wrong index key, input size and serial exhaustion. Fixtures generate fresh
 Ed25519 keys in temporary directories; no private keys or external credentials are in source.
+
+## Independent review follow-up
+
+Read-only Claude review of `4303efaa5` found no major or blocker issues. Its first three minor
+findings are addressed: credential-host and existing-publisher/new-module coverage, unchanged and
+removed hosts, a real host round trip of the emitted signed index, the shared host index-size
+limit, and refusal of blocked digests/publishers using the existing host revocation policy.
+Warnings still permit publication. The additional refusal tests were observed failing before
+their guards were added (34 passed, 3 failed), then green. Their guard-removal controls are part
+of the final count above. Existing host regression suites passed 19 boundary and 9 registry tests;
+the pre-existing real-TLS test was ignored.
+
+The remaining minor finding is accepted and documented: historical review supports today's
+schema/ABI only, and indexes with `publishReviews` require an updated host. A future schema/ABI
+migration needs an explicit historical decoder and coordinated host/index rollout. No older
+format compatibility is claimed by this slice. Final independent review output is in the task
+proof artifact.
 
 ## Not proven by this slice
 

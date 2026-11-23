@@ -10,6 +10,7 @@ fn clean_package_and_signed_growth_index() {
     assert_eq!(review["diff"]["capabilities"], json!([]));
     let envelope = f.publish_ok(None);
     f.verify_index(&envelope);
+    f.roundtrip(&envelope);
     let index: Value = serde_json::from_str(envelope["index"].as_str().unwrap()).unwrap();
     assert!(
         index["publishReviews"][&f.digest()]["request"]["diff"]["capabilities"]
@@ -306,4 +307,76 @@ fn exhausted_index_serial_is_refused() {
     let f = Fixture::new();
     f.edit_index(|i| i["serial"] = json!(u64::MAX));
     f.refused("publish", None, "Index serial exhausted");
+}
+
+#[test]
+fn existing_publisher_new_module_needs_capability_review() {
+    let f = Fixture::new();
+    f.edit_manifest(|m| m["id"] = json!("sample.other"));
+    let request = f.review_ok();
+    assert_eq!(request["diff"]["newPublisher"], false);
+    assert_eq!(request["previousDigest"], Value::Null);
+    f.refused("publish", None, "Human approval required");
+    assert_eq!(request["diff"]["capabilities"][0]["port"], "kv");
+}
+
+#[test]
+fn credential_hosts_are_also_diffed() {
+    let f = Fixture::new();
+    f.edit_manifest(|m| {
+        m["capabilities"].as_array_mut().unwrap().push(json!({"port":"credentials","operations":["get"]}));
+        m["credentials"] = json!({"service":{"scope":"account","hosts":["example.org"],"attachment":{"kind":"header","name":"authorization"}}});
+    });
+    assert_eq!(f.review_ok()["diff"]["fetchHosts"], json!(["example.org"]));
+    f.refused("publish", None, "Human approval required");
+}
+
+#[test]
+fn unchanged_and_removed_hosts_do_not_grow() {
+    let f = Fixture::new();
+    f.edit_manifest(|m| {
+        m["capabilities"].as_array_mut().unwrap().push(
+            json!({"port":"fetch","operations":["get"],"resources":["example.org","example.com"]}),
+        )
+    });
+    f.copy_current_to_history();
+    assert_eq!(f.review_ok()["diff"]["fetchHosts"], json!([]));
+    f.verify_index(&f.publish_ok(None));
+    f.edit_manifest(|m| m["capabilities"][1]["resources"] = json!(["example.org"]));
+    assert_eq!(f.review_ok()["diff"]["fetchHosts"], json!([]));
+    f.verify_index(&f.publish_ok(None));
+}
+
+#[test]
+fn oversized_proposed_index_is_refused() {
+    let f = Fixture::new();
+    f.near_full_index();
+    f.refused("publish", None, "Proposed index exceeds the host limit");
+}
+
+#[test]
+fn blocked_publisher_is_refused() {
+    let f = Fixture::new();
+    f.edit_index(|i| {
+        i["revoked"] = json!([{"target":"sample","reason":"Test block","level":"block"}])
+    });
+    f.refused("review", None, "blocked by registry revocation");
+}
+
+#[test]
+fn blocked_digest_is_refused() {
+    let f = Fixture::new();
+    f.edit_index(|i| {
+        i["revoked"] = json!([{"target":f.digest(),"reason":"Test block","level":"block"}])
+    });
+    f.refused("review", None, "blocked by registry revocation");
+}
+
+#[test]
+fn warned_publisher_can_still_publish() {
+    let f = Fixture::new();
+    f.edit_index(|i| {
+        i["revoked"] = json!([{"target":"sample","reason":"Test warning","level":"warn"}])
+    });
+    f.verify_index(&f.publish_ok(None));
 }

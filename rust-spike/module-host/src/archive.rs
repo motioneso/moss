@@ -25,6 +25,8 @@ impl Package {
     }
     /// Validate historical bytes for comparison, without claiming they run on today's host.
     /// All archive, manifest and digest checks still run. Never use this to install code.
+    /// This reader supports today's schema/ABI only; a future format change needs an explicit
+    /// historical decoder before it can review releases of that older format.
     pub fn read_for_review(bytes: &[u8], expected: &str) -> Result<Self> {
         ensure!(
             bytes.len() as u64 <= MAX_PACKAGE,

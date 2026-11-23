@@ -59,6 +59,14 @@ from publication. `publishReviews[packageDigest]` carries the request/diff and o
 approval inside the signed index. Keep the existing history and revocations. Part 4 owns archive
 and registry artifact commands, and part 5 owns atomic staging/deployment and release custody.
 
+Blocked package digests or publisher keys are refused using the host's revocation policy;
+warning-only revocations still permit publication. The proposed index must fit the host's shared
+index size limit, including accumulated review records.
+
+This release reads the current schema and ABI for both candidate and historical packages.
+A future schema/ABI transition needs a historical decoder. Indexes containing `publishReviews`
+require an updated host; coordinate that format rollout with the release owner.
+
 The output is a proposal against one signed base. The release owner must serialize publications
 and compare the current base digest before staging it; publishing two proposals from one base
 must not overwrite one another. Changing the base requires a fresh review request/approval.

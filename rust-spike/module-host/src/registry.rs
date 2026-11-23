@@ -15,6 +15,8 @@ use std::{
 };
 use url::Url;
 
+pub const MAX_INDEX: u64 = 8 * 1024 * 1024;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Artifact {
@@ -173,7 +175,8 @@ impl SeenRegistry {
                 .get(target)
                 .map_or(target == publisher_id, |key| key == public_key)
     }
-    pub(crate) fn blocks_package(
+    /// Shared block policy for installers, runtime dispatch and publisher validation.
+    pub fn blocks_package(
         &self,
         digest: &str,
         publisher_id: &str,
@@ -371,7 +374,7 @@ impl Catalog {
         let sig = String::from_utf8(source.fetch("registry.json.sig", 4096)?)?;
         let root_signature = sig.as_bytes().to_vec();
         let trust = TrustedRegistry::open(&identity, &sig, root_key, first_party_key)?;
-        let bytes = source.fetch("index.json", 8 * 1024 * 1024)?;
+        let bytes = source.fetch("index.json", MAX_INDEX)?;
         let sig = String::from_utf8(source.fetch("index.json.sig", 4096)?)?;
         let index: Index = serde_json::from_slice(&bytes)?;
         let key = trust

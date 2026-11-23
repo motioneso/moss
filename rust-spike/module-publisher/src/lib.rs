@@ -5,7 +5,7 @@ pub use moss_module_host::registry_review::ReviewRequest;
 use moss_module_host::{
     archive::{Package, MAX_PACKAGE},
     manifest::Manifest,
-    registry::{Artifact, Catalog, Channel, Index, SeenRegistry, Source},
+    registry::{Artifact, Catalog, Channel, Index, SeenRegistry, Source, MAX_INDEX},
     registry_review::{HumanApproval, PublishDiff, PublishReview},
     runtime::{Host, Limits},
     sql::{self, LegacyInventory},
@@ -128,6 +128,10 @@ impl<'a> Prepared<'a> {
         let publisher = catalog
             .trust
             .publisher(&submission.publisher_key, &package.manifest.id)?;
+        ensure!(
+            !seen.blocks_package(&digest, &submission.publisher_key, &publisher.key),
+            "Package or publisher is blocked by registry revocation"
+        );
         let new_publisher = !catalog.index.modules.iter().any(|a| {
             catalog
                 .trust
@@ -251,6 +255,10 @@ impl<'a> Prepared<'a> {
         );
         index.modules.push(self.artifact);
         let bytes = serde_json::to_vec(&index)?;
+        ensure!(
+            bytes.len() as u64 <= MAX_INDEX,
+            "Proposed index exceeds the host limit"
+        );
         let signature = STANDARD.encode(key.sign(&bytes).as_ref());
         Ok(SignedIndex {
             index: String::from_utf8(bytes)?,

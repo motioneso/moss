@@ -236,7 +236,7 @@ impl Fixture {
         }
     }
     pub fn add_prior_sql(&self) {
-        self.edit_manifest(|m| m["database"] = json!({"migrations":["sql/001_create.sql"]}));
+        self.edit_manifest(|m| m["database"] = json!({"migrations":["sql/001_create.sql"],"ownedTables":["app.sample_counter_rows"]}));
         self.files.borrow_mut().insert(
             "sql/001_create.sql".into(),
             b"CREATE TABLE app.sample_counter_rows (id uuid);".to_vec(),
@@ -284,6 +284,62 @@ impl Fixture {
         files.insert("moss.module.json".into(), serde_json::to_vec(&m).unwrap());
         let a = self.store_prior(&files);
         self.edit_index(|i| i["modules"] = json!([a]));
+    }
+    pub fn copy_current_to_history(&self) {
+        let mut files = self.files.borrow().clone();
+        let mut m: Value = serde_json::from_slice(&files["moss.module.json"]).unwrap();
+        m["version"] = json!("1.0.0");
+        files.insert("moss.module.json".into(), serde_json::to_vec(&m).unwrap());
+        let a = self.store_prior(&files);
+        self.edit_index(|i| i["modules"] = json!([a]));
+    }
+    pub fn roundtrip(&self, envelope: &Value) {
+        use moss_module_host::registry::{Catalog, SeenRegistry, Source};
+        let staged = tempfile::tempdir().unwrap();
+        std::fs::create_dir(staged.path().join("packages")).unwrap();
+        for name in ["registry.json", "registry.json.sig"] {
+            std::fs::copy(
+                self.dir.path().join("registry").join(name),
+                staged.path().join(name),
+            )
+            .unwrap();
+        }
+        std::fs::write(
+            staged.path().join("index.json"),
+            envelope["index"].as_str().unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            staged.path().join("index.json.sig"),
+            envelope["signature"].as_str().unwrap(),
+        )
+        .unwrap();
+        std::fs::copy(
+            self.dir.path().join("candidate.mosspkg"),
+            staged
+                .path()
+                .join(format!("packages/{}.mosspkg", self.digest())),
+        )
+        .unwrap();
+        let catalog = Catalog::fetch(
+            Source::Folder(staged.path().into()),
+            &public(&self.root),
+            &public(&self.root),
+            &mut SeenRegistry::default(),
+        )
+        .unwrap();
+        let artifact = catalog.index.modules.last().unwrap();
+        let package = catalog
+            .download(artifact, &"0.1.0".parse().unwrap())
+            .unwrap();
+        assert_eq!(package.digest, self.digest());
+    }
+    pub fn near_full_index(&self) {
+        self.edit_index(|i| {
+            i["modules"][0]["changelog"] = json!("");
+            let overhead = serde_json::to_vec(i).unwrap().len();
+            i["modules"][0]["changelog"] = json!("x".repeat(8 * 1024 * 1024 - 100 - overhead));
+        });
     }
     pub fn replace_index_key(&self) {
         let pkcs8 = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap();
