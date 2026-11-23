@@ -92,3 +92,7 @@ to fail at an assertion (a compiler error does not count), restores the original
 and reruns the full suite. Use a dedicated clean worktree and do not edit or build it concurrently.
 Logs go to a temporary folder, or `PUBLISH_REVIEW_PROOF_DIR` when explicitly set. The script leaves
 no runtime bypass option in the publisher.
+
+Shared package and static registry commands are documented in [ARTIFACTS.md](ARTIFACTS.md).
+Use `cargo run --bin moss --manifest-path rust-spike/module-publisher/Cargo.toml -- ...` for those
+commands; the default binary remains the existing publish-review CLI.

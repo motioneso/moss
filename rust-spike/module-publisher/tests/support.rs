@@ -34,6 +34,11 @@ pub struct Fixture {
     index: Ed25519KeyPair,
     reviewer: Ed25519KeyPair,
 }
+impl Default for Fixture {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Fixture {
     pub fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
@@ -357,5 +362,63 @@ impl Fixture {
                 .unwrap()
                 .push(serde_json::to_value(a).unwrap())
         });
+    }
+}
+
+impl Fixture {
+    #[allow(dead_code)] // Used by the artifact CLI suite, not the publish-review suite.
+    pub fn artifact_layout(&self) {
+        // Signed formatting is deliberately noncanonical so a mirror cannot reserialize it.
+        for (name, key) in [("registry.json", &self.root), ("index.json", &self.index)] {
+            let path = self.dir.path().join("registry").join(name);
+            let value: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let bytes = serde_json::to_vec_pretty(&value).unwrap();
+            std::fs::write(&path, &bytes).unwrap();
+            std::fs::write(
+                path.with_file_name(format!("{name}.sig")),
+                format!("{}\n", sign(key, &bytes)),
+            )
+            .unwrap();
+        }
+        let index: Value = serde_json::from_slice(
+            &std::fs::read(self.dir.path().join("registry/index.json")).unwrap(),
+        )
+        .unwrap();
+        for a in index["modules"].as_array().unwrap() {
+            std::fs::write(
+                self.dir.path().join(format!(
+                    "registry/packages/{}.mosspkg.sig",
+                    a["digest"].as_str().unwrap()
+                )),
+                format!("{}\n", a["signature"].as_str().unwrap()),
+            )
+            .unwrap();
+        }
+        self.write_json("selection.json", &json!({"default":{"modules":[{"id":"sample.counter","registry":"moss","version":"1.0.0"}]},"optional":{"modules":[]}}));
+    }
+}
+
+impl Fixture {
+    #[allow(dead_code)] // Used by the artifact CLI suite, not the publish-review suite.
+    pub fn first_party_bundle(&self) {
+        let mut artifacts = Vec::new();
+        for id in ["tasks", "finance", "meals"] {
+            let mut files = self.files.borrow().clone();
+            let mut manifest: Value = serde_json::from_slice(&files["moss.module.json"]).unwrap();
+            manifest["id"] = json!(id);
+            files.insert(
+                "moss.module.json".into(),
+                serde_json::to_vec(&manifest).unwrap(),
+            );
+            let mut artifact = self.store_prior(&files);
+            artifact.publisher_key = "first".into();
+            artifact.signature = sign(&self.root, artifact.digest.as_bytes());
+            artifacts.push(artifact);
+        }
+        let identity = json!({"id":"moss","name":"Bundle fixture","rootFingerprint":trust::digest(self.root.public_key().as_ref()),"indexKeys":{"online":public(&self.index)},"publishers":{"first":{"key":public(&self.root),"prefix":""}}});
+        self.write_signed("registry.json", &identity, &self.root);
+        self.edit_index(|i| i["modules"] = json!(artifacts));
+        self.artifact_layout();
+        self.write_json("selection.json", &json!({"default":{"modules":[{"id":"tasks","registry":"moss"}]},"optional":{"modules":[{"id":"meals","registry":"moss"},{"id":"finance","registry":"moss"}]}}));
     }
 }
