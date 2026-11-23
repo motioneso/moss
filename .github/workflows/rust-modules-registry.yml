@@ -63,6 +63,13 @@ jobs:
         run: python rust-spike/module-publisher/tools/build_first_party.py .rust-packages
       - name: Record unsigned package digests
         run: python rust-spike/module-publisher/tools/compare_digests.py write .rust-packages digests.json
+      - name: Retain unsigned build inputs for reproducibility diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-build-inputs-${{ matrix.os }}
+          path: .rust-packages/
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Exercise signed release assembly using a generated key
         run: cargo +1.95.0 run --locked --manifest-path rust-spike/module-publisher/Cargo.toml --bin moss -- release .rust-packages .rust-dry-release --dry-run
       - name: Compile the stand-in with the generated allowlist and package signatures
@@ -78,6 +85,8 @@ jobs:
         with:
           name: rust-first-party-packages
           path: .rust-packages/*.mosspkg
+          include-hidden-files: true
+          if-no-files-found: error
       # These are CI job handoffs, not release publication. Dry runs never call gh upload.
       - name: Check offline bootstrap and refusal controls
         if: runner.os == 'Linux'

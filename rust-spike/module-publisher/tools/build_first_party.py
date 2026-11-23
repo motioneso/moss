@@ -1,4 +1,5 @@
 """Build all declared Rust first-party packages, sequentially, using existing packers."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,9 +22,20 @@ BASE = os.environ.copy()
 BASE.update(CARGO_BUILD_JOBS="2", CARGO_PROFILE_DEV_DEBUG="0", CARGO_PROFILE_TEST_DEBUG="0",
             CARGO_PROFILE_RELEASE_DEBUG="0", CARGO_INCREMENTAL="0")
 
+# RUSTC_WRAPPER is not part of Cargo's output fingerprint. Isolate its cache by
+# source digest so introducing/changing it cannot reuse old, path-dependent crates.
+wrapper_source = ROOT / "rust-spike/module-publisher/tools/repro-rustc.rs"
+wrapper_digest = hashlib.sha256(wrapper_source.read_bytes()).hexdigest()[:16]
+REPRO_TARGET = TARGET / f"repro-{wrapper_digest}"
+REPRO_TARGET.mkdir(parents=True, exist_ok=True)
+wrapper = REPRO_TARGET / ("repro-rustc.exe" if os.name == "nt" else "repro-rustc")
+subprocess.run(["rustc", "+1.95.0", "--edition=2021", "-Cdebuginfo=0",
+                str(wrapper_source), "-o", str(wrapper)], env=BASE, check=True)
+
 def cargo(manifest, args, target=TARGET, flags=None, extra=None):
     env = BASE | {"CARGO_TARGET_DIR": str(target)} | (extra or {})
     if flags:
+        env["RUSTC_WRAPPER"] = str(wrapper)
         remaps = [f"--remap-path-prefix={source}={dest}" for source, dest in (
             (ROOT, "/moss/source"), (Path(env.get("CARGO_HOME", Path.home() / ".cargo")), "/moss/cargo"),
             (SYSROOT, "/moss/rust"), (target, "/moss/target"))]
@@ -37,7 +49,7 @@ def crate_name(manifest):
 def ui(module):
     source = ROOT / "modules" / module
     manifest = source / "ui/Cargo.toml"
-    target = TARGET / f"{module}-ui"
+    target = REPRO_TARGET / f"{module}-ui"
     cargo(manifest, ["build", "--release", "--lib", "--target", "wasm32-unknown-unknown",
                      "--no-default-features", "--features", "csr"], target, ["-Cdebuginfo=0"])
     cargo(ROOT / "rust-spike/ui/bindgen/Cargo.toml", ["build", "--release"], TARGET / "bindgen")
@@ -66,7 +78,7 @@ for manifest in sorted((ROOT / "modules").glob("*/moss.module.json")):
     module = manifest.parent.name
     if not (manifest.parent / "src/Cargo.toml").exists():
         raise SystemExit(f"Missing Rust builder for {module}")
-    guest = TARGET / f"{module}-guest"
+    guest = REPRO_TARGET / f"{module}-guest"
     core_manifest = manifest.parent / "src/Cargo.toml"
     component = OUT / f"{module}.wasm"
     package = OUT / f"{module}.mosspkg"

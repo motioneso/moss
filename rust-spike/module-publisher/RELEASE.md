@@ -28,6 +28,17 @@ Windows CI jobs compare the complete package set and every unsigned `.mosspkg` d
 stops publication. Their CI artifacts carry unsigned packages and digest reports between jobs.
 They do not publish a GitHub release or retain private signing keys.
 
+Source path remapping alone does not stabilize Cargo's local-dependency crate IDs.
+The first-party builder compiles `tools/repro-rustc.rs` with the pinned compiler and
+uses it only for guest/UI builds and their dependencies. It derives crate metadata
+from the locked package name/version, crate name/type, target and feature cfgs,
+while preserving Cargo's output filenames. This gives the local SDK the same
+identity on each runner. The wrapper source digest selects a separate guest/UI
+cache because Cargo does not invalidate outputs when `RUSTC_WRAPPER` changes.
+This wrapper is scoped to these locked first-party graphs, not arbitrary publisher inputs.
+Unsigned build inputs are retained per platform for investigating a failed comparison.
+The artifact handoff includes hidden paths explicitly and fails if packages are absent.
+
 `moss release` generates a temporary key for `--dry-run`. Production mode reads only
 `MOSS_RUST_REGISTRY_SIGNING_KEY_ID` and `MOSS_RUST_REGISTRY_SIGNING_PRIVATE_KEY` (base64 PKCS#8).
 Those secrets are not provisioned by this task. Missing values stop manual dispatch explicitly;

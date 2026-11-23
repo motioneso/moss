@@ -6,6 +6,8 @@ export PYTHONDONTWRITEBYTECODE=1
 export CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
+rustc +1.95.0 --edition=2021 --test -Cdebuginfo=0 rust-spike/module-publisher/tools/repro-rustc.rs -o "$scratch/repro-tests"
+"$scratch/repro-tests"
 cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --test phase6_offline_bundle -- --test-threads=1
 MOSS_RELEASE_FIXTURE_OUTPUT="$scratch/release" cargo +1.95.0 test --locked --manifest-path rust-spike/module-publisher/Cargo.toml --test phase6_release -- --test-threads=1
 python3 rust-spike/module-publisher/tools/test_release_transport.py
