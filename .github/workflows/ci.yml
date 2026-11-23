@@ -564,19 +564,16 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      # Azure's archive can stream packages too slowly for the bounded install.
-      - name: Use standard Ubuntu archive for browser dependencies
-        run: |
-          sudo python3 scripts/prepare-browser-apt-mirror.py
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       # #1724: Bound system dependencies separately from runner-owned browser downloads.
+      # Try the runner's default apt mirror first, then the standard Ubuntu archive.
       - name: Install Playwright browsers
         run: |
           status=0
           for attempt in 1 2; do
+            if [ "$attempt" -eq 2 ]; then sudo python3 scripts/prepare-browser-apt-mirror.py; fi
             status=0
             # The timeout must own apt's privileges so it can stop apt before retrying.
             sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m \
