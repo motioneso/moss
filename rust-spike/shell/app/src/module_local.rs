@@ -74,7 +74,7 @@ mod platform {
         let cx = safety_core::db::DataContext::open(&admin.platform.app, access)
             .await
             .map_err(|_| anyhow::anyhow!("Cannot check local catalog"))?;
-        let present: bool = cx.db().query_one("SELECT to_regclass('moss_modules.local_packages') IS NOT NULL AND to_regclass('moss_modules.local_trust') IS NOT NULL", &[]).await?.get(0);
+        let present: bool = cx.db().query_one("SELECT to_regclass('moss_modules.local_packages') IS NOT NULL AND to_regclass('moss_modules.local_trust') IS NOT NULL AND CASE WHEN to_regclass('moss_modules.local_packages') IS NOT NULL THEN has_column_privilege(current_user,'moss_modules.local_packages','digest','UPDATE') ELSE false END", &[]).await?.get(0);
         cx.commit()
             .await
             .map_err(|_| anyhow::anyhow!("Cannot finish local catalog check"))?;

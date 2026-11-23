@@ -41,7 +41,7 @@ impl Lifecycle for FileLifecycle {
         }
     }
     fn set_account_enabled(&self, id: &str, access: &AccessContext, enabled: bool) -> Result<()> {
-        ensure!(crate::manifest::identifier(id), "Invalid module id");
+        ensure!(crate::manifest::package_identifier(id), "Invalid module id");
         let root = vault::Root::create(&self.data.join("modules/accounts"))?;
         vault::VaultContext::for_module_files(&root, access)?
             .write(&format!("{id}.json"), &serde_json::to_vec(&enabled)?)?;
@@ -60,7 +60,10 @@ impl Lifecycle for FileLifecycle {
         Ok(())
     }
     fn snapshot(&self, id: &str) -> Result<String> {
-        ensure!(crate::manifest::identifier(id), "Invalid module identifier");
+        ensure!(
+            crate::manifest::package_identifier(id),
+            "Invalid module identifier"
+        );
         let name = uuid::Uuid::new_v4().to_string();
         let dest = self.data.join("modules/snapshots").join(id).join(&name);
         vault::Root::create(&dest)?;
@@ -83,7 +86,7 @@ impl Lifecycle for FileLifecycle {
     }
     fn restore(&self, id: &str, snapshot: &str) -> Result<()> {
         ensure!(
-            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            crate::manifest::package_identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
             "Invalid snapshot name"
         );
         let files = self.files(id);
@@ -103,7 +106,7 @@ impl Lifecycle for FileLifecycle {
     }
     fn discard_snapshot(&self, id: &str, snapshot: &str) -> Result<()> {
         ensure!(
-            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            crate::manifest::package_identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
             "Invalid snapshot identity"
         );
         let path = self.data.join("modules/snapshots").join(id).join(snapshot);

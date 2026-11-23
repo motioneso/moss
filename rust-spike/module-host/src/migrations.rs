@@ -29,6 +29,7 @@ pub struct PostgresLifecycle {
     app: Database,
     files: FileLifecycle,
     data: PathBuf,
+    catalog_codec: crate::catalog_storage::Codec,
 }
 impl PostgresLifecycle {
     /// The privileged address belongs to the host's migration service, not a runtime pool.
@@ -39,7 +40,15 @@ impl PostgresLifecycle {
             app,
             files: FileLifecycle::new(data, Default::default())?,
             data: data.into(),
+            catalog_codec: Default::default(),
         })
+    }
+    pub fn with_cipher(
+        mut self,
+        cipher: std::sync::Arc<safety_core::secret::SecretCipher>,
+    ) -> Self {
+        self.catalog_codec = crate::catalog_storage::Codec::new(cipher);
+        self
     }
     pub(crate) async fn privileged(&self) -> Result<Client> {
         let (client, connection) = tokio_postgres::connect(self.privileged.expose_secret(), NoTls)
@@ -52,7 +61,7 @@ impl PostgresLifecycle {
     }
     fn snapshot_root(&self, id: &str, snapshot: &str) -> Result<vault::Root> {
         ensure!(
-            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            crate::manifest::package_identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
             "Invalid snapshot identity"
         );
         Ok(vault::Root::open(
@@ -102,7 +111,7 @@ impl Lifecycle for PostgresLifecycle {
     fn resume_jobs(&self, id: &str) -> Result<()> {
         self.runtime.block_on(async {
             let db = self.privileged().await?;
-            let state: crate::store::State = serde_json::from_value(
+            let state = self.catalog_codec.decode(
                 db.query_opt("SELECT state FROM moss_modules.catalog WHERE id=true", &[])
                     .await?
                     .map(|r| r.get::<_, Value>(0))
@@ -234,7 +243,7 @@ impl Lifecycle for PostgresLifecycle {
     }
     fn discard_snapshot(&self, id: &str, snapshot: &str) -> Result<()> {
         ensure!(
-            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            crate::manifest::package_identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
             "Invalid snapshot identity"
         );
         self.runtime.block_on(async {

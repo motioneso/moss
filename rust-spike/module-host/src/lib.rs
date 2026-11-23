@@ -30,16 +30,16 @@ pub mod approval_port;
 pub mod purge_hooks;
 
 pub mod ai;
-pub mod credentials;
-pub mod network;
 pub mod browser;
-pub mod public_web;
-pub mod route_image;
-pub mod robots;
+pub mod credentials;
 pub mod feedback_port;
+pub mod network;
 pub mod proactive_cards;
-pub mod usefulness_feedback;
+pub mod public_web;
+pub mod robots;
+pub mod route_image;
 pub mod services;
+pub mod usefulness_feedback;
 
 pub mod legacy;
 pub mod rls;
@@ -90,7 +90,12 @@ mod producer_queue;
 pub mod quiet_hours;
 pub mod worker;
 
-pub mod chat_tools;
 mod chat_schema;
 mod chat_services;
+pub mod chat_tools;
 mod invocation;
+
+mod activation;
+pub mod local_lifecycle;
+
+mod catalog_storage;

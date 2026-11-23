@@ -130,7 +130,7 @@ impl Installer {
         };
         let journal: Journal = serde_json::from_slice(&bytes)?;
         ensure!(
-            crate::manifest::identifier(&journal.module)
+            crate::manifest::package_identifier(&journal.module)
                 && uuid::Uuid::parse_str(&journal.snapshot).is_ok(),
             "Invalid lifecycle journal"
         );
@@ -158,15 +158,27 @@ impl Installer {
         self.clear_journal()
     }
     pub fn snapshots(&self, access: &AccessContext) -> Result<Vec<Snapshot>> {
-        self.admin(access)?;
-        self.snapshots_internal()
+        let admin = self.lifecycle.is_admin(access)?;
+        Ok(self
+            .snapshots_internal()?
+            .into_iter()
+            .filter(|s| {
+                if s.module.starts_with("local.") {
+                    s.module
+                        .starts_with(&format!("local.{}.", access.actor_user_id()))
+                } else {
+                    admin
+                }
+            })
+            .collect())
     }
     fn snapshots_internal(&self) -> Result<Vec<Snapshot>> {
         let mut snapshots = Vec::new();
         let root = self.root.subdir("snapshots")?;
         for module in root.list("")? {
             ensure!(
-                module.kind == vault::EntryKind::Dir && crate::manifest::identifier(&module.name),
+                module.kind == vault::EntryKind::Dir
+                    && crate::manifest::package_identifier(&module.name),
                 "Invalid snapshot module folder"
             );
             let module_root = root.subdir(&module.name)?;
@@ -229,7 +241,6 @@ impl Installer {
         typed_name: &str,
         acknowledge_data_loss: bool,
     ) -> Result<()> {
-        self.admin(access)?;
         let _fence = self
             .fence
             .write()
@@ -244,6 +255,7 @@ impl Installer {
         let mut module = stored
             .previous
             .context("This snapshot contains no previous module data")?;
+        self.manage(access, &module)?;
         ensure!(
             typed_name == module.manifest.name && acknowledge_data_loss,
             "Confirm the module name and that newer writes will be lost"
@@ -268,7 +280,7 @@ impl Installer {
         self.begin_change(&snapshot.module, &backup, Some(module.digest.clone()))?;
         let outcome = (|| {
             self.lifecycle.restore(&snapshot.module, &snapshot.id)?;
-            let package = self.read_package(&module.digest)?;
+            let package = self.read_package_trusted(&module.digest)?;
             let bytes = self.root.subdir("blobs/sha256")?.read(&module.digest)?;
             self.stage(&package, &bytes)?;
             state.retained.remove(&snapshot.module);

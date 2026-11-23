@@ -112,7 +112,7 @@ fn module_asset(path: &str) -> bool {
 }
 
 fn public(path: &str) -> bool {
-    module_asset(path)
+    (module_asset(path) && !path.starts_with("/module-ui/local."))
         || matches!(
             path,
             "/sign-in"

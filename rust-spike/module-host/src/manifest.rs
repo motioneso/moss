@@ -263,7 +263,7 @@ pub fn identifier(s: &str) -> bool {
         })
 }
 /// Local owner segment is the canonical account UUID, never a display name.
-fn package_identifier(id: &str) -> bool {
+pub fn package_identifier(id: &str) -> bool {
     if let Some(local) = id.strip_prefix("local.") {
         return local.split_once('.').is_some_and(|(owner, name)| {
             uuid::Uuid::parse_str(owner).is_ok_and(|id| id.to_string() == owner)
@@ -351,6 +351,7 @@ impl Manifest {
         );
         let mut ports = BTreeSet::new();
         crate::account_contracts::validate_routes(self)?;
+        crate::local_packages::validate_scope(self)?;
         for cap in &self.capabilities {
             ensure!(
                 PORTS.contains(&cap.port.as_str()) && ports.insert(&cap.port),
@@ -372,10 +373,9 @@ impl Manifest {
                 );
                 ensure!(
                     !cap.resources.is_empty()
-                        && cap
-                            .resources
-                            .iter()
-                            .all(|r| crate::feedback_port::MODULE_TARGET_KINDS.contains(&r.as_str())),
+                        && cap.resources.iter().all(
+                            |r| crate::feedback_port::MODULE_TARGET_KINDS.contains(&r.as_str())
+                        ),
                     "A module may declare only briefing, news and sports target kinds"
                 );
             }
@@ -387,8 +387,7 @@ impl Manifest {
                     "Unknown approvals operation"
                 );
                 ensure!(
-                    !cap.resources.is_empty()
-                        && cap.resources.iter().all(|r| identifier(r)),
+                    !cap.resources.is_empty() && cap.resources.iter().all(|r| identifier(r)),
                     "An approvals permission must name its approval families"
                 );
             }
@@ -608,12 +607,18 @@ impl Manifest {
             // Exposing a field skips name-based stripping, so only link and public tokens may be
             // exposed. Anything that can name a secret stays hidden.
             ensure!(
-                cred.expose_fields
-                    .iter()
-                    .all(|f| matches!(f.as_str(), "link_token" | "public_token")
-                        || !["token", "secret", "password", "authorization", "cookie"]
-                            .iter()
-                            .any(|w| f.to_ascii_lowercase().contains(w))),
+                cred.expose_fields.iter().all(|f| matches!(
+                    f.as_str(),
+                    "link_token" | "public_token"
+                ) || ![
+                    "token",
+                    "secret",
+                    "password",
+                    "authorization",
+                    "cookie"
+                ]
+                .iter()
+                .any(|w| f.to_ascii_lowercase().contains(w))),
                 "A secret-looking field cannot be exposed"
             );
             ensure!(

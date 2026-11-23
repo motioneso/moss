@@ -82,7 +82,8 @@ impl ServicePorts {
         launcher: crate::browser::launch::Launcher,
         weakened: crate::browser::Weakened,
     ) -> Self {
-        let mut port = crate::browser::BrowserPort::with_launcher(launcher, self.public_web.clone());
+        let mut port =
+            crate::browser::BrowserPort::with_launcher(launcher, self.public_web.clone());
         port.weakened = weakened;
         self.browser = Some(port);
         self
@@ -162,7 +163,7 @@ impl ServicePorts {
         *self.installer.write().expect("host binding") = Arc::downgrade(installer);
     }
     pub(crate) fn account(&self, id: &str, access: &AccessContext) -> Result<VaultContext> {
-        ensure!(crate::manifest::identifier(id), "Invalid module id");
+        ensure!(crate::manifest::package_identifier(id), "Invalid module id");
         let module = self.files.create_subdir(id)?;
         #[cfg(feature = "browser-proof")]
         let pooled = AccessContext::new(uuid::Uuid::nil(), "pooled");
@@ -479,7 +480,8 @@ impl ServicePorts {
                         .get(provider)
                         .context("Publisher unavailable")?;
                     ensure!(
-                        !provider_entry.is_blocked()
+                        provider_entry.visible_to(access)
+                            && !provider_entry.is_blocked()
                             && host.lifecycle.account_enabled(
                                 provider,
                                 access,

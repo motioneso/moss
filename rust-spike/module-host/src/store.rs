@@ -31,6 +31,8 @@ pub struct State {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Installed {
     pub manifest: Manifest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_owner: Option<uuid::Uuid>,
     pub digest: String,
     pub publisher_key: String,
     pub publisher_public_key: String,
@@ -156,7 +158,7 @@ impl Installer {
         installer.apply_cached_revocations()?;
         installer.cleanup_snapshots(chrono::Utc::now())?;
         for module in installer.catalog.load()?.installed.values() {
-            let package = installer.read_package(&module.digest)?;
+            let package = installer.read_package_trusted(&module.digest)?;
             installer.lifecycle.audit(&package)?;
         }
         for entry in std::fs::read_dir(installer.root.subdir("staging")?.path())? {
@@ -441,118 +443,6 @@ impl Installer {
             },
         )
     }
-    pub(crate) fn activate(
-        &self,
-        access: &AccessContext,
-        package: Package,
-        bytes: &[u8],
-        registry_trust: &trust::TrustedRegistry,
-        key_id: &str,
-        options: Activation,
-    ) -> Result<()> {
-        let Activation {
-            approved,
-            pin_override,
-        } = options;
-        crate::archive::validate_install(&package, &self.host, &self.inventory)?;
-        let mut state = self.catalog.load()?;
-        let revision = state.revision;
-        let id = &package.manifest.id;
-        let old = state
-            .installed
-            .get(id)
-            .or_else(|| state.retained.get(id))
-            .cloned();
-        let publisher = registry_trust.publisher(key_id, id)?;
-        for (registry, seen) in &state.registries {
-            ensure!(
-                seen.removed
-                    || registry == &registry_trust.identity.id
-                    || seen
-                        .publishers
-                        .get(&publisher.prefix)
-                        .is_none_or(|key| key == &publisher.key),
-                "Resolve conflicting registry publisher prefixes before installing"
-            );
-        }
-        if let Some(old) = &old {
-            ensure!(
-                package.manifest.version > old.manifest.version || package.digest == old.digest,
-                "An installed module cannot silently move backwards or replace a published version"
-            );
-            ensure!(
-                old.publisher_public_key == publisher.key
-                    || old.registry == registry_trust.identity.id
-                        && publisher.replaces.contains(&old.publisher_public_key),
-                "Only the registry root may approve a publisher replacement"
-            );
-            let previous = self.read_package(&old.digest)?;
-            package.unchanged_sql(&previous)?;
-            ensure!(
-                pin_override
-                    .as_ref()
-                    .or(old.pin.as_ref())
-                    .is_none_or(|pin| pin == &package.manifest.version),
-                "This module is pinned to another version"
-            );
-        }
-        let approval = self.approval(&package, false)?;
-        ensure!(
-            approved || !approval.required(),
-            "This update asks for more access or new migrations and needs administrator approval"
-        );
-        self.stage(&package, bytes)?;
-        self.lifecycle.pause_jobs(id)?;
-        let snapshot = match self.lifecycle.snapshot(id) {
-            Ok(s) => s,
-            Err(e) => {
-                self.lifecycle.resume_jobs(id)?;
-                return Err(e);
-            }
-        };
-        self.begin_change(id, &snapshot, Some(package.digest.clone()))?;
-        let outcome = (|| -> Result<()> {
-            self.lifecycle.migrate(&package, old.as_ref())?;
-            if let Some(wasm) = package.files.get("code/module.wasm") {
-                self.host.call(
-                    wasm,
-                    Arc::new(package.manifest.clone()),
-                    access.clone(),
-                    self.ports.clone(),
-                    "install",
-                    "{}",
-                )?;
-                self.host.call(
-                    wasm,
-                    Arc::new(package.manifest.clone()),
-                    access.clone(),
-                    self.ports.clone(),
-                    "health",
-                    "{}",
-                )?;
-            }
-            state.retained.remove(id);
-            state.installed.insert(
-                id.clone(),
-                Installed {
-                    manifest: package.manifest.clone(),
-                    digest: package.digest.clone(),
-                    publisher_key: key_id.into(),
-                    publisher_public_key: publisher.key.clone(),
-                    registry: registry_trust.identity.id.clone(),
-                    pin: pin_override.or_else(|| old.as_ref().and_then(|m| m.pin.clone())),
-                    previous: old.as_ref().map(|m| m.digest.clone()),
-                    disabled: old.as_ref().and_then(|m| m.disabled.clone()),
-                    revocations: Vec::new(),
-                },
-            );
-            state.apply_revocations();
-            state.revision += 1;
-            self.catalog.commit(revision, &state)?;
-            Ok(())
-        })();
-        self.complete_change(id, &snapshot, outcome)
-    }
     pub(crate) fn stage(&self, package: &Package, bytes: &[u8]) -> Result<()> {
         let blob = self.root.subdir("blobs/sha256")?;
         match blob.read(&package.digest) {
@@ -615,12 +505,19 @@ impl Installer {
         Ok(())
     }
     pub fn read_package(&self, digest: &str) -> Result<Package> {
+        let package = self.read_package_trusted(digest)?;
+        ensure!(
+            !package.manifest.id.starts_with("local."),
+            "Local package reads need the builder account"
+        );
+        Ok(package)
+    }
+    pub(crate) fn read_package_trusted(&self, digest: &str) -> Result<Package> {
         ensure!(trust::valid_digest(digest), "Invalid installed digest");
         let bytes = self.root.subdir("blobs/sha256")?.read(digest)?;
         Package::read(&bytes, digest, &self.moss)
     }
     pub fn pin(&self, access: &AccessContext, id: &str, version: Option<Version>) -> Result<()> {
-        self.admin(access)?;
         let _fence = self
             .fence
             .write()
@@ -632,6 +529,7 @@ impl Installer {
             .installed
             .get_mut(id)
             .context("This module is not installed")?;
+        self.manage(access, installed)?;
         ensure!(
             version
                 .as_ref()
@@ -648,7 +546,6 @@ impl Installer {
         id: &str,
         delete_data: Option<&str>,
     ) -> Result<()> {
-        self.admin(access)?;
         let _fence = self
             .fence
             .write()
@@ -663,6 +560,7 @@ impl Installer {
             .or_else(|| state.retained.get(id))
             .cloned()
             .context("This module has no installed code or retained data")?;
+        self.manage(access, &module)?;
         ensure!(
             module.manifest.removable(),
             "This module is part of Moss and cannot be removed"
@@ -921,6 +819,7 @@ impl Installer {
                 .load()?
                 .installed
                 .into_iter()
+                .filter(|(_, m)| m.local_owner.is_none() && !m.manifest.id.starts_with("local."))
                 .map(|(id, m)| ModulePin {
                     id,
                     registry: m.registry,

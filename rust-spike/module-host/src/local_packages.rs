@@ -10,6 +10,7 @@ use anyhow::{ensure, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 
+pub const LIFECYCLE_MIGRATION: &str = include_str!("../sql/0007_local_package_lifecycle.sql");
 pub const MIGRATION: &str = include_str!("../sql/0006_local_packages.sql");
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -164,7 +165,7 @@ pub async fn record(
         "Catalog local key belongs to another install or key"
     );
     let record = &verified.record;
-    cx.db().execute("INSERT INTO moss_modules.local_packages(module_id,owner_account_id,digest,installation_id,install_key_fingerprint) VALUES($1,$2::text::uuid,$3,$4,$5) ON CONFLICT DO NOTHING", &[&record.module_id, &record.owner_account_id, &record.digest, &trust.installation_id, &trust.fingerprint]).await?;
+    cx.db().execute("INSERT INTO moss_modules.local_packages(module_id,owner_account_id,digest,installation_id,install_key_fingerprint) VALUES($1,$2::text::uuid,$3,$4,$5) ON CONFLICT (module_id) DO UPDATE SET digest=EXCLUDED.digest WHERE local_packages.owner_account_id=EXCLUDED.owner_account_id AND local_packages.installation_id=EXCLUDED.installation_id AND local_packages.install_key_fingerprint=EXCLUDED.install_key_fingerprint", &[&record.module_id, &record.owner_account_id, &record.digest, &trust.installation_id, &trust.fingerprint]).await?;
     let row = cx
         .db()
         .query_opt(
@@ -179,5 +180,52 @@ pub async fn record(
     cx.commit()
         .await
         .map_err(|_| anyhow::anyhow!("Cannot commit local package provenance"))?;
+    Ok(())
+}
+
+/// Locally built declarations cannot introduce storage or policy shared across accounts.
+pub fn validate_scope(manifest: &crate::manifest::Manifest) -> Result<()> {
+    use crate::manifest::{CredentialScope, TableAccess};
+    let Some(local) = manifest.id.strip_prefix("local.") else {
+        return Ok(());
+    };
+    let (owner, _) = local
+        .split_once('.')
+        .ok_or_else(|| anyhow::anyhow!("Invalid local owner"))?;
+    ensure!(
+        manifest.install_wide_kv.is_empty(),
+        "Local packages cannot use install-wide storage"
+    );
+    ensure!(
+        manifest
+            .database
+            .access
+            .values()
+            .all(|a| matches!(a, TableAccess::OwnerOnly)),
+        "Local SQL must be owner-only"
+    );
+    ensure!(
+        manifest
+            .credentials
+            .values()
+            .all(|c| c.scope == CredentialScope::Account),
+        "Local credentials must be account-scoped"
+    );
+    ensure!(
+        manifest.lifecycle.is_none(),
+        "Local packages cannot declare a core lifecycle"
+    );
+    ensure!(
+        manifest
+            .requires
+            .keys()
+            .chain(manifest.optional_requires.keys())
+            .all(|id| !id.starts_with("local.") || id.starts_with(&format!("local.{owner}."))),
+        "Local dependencies must belong to the same account"
+    );
+    ensure!(
+        manifest.settings.iter().all(|s| s["scope"] == "user"),
+        "Local settings must be account-scoped"
+    );
     Ok(())
 }

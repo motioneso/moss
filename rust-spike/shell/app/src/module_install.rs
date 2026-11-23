@@ -178,6 +178,13 @@ pub(crate) async fn prepare_host_schema(migrations_url: &str) -> Result<tokio_po
             db.batch_execute(sql).await?;
         }
     }
+    let local_upgrade: bool = db.query_one(
+        "SELECT has_column_privilege('jarvis_app_runtime','moss_modules.local_packages','digest','UPDATE')", &[]
+    ).await?.get(0);
+    if !local_upgrade {
+        db.batch_execute(moss_module_host::local_packages::LIFECYCLE_MIGRATION)
+            .await?;
+    }
     // The server opens the host as the migration owner, so it must own what the steps made.
     db.batch_execute(HAND_OVER).await?;
     Ok(db)
@@ -304,8 +311,12 @@ fn run_selected(
             first_party_key: args.first_party_key.clone(),
         },
     )?;
-    use moss_module_host::{postgres::PostgresCatalog, store::CatalogStore};
-    let state = PostgresCatalog::new(database, access.clone())?.load()?;
+    let installed_modules: std::collections::BTreeMap<_, _> = application
+        .installer
+        .installed_for(&access)?
+        .into_iter()
+        .map(|m| (m.manifest.id.clone(), m))
+        .collect();
     if args.mode == Mode::List {
         let installed: std::collections::BTreeSet<String> = application
             .installer
@@ -327,7 +338,7 @@ fn run_selected(
                     "source": args.registry_id,
                     "digest": a.digest,
                     "publisher": catalog.trust.publisher(&a.publisher_key, &a.id).map(|p| p.key.clone()).unwrap_or_default(),
-                    "installedDigest": state.installed.get(&a.id).map(|m| &m.digest),
+                    "installedDigest": installed_modules.get(&a.id).map(|m| &m.digest),
                     "capabilities": a.capabilities,
                     "migrations": a.migrations,
                 })
@@ -376,7 +387,7 @@ fn run_selected(
                         "description": package.manifest.description,
                         "version": artifact.version.to_string(),
                         "digest": artifact.digest,
-                        "previous": state.installed.get(name).map(|m| &m.digest),
+                        "previous": installed_modules.get(name).map(|m| &m.digest),
                         "capabilities": package.manifest.capabilities,
                         "migrations": package.manifest.database.migrations,
                         "permissions": permissions,
