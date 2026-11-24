@@ -32,7 +32,7 @@ fn remember(id: &str) {
         }
     }
 }
-async fn read_operation(id: &str) -> Result<ModuleOperation, ()> {
+async fn read_operation(id: &str) -> Result<Option<ModuleOperation>, ()> {
     let response = gloo_net::http::Request::get(&format!("/api/modules/operations/{id}"))
         .send()
         .await
@@ -43,14 +43,16 @@ async fn read_operation(id: &str) -> Result<ModuleOperation, ()> {
             "{}&screen=request",
             module_catalog::detail_url(&m, &s)
         ));
+        return Ok(None);
     }
     if response.status() == 401 {
         go("/sign-in");
+        return Ok(None);
     }
     if !response.ok() {
         return Err(());
     }
-    response.json().await.map_err(|_| ())
+    response.json().await.map(Some).map_err(|_| ())
 }
 
 fn poll(
@@ -68,7 +70,7 @@ fn poll(
             return;
         }
         match result {
-            Ok(saved) => {
+            Ok(Some(saved)) => {
                 let running = !saved.stage.terminal() && saved.stage != Stage::Reviewed;
                 operation.set(Some(saved));
                 error.set(None);
@@ -79,12 +81,14 @@ fn poll(
                     );
                 }
             }
+            Ok(None) => {}
             Err(_) => error.set(Some("Status unavailable. Check again.".into())),
         }
     });
 }
 #[component]
 pub fn ModuleInstall() -> impl IntoView {
+    let reading_status = module_catalog::query("operation").is_some();
     let operation = RwSignal::new(None::<ModuleOperation>);
     let error = RwSignal::new(None::<String>);
     let pending = RwSignal::new(false);
@@ -182,7 +186,7 @@ pub fn ModuleInstall() -> impl IntoView {
                 if let Some(saved)=operation.get_untracked() {poll(saved.id,operation,error,alive);} else if let Some(id)=module_catalog::query("operation") {poll(id,operation,error,alive);} else {review.run(());}
             })>"Retry"</Button></div>})}
             {move || match operation.get() {
-                None => view!{<p role="status" aria-busy=move ||pending.get()>"Checking this package…"</p>}.into_any(),
+                None => view!{<p role="status" aria-busy=move ||pending.get()>{if reading_status {"Reading install status…"}else{"Checking this package…"}}</p>}.into_any(),
                 Some(saved) => {
                     let Some(package)=saved.review.clone() else {return view!{<EmptyState title="No install running."/>}.into_any();};
                     let meta=format!("{} · {} · {}",package.publisher,if package.source_name.is_empty(){&package.source}else{&package.source_name},package.version);

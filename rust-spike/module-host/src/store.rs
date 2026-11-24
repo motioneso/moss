@@ -344,9 +344,7 @@ impl Installer {
             )
             .context(InstallFailure::Download)?;
         progress(InstallStage::Verifying)?;
-        let package = catalog
-            .read_download(artifact, &bytes, &self.moss)
-            .context(InstallFailure::Verification)?;
+        let package = catalog.read_download(artifact, &bytes, &self.moss)?;
         let _fence = self
             .fence
             .write()

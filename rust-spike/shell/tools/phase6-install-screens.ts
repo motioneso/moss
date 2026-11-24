@@ -166,10 +166,41 @@ try {
       "no horizontal overflow"
     );
   }
-  for (const [width, pixels] of [
-    ["desktop", 1440],
-    ["phone", 390]
-  ] as const) {
+  // Narrow runs let the same real boundary assertions prove their negative controls.
+  const control = process.env.INSTALL_CONTROL;
+  if (control === "member") {
+    const response = await admin.request.post(`${origin}/api/modules/review`, {
+      data: { module: "install-desktop-success", source: "moss-fixture" }
+    });
+    assert.equal(response.status(), 200);
+    const saved = await response.json();
+    assert.equal(
+      (await member.request.get(`${origin}/api/modules/operations/${saved.id}`)).status(),
+      403,
+      "member cannot read administrator journal"
+    );
+    console.log("PASS member operation protection");
+  } else if (control === "digest") {
+    const page = await admin.newPage();
+    await review(page, "desktop", "changed");
+    await command("change", "desktop");
+    await approve(page, "desktop", "changed");
+    await expect(
+      page.getByRole("heading", { name: "This package changed. Review it again.", exact: true })
+    ).toBeVisible();
+    assert.equal((await operation(page)).stage, "failed");
+    await page.close();
+    console.log("PASS digest-bound consent protection");
+  } else {
+    assert.equal(control, undefined, "known protection control");
+  }
+  const widths = control
+    ? []
+    : ([
+        ["desktop", 1440],
+        ["phone", 390]
+      ] as const);
+  for (const [width, pixels] of widths) {
     const page = await admin.newPage();
     await page.setViewportSize({ width: pixels, height: 1000 });
     const consoleErrors: string[] = [];
@@ -242,7 +273,11 @@ try {
       await expect(
         page.getByText("The package could not be downloaded.", { exact: true })
       ).toBeVisible();
-      assert.equal((await operation(page)).result.message, "The package could not be downloaded.");
+      const failed = await operation(page);
+      assert.equal(failed.result.message, "The package could not be downloaded.");
+      assert(failed.stages.includes("downloading"));
+      for (const stage of ["verifying", "setting_up_data", "activating"])
+        assert(!failed.stages.includes(stage), `download failure never reached ${stage}`);
       await page.screenshot({ path: join(out, `${width}-download-failure.png`) });
     } finally {
       writeFileSync(file, bytes);
@@ -250,9 +285,27 @@ try {
     await page.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     assert.notEqual((await operation(page)).id, download.id);
+    // Keep the signed offer intact but alter the actual package on disk after consent.
+    writeFileSync(file, Buffer.alloc(bytes.length, 0));
+    try {
+      await approve(page, width, "download");
+      await expect(
+        page.getByText("The package signature or contents could not be verified.", { exact: true })
+      ).toBeVisible();
+      const failed = await operation(page);
+      assert(failed.stages.includes("verifying"));
+      assert(!failed.stages.includes("setting_up_data"));
+      await page.screenshot({ path: join(out, `${width}-verification-failure.png`) });
+    } finally {
+      writeFileSync(file, bytes);
+    }
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
     await approve(page, width, "download");
     await success(page, width, "download");
-    console.log(`PASS ${width}: real missing download shows fixed reason, retry succeeds`);
+    console.log(
+      `PASS ${width}: real missing download and tampered package show fixed reasons and reached stages, retry succeeds`
+    );
 
     await review(page, width, "sql");
     await command("sql-conflict", width);

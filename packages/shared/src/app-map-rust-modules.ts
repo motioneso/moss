@@ -194,7 +194,7 @@ export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Module details",
     description:
-      "A named module opens source, version, capabilities, changelog, up to four signed digest-checked screenshots with paging and recent configuration activity. The header cog is the only module settings entry and opens the installed module’s declared settings screen. Administrators can pin or unpin the installed version.",
+      "A named module opens source, version, capabilities, changelog, up to four signed digest-checked screenshots with paging and recent configuration activity. The header cog is the only module settings entry and opens the installed module’s declared settings screen. Administrators can pin or unpin the installed version. For a module that is not installed, administrators open install review and members open Request to install.",
     path: "/settings/modules?module={module}&source={source}",
     scope: "user"
   }

@@ -540,7 +540,9 @@ impl Catalog {
         bytes: &[u8],
         moss: &Version,
     ) -> Result<crate::archive::Package> {
-        let package = self.read_download_for_review(artifact, bytes)?;
+        let package = self
+            .read_download_for_review(artifact, bytes)
+            .context(crate::install_progress::InstallFailure::Verification)?;
         package.manifest.check_moss_version(moss)?;
         Ok(package)
     }
