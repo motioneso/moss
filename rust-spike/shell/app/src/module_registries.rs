@@ -299,7 +299,7 @@ async fn import(
         );
         // A new host-owned directory prevents overwriting a configured source or following a
         // caller-selected destination. Vault confines every uploaded relative file name.
-        let parent = vault::Root::create(instance.join("registry-imports"))?;
+        let parent = vault::Root::create(&instance.join("registry-imports"))?;
         let folder = parent.create_subdir(&uuid::Uuid::new_v4().to_string())?;
         let result = (|| {
             let mut total = 0;
