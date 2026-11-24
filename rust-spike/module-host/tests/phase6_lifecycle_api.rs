@@ -203,8 +203,30 @@ fn phase6_lifecycle_api() {
         .get::<_, String>(0)
         .parse()
         .unwrap();
-    let member = uuid::Uuid::new_v4();
-    runtime.block_on(db.execute("INSERT INTO app.users(id,name,email,email_verified,is_instance_admin,status) VALUES($1,'Member','member@example.test',false,false,'active')", &[&member])).unwrap();
+    // Setup closes signup after the owner. Seed disposable credential accounts, then
+    // obtain sessions through the real sign-in route, as in the catalog/review runner.
+    let sign_in_account = |email: &str, admin: bool| {
+        let id = uuid::Uuid::new_v4();
+        runtime.block_on(async {
+            db.execute("INSERT INTO app.users(id,name,email,email_verified,is_instance_admin,status) VALUES($1,'Lifecycle account',$2,false,$3,'active')", &[&id,&email,&admin]).await.unwrap();
+            db.execute("INSERT INTO app.auth_accounts(id,account_id,provider_id,user_id,password,created_at,updated_at) SELECT gen_random_uuid(),$1::uuid::text,'credential',$1::uuid,password,now(),now() FROM app.auth_accounts WHERE user_id=$2::uuid AND provider_id='credential'", &[&id,&owner]).await.unwrap();
+        });
+        let response = client.post(format!("{origin}/api/auth/sign-in/email"))
+            .header("origin", &origin)
+            .json(&json!({"email":email,"password":"temporary-bootstrap-password-179-not-a-real-secret"}))
+            .send().unwrap();
+        assert_eq!(response.status(), 200, "lifecycle account sign-in");
+        let session = response.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned();
+        (id, session)
+    };
+    let (member, member_cookie) = sign_in_account("lifecycle-member@example.test", false);
+    let (_, other_admin_cookie) = sign_in_account("lifecycle-admin@example.test", true);
     let original = vec!["other account private row", "owner row"];
     for (account, title) in [(owner, original[1]), (member, original[0])] {
         runtime
@@ -299,7 +321,61 @@ fn phase6_lifecycle_api() {
             std::thread::sleep(Duration::from_millis(100));
         }
     };
-    let mismatch = wait(value["id"].as_str().unwrap());
+    let operation_id = value["id"].as_str().unwrap();
+    let operation_path = format!("/api/modules/operations/{operation_id}");
+    let cancel_path = format!("{operation_path}/cancel");
+    let snapshot_id = uuid::Uuid::new_v4().to_string();
+    for (method, path, body) in [
+        (
+            Method::POST,
+            "/api/modules/remove",
+            Some(json!({"module":"sample.counter"})),
+        ),
+        (
+            Method::POST,
+            "/api/modules/restore",
+            Some(
+                json!({"module":"sample.counter","snapshot":snapshot_id,"typedName":"Counter","acknowledgeDataLoss":true}),
+            ),
+        ),
+        (Method::GET, "/api/modules/snapshots", None),
+        (Method::GET, operation_path.as_str(), None),
+        (Method::POST, cancel_path.as_str(), None),
+    ] {
+        assert_eq!(
+            api(method.clone(), path, body.clone(), None).0,
+            401,
+            "anonymous lifecycle request: {path}"
+        );
+        assert_eq!(
+            api(method, path, body, Some(&member_cookie)).0,
+            403,
+            "non-admin lifecycle request: {path}"
+        );
+    }
+    for (method, path) in [
+        (Method::GET, operation_path.as_str()),
+        (Method::POST, cancel_path.as_str()),
+    ] {
+        assert_eq!(
+            api(method, path, None, Some(&other_admin_cookie)).0,
+            403,
+            "another administrator must not own the session operation: {path}"
+        );
+    }
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/remove",
+            Some(json!({"module":"sample.counter","actor":owner})),
+            Some(&member_cookie)
+        )
+        .0,
+        422,
+        "payload actor must be refused rather than replacing the session"
+    );
+    println!("PASS anonymous and non-admin lifecycle requests refuse; other admin cannot read or cancel; payload actor refuses");
+    let mismatch = wait(operation_id);
     assert_eq!(mismatch["stage"], "failed", "{mismatch}");
     assert!(
         mismatch["result"]["message"]

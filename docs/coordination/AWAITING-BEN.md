@@ -4,6 +4,19 @@ origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate ski
 
 # Awaiting Ben
 
+
+## JS-413 — verification resource allocation (2026-11-23)
+
+Lifecycle API implementation and its initial real-server, regression and recovery suites passed.
+Independent review requested additional authorization controls; those tests are written, but the
+machine's low-memory monitor now terminates database setup and the Rust linker before the new
+checks can run. Its journal records SIGTERM at the 6% available-memory threshold. Single Cargo
+builds with two jobs, disabled debug info, a smaller Node heap and two-core affinity did not avoid
+termination. This is a request to free workstation memory, not a missing product API or a request
+to waive verification. Recommend closing unused high-memory applications, then finishing the
+controls, final positive run, type checking and the remaining independent review round.
+
+
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
 only currently-open questions — not a historical log.** Resolved entries are removed outright; the
