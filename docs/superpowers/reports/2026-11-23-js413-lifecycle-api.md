@@ -87,3 +87,20 @@ checks above address that gap. It also recorded these six minor limitations, ret
 
 These notes were below the configured major/blocker fix threshold. They do not broaden the
 sample-module proof into a claim about every module or every interruption point.
+
+## Rebase and constrained final attempt
+
+Rebased onto main `0b4e45e8d`, preserving the merged part 8a update endpoints, contract types,
+runner and app-map entries. The update handler now refuses lifecycle records as update reviews;
+the lifecycle runner includes that compatibility assertion. The complete one-job run above passed
+before this rebase. The exact final retry was:
+
+```bash
+CARGO_HOME=/tmp/js413-cargo RUSTUP_HOME="$HOME/.rustup" CARGO_TARGET_DIR=/tmp/js413-target CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 RUST_TEST_THREADS=1 NODE_OPTIONS=--max-old-space-size=256 scripts/run-gate.sh start --gate test:rust-phase6-lifecycle-api
+scripts/run-gate.sh wait --follow --log /tmp/jarv1s-gate/task_413_rust_phase_6_part_8b_lifecycle_-20261123-181232-YoeBqv.log
+```
+
+The final gate returned **101** (wait exit **1**): `rustc` was terminated by SIGTERM while compiling
+`moss-module-host`, before tests. This is not a test assertion failure or passing final-commit
+proof. Per the coordinator's resource ruling, the rebased integration suite and type checking
+rely on CI. The PR's shared-host Rust matrix explicitly schedules `phase6-lifecycle-api`.

@@ -322,6 +322,17 @@ fn phase6_lifecycle_api() {
         }
     };
     let operation_id = value["id"].as_str().unwrap();
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/sample.counter/update",
+            Some(json!({"operation":operation_id,"approve":true})),
+            Some(&cookie)
+        )
+        .0,
+        400,
+        "a lifecycle operation is not an update review"
+    );
     let operation_path = format!("/api/modules/operations/{operation_id}");
     let cancel_path = format!("{operation_path}/cancel");
     let snapshot_id = uuid::Uuid::new_v4().to_string();
