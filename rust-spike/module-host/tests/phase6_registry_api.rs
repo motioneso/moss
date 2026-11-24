@@ -126,7 +126,7 @@ fn phase6_registry_api() {
         .arg(root)
         .arg("--web")
         .arg(root.join("web"));
-    let mut server = Server(
+    let _server = Server(
         command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
