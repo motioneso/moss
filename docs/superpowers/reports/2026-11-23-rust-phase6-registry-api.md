@@ -20,7 +20,8 @@ account switches or install-request workflow are added.
 Authorization comes from the signed-in account. Pending source labels and keys are never
 accepted as root confirmation. First-party publisher authority comes from existing trusted
 host configuration and is pinned separately, including after the last source is removed;
-uploaded files cannot choose it. Adding a registry requires that host trust to be provisioned. Imported registry directories are host-owned. Responses project
+uploaded files cannot choose it. Without provisioned first-party authority, namespaced registries can still be added,
+but no registry publisher may claim a bare first-party name. Imported registry directories are host-owned. Responses project
 identities, public fingerprints, health and reviews, omitting host paths and database logins.
 
 ## Verification state

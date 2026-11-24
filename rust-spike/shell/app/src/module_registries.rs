@@ -90,15 +90,20 @@ fn first_party_key(instance: &FsPath) -> Result<String> {
         )?);
     }
     let configured = sources(instance)?;
-    let key = configured
-        .first()
-        .context("Set up host first-party trust before adding registries")?
-        .first_party_key
-        .clone();
+    let mut keys = configured
+        .iter()
+        .map(|r| &r.first_party_key)
+        .filter(|key| !key.is_empty());
+    let Some(key) = keys.next() else {
+        // Without provisioned first-party authority, nonempty validated publisher keys
+        // cannot match this value. Namespaced third-party sources can still be added.
+        return Ok(String::new());
+    };
     ensure!(
-        configured.iter().all(|r| r.first_party_key == key),
+        keys.all(|other| other == key),
         "Host first-party keys disagree"
     );
+    let key = key.clone();
     ensure!(
         STANDARD.decode(&key)?.len() == 32,
         "Invalid host first-party key"
@@ -304,10 +309,24 @@ async fn import(
                 ensure!(total <= 64 * 1024 * 1024, "Registry file too large");
                 if let Some(file) = name.strip_prefix("packages/") {
                     let digest = file
+                        .strip_suffix(".sig")
+                        .unwrap_or(file)
                         .strip_suffix(".mosspkg")
                         .context("Invalid package name")?;
                     ensure!(trust::valid_digest(digest), "Invalid package digest");
                     folder.create_subdir("packages")?.write(file, &bytes)?;
+                } else if let Some(file) = name.strip_prefix("media/") {
+                    let (digest, extension) = file.split_once('.').context("Invalid media name")?;
+                    ensure!(
+                        trust::valid_digest(digest)
+                            && !extension.is_empty()
+                            && extension
+                                .bytes()
+                                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+                            && trust::digest(&bytes) == digest,
+                        "Invalid media digest"
+                    );
+                    folder.create_subdir("media")?.write(file, &bytes)?;
                 } else {
                     ensure!(
                         [
@@ -348,6 +367,15 @@ async fn import(
 
             for artifact in &catalog.index.modules {
                 let name = format!("packages/{}.mosspkg", artifact.digest);
+                let signature = format!("{name}.sig");
+                if folder.path().join(&signature).exists() {
+                    catalog.trust.verify_package(
+                        &artifact.publisher_key,
+                        &artifact.id,
+                        &artifact.digest,
+                        std::str::from_utf8(&catalog.source.fetch(&signature, 4096)?)?,
+                    )?;
+                }
                 if folder.path().join(&name).exists() {
                     let bytes = catalog.source.fetch(&name, artifact.size)?;
                     ensure!(

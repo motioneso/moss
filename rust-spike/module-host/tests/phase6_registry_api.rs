@@ -301,6 +301,10 @@ fn phase6_registry_api() {
                 common::Keys::sign(&keys.index, &bundle).into_bytes(),
             ),
             (
+                format!("packages/{}.mosspkg.sig", first.digest),
+                entry.signature.clone().into_bytes(),
+            ),
+            (
                 format!("packages/{}.mosspkg", first.digest),
                 fs::read(registry.join(format!("packages/{}.mosspkg", first.digest))).unwrap(),
             ),
