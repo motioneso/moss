@@ -70,7 +70,7 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     id: "core.modules.install_request_approval_refused",
     runtime: "rust",
     description:
-      "Only an instance administrator can approve an install request. Obtain your own fresh review for the request's exact module and source and explicitly approve it. Once linked, retry with the request's saved operation rather than switching reviews. Read the saved result after a restart or failure; changed bytes or registry configuration need review again through the existing management path.",
+      "Only an instance administrator can approve an install request. Obtain your own fresh review for the request's exact module and source and explicitly approve it. While active or completed, retry with the request's saved operation. After failure, obtain a fresh review for changed bytes or registry configuration before approving again. Request status remains readable during installation.",
     path: "/sign-in",
     scope: "admin"
   },

@@ -45,7 +45,7 @@ fn reply(value: impl serde::Serialize) -> Response {
 }
 
 // The same one-shot trusted schema bootstrap used by local trust, with no caller SQL.
-// Callers hold admin.gate; the file fence also serializes other server/installer processes.
+// The file fence serializes bootstrap with other server/installer processes.
 async fn context(admin: &Admin, access: &AccessContext) -> anyhow::Result<DataContext> {
     let cx = DataContext::open(&admin.platform.app, access)
         .await
@@ -156,7 +156,6 @@ async fn list(
     State(admin): State<Arc<Admin>>,
     Extension(access): Extension<AccessContext>,
 ) -> Response {
-    let _gate = admin.gate.lock().await;
     let result = async {
         let cx = context(&admin, &access).await?;
         // RLS exposes only the requester's rows, or configuration metadata to an admin.
@@ -190,7 +189,6 @@ async fn status(
     let Ok(id) = Uuid::parse_str(&id) else {
         return missing();
     };
-    let _gate = admin.gate.lock().await;
     let result = async {
         let cx = context(&admin, &access).await?;
         let row = cx
@@ -274,13 +272,10 @@ async fn approve(
                 "Review this request's module and source before approving",
             );
         }
-        if saved
-            .operation_id
-            .as_ref()
-            .is_some_and(|id| id != &decision.operation)
-            || (saved.operation_id.is_none()
-                && (record.approved || record.view.stage != ModuleOperationStage::Reviewed))
-        {
+        let same_operation = saved.operation_id.as_deref() == Some(decision.operation.as_str());
+        let fresh_review = !record.approved && record.view.stage == ModuleOperationStage::Reviewed;
+        let retryable = saved.operation_id.is_none() || saved.status == "failed";
+        if !same_operation && !(retryable && fresh_review) {
             return module_admin::say(
                 StatusCode::CONFLICT,
                 "Use the request's saved operation, or obtain a fresh review before approval",

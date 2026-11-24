@@ -92,9 +92,24 @@ fn phase6_install_requests() {
     let registry = root.join("registry");
     let keys = common::Keys::new();
     let _first = fixtures::publish(&keys, &registry, "1.0.0", 1);
+    let other_registry = root.join("other-registry");
+    fixtures::publish(&keys, &other_registry, "1.0.0", 1);
+    let mut identity: Value =
+        serde_json::from_slice(&fs::read(other_registry.join("registry.json")).unwrap()).unwrap();
+    identity["id"] = json!("other-registry");
+    let identity = serde_json::to_vec(&identity).unwrap();
+    fs::write(other_registry.join("registry.json"), &identity).unwrap();
+    fs::write(
+        other_registry.join("registry.json.sig"),
+        common::Keys::sign(&keys.root, &identity),
+    )
+    .unwrap();
     private(
         &root.join("registry.json"),
-        &json!({"id":"sample-registry","folder":registry,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)}),
+        &json!({"registries":[
+            {"id":"sample-registry","folder":registry,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)},
+            {"id":"other-registry","folder":other_registry,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)}
+        ]}),
     );
     // Stands in for the database supervisor's credentials command.
     let supervisor = root.join("supervisor.sh");
@@ -134,15 +149,18 @@ fn phase6_install_requests() {
             .spawn()
             .unwrap(),
     );
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !client
-        .get(format!("{origin}/api/hello"))
-        .send()
-        .is_ok_and(|r| r.status().is_success())
-    {
-        assert!(Instant::now() < deadline, "server startup deadline");
-        std::thread::sleep(Duration::from_millis(100));
-    }
+    let wait_ready = || {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !client
+            .get(format!("{origin}/api/hello"))
+            .send()
+            .is_ok_and(|r| r.status().is_success())
+        {
+            assert!(Instant::now() < deadline, "server startup deadline");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    wait_ready();
     let signup = client
         .post(format!("{origin}/api/auth/sign-up/email"))
         .header("origin", &origin)
@@ -205,12 +223,363 @@ fn phase6_install_requests() {
         .next()
         .unwrap()
         .to_string();
+    let second = uuid::Uuid::new_v4();
+    member_rt.block_on(async {
+        member_db.execute("INSERT INTO app.users(id,name,email,email_verified,is_instance_admin,status) VALUES($1,'Other member','other-member@example.test',false,false,'active')", &[&second]).await.unwrap();
+        member_db.execute("INSERT INTO app.auth_accounts(id,account_id,provider_id,user_id,password,created_at,updated_at) SELECT gen_random_uuid(),$1::uuid::text,'credential',$1::uuid,password,now(),now() FROM app.auth_accounts WHERE user_id=(SELECT id FROM app.users WHERE email='bootstrap-owner@example.test') AND provider_id='credential'", &[&second]).await.unwrap();
+    });
+    let second_login = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin).json(&json!({"email":"other-member@example.test","password":"temporary-bootstrap-password-179-not-a-real-secret"})).send().unwrap();
+    assert_eq!(second_login.status(), 200);
+    let second_cookie = second_login.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+    let pick = json!({"module":"sample.counter","source":"sample-registry"});
+    for (method, path, body) in [
+        (Method::POST, "/api/modules/requests", Some(pick.clone())),
+        (Method::GET, "/api/modules/requests", None),
+        (
+            Method::GET,
+            "/api/modules/requests/00000000-0000-0000-0000-000000000000",
+            None,
+        ),
+        (
+            Method::POST,
+            "/api/modules/requests/00000000-0000-0000-0000-000000000000/approve",
+            Some(json!({"operation":uuid::Uuid::new_v4(),"approve":true})),
+        ),
+    ] {
+        assert_eq!(
+            api(method, path, body, None).0,
+            401,
+            "existing session boundary: {path}"
+        );
+    }
+    assert_eq!(api(Method::POST, "/api/modules/requests", Some(json!({"module":"sample.counter","source":"sample-registry","ownerAccountId":second})), Some(&member_cookie)).0, 422, "REFUSAL: payload cannot name an owner");
     let reply = api(
         Method::POST,
         "/api/modules/requests",
-        Some(json!({"module":"sample.counter","source":"sample-registry"})),
+        Some(pick.clone()),
         Some(&member_cookie),
     );
     assert_eq!(reply.0, 200, "member request must succeed: {}", reply.1);
     assert_eq!(reply.1["status"], "pending");
+    assert_eq!(reply.1["ownerAccountId"], member.to_string());
+    assert_eq!(
+        reply.1["notice"], "unsupported",
+        "never pretend a notice was sent"
+    );
+    let id = reply.1["id"].as_str().unwrap().to_string();
+    let path = format!("/api/modules/requests/{id}");
+    assert_eq!(
+        api(Method::GET, &path, None, Some(&second_cookie)).0,
+        404,
+        "REFUSAL: another account cannot read the request"
+    );
+    assert_eq!(
+        api(
+            Method::GET,
+            "/api/modules/requests",
+            None,
+            Some(&second_cookie)
+        )
+        .1["requests"],
+        json!([])
+    );
+    let other = api(
+        Method::POST,
+        "/api/modules/requests",
+        Some(pick.clone()),
+        Some(&second_cookie),
+    );
+    assert_eq!(other.0, 200);
+    assert_ne!(other.1["id"], id);
+    let own_list = api(
+        Method::GET,
+        "/api/modules/requests",
+        None,
+        Some(&member_cookie),
+    );
+    assert_eq!(own_list.1["requests"].as_array().unwrap().len(), 1);
+    assert_eq!(own_list.1["requests"][0]["id"], id);
+    let unavailable = api(
+        Method::POST,
+        "/api/modules/requests",
+        Some(json!({"module":"sample.missing","source":"sample-registry"})),
+        Some(&member_cookie),
+    );
+    assert_eq!(
+        unavailable.0, 422,
+        "REFUSAL: unavailable module cannot be requested"
+    );
+    assert!(unavailable.1["error"]
+        .as_str()
+        .unwrap()
+        .contains("unavailable"));
+    assert!(!unavailable.1.to_string().contains("postgres"));
+    let admin_list = api(Method::GET, "/api/modules/requests", None, Some(&cookie));
+    assert_eq!(admin_list.0, 200);
+    assert_eq!(admin_list.1["requests"].as_array().unwrap().len(), 2);
+    for private_field in [
+        "password",
+        "email",
+        "connector_key",
+        "postgres://",
+        "private account content",
+    ] {
+        assert!(
+            !admin_list.1.to_string().contains(private_field),
+            "request metadata projection: {private_field}"
+        );
+    }
+    let notices = || {
+        let out = api(Method::GET, "/api/desktop/notices", None, Some(&cookie));
+        assert_eq!(out.0, 200, "existing recipient feed: {}", out.1);
+        out.1["events"].clone()
+    };
+    let before_notices = notices();
+    // Verify why fan-out cannot use the existing app-runtime notification contract.
+    member_rt.block_on(async {
+        let database = safety_core::db::Database::connect(&app_url, 1, safety_core::db::RuntimeRole::App).await.unwrap();
+        let access = access_context::AccessContext::new(member, "notification-recipient-probe");
+        let cx = safety_core::db::DataContext::open(&database, &access).await.unwrap();
+        let owner: uuid::Uuid = member_db.query_one("SELECT id FROM app.users WHERE email='bootstrap-owner@example.test'", &[]).await.unwrap().get(0);
+        let error = cx.db().execute("INSERT INTO app.notifications(id,actor_user_id,recipient_user_id,title) VALUES($1,$2,$3,'Install request recipient probe')", &[&uuid::Uuid::new_v4(), &member, &owner]).await.unwrap_err();
+        assert_eq!(error.code().map(|c| c.code()), Some("42501"), "recipient-only notification policy");
+    });
+    std::thread::scope(|threads| {
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                threads.spawn(|| {
+                    api(
+                        Method::POST,
+                        "/api/modules/requests",
+                        Some(pick.clone()),
+                        Some(&member_cookie),
+                    )
+                })
+            })
+            .collect();
+        for handle in handles {
+            let duplicate = handle.join().unwrap();
+            assert_eq!(duplicate.0, 200);
+            assert_eq!(duplicate.1["id"], id, "duplicate request identity");
+        }
+    });
+    server.0.kill().unwrap();
+    server.0.wait().unwrap();
+    server = Server(command.spawn().unwrap());
+    wait_ready();
+    assert!(server.0.try_wait().unwrap().is_none());
+    let restarted = api(
+        Method::POST,
+        "/api/modules/requests",
+        Some(pick.clone()),
+        Some(&member_cookie),
+    );
+    assert_eq!(restarted.0, 200);
+    assert_eq!(
+        restarted.1["id"], id,
+        "restart preserves duplicate suppression"
+    );
+    assert_eq!(restarted.1["status"], "pending");
+    assert_eq!(
+        notices(),
+        before_notices,
+        "unsupported notices remain absent after duplicates and restart"
+    );
+    println!("request submission, ownership, duplicate/restart persistence: passed; admin notice delivery unsupported (recipient-only policy 42501)");
+    let review = api(
+        Method::POST,
+        "/api/modules/review",
+        Some(pick.clone()),
+        Some(&cookie),
+    );
+    assert_eq!(review.0, 200, "real admin review: {}", review.1);
+    let operation = review.1["id"].as_str().unwrap().to_string();
+    let approval = format!("{path}/approve");
+    let approved = json!({"operation":operation,"approve":true});
+    assert_eq!(
+        api(
+            Method::POST,
+            &approval,
+            Some(approved.clone()),
+            Some(&member_cookie)
+        )
+        .0,
+        403,
+        "member cannot execute admin approval"
+    );
+    assert!(
+        api(Method::GET, &path, None, Some(&member_cookie)).1["operationId"].is_null(),
+        "REFUSAL: member cannot bind approval"
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            &approval,
+            Some(json!({"operation":operation,"approve":false})),
+            Some(&cookie)
+        )
+        .0,
+        400,
+        "REFUSAL: approval must be explicit"
+    );
+    let wrong_review = api(
+        Method::POST,
+        "/api/modules/review",
+        Some(json!({"module":"sample.counter","source":"other-registry"})),
+        Some(&cookie),
+    );
+    assert_eq!(
+        wrong_review.0, 200,
+        "second configured source review: {}",
+        wrong_review.1
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            &approval,
+            Some(json!({"operation":wrong_review.1["id"],"approve":true})),
+            Some(&cookie)
+        )
+        .0,
+        409,
+        "REFUSAL: review must match the requested source"
+    );
+    // A registry change after review must still fail through part 1's real execution path.
+    fixtures::publish(&keys, &registry, "2.0.0", 2);
+    assert_eq!(
+        api(
+            Method::POST,
+            &approval,
+            Some(approved.clone()),
+            Some(&cookie)
+        )
+        .0,
+        202
+    );
+    let wait_status = |expected: &str| {
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            let (status, value) = api(Method::GET, &path, None, Some(&member_cookie));
+            assert_eq!(status, 200);
+            if value["status"] == expected {
+                return value;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "request result deadline: {value}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    let failed = wait_status("failed");
+    assert_eq!(failed["operationId"], operation);
+    let fresh = api(
+        Method::POST,
+        "/api/modules/review",
+        Some(pick.clone()),
+        Some(&cookie),
+    );
+    assert_eq!(fresh.0, 200, "fresh review: {}", fresh.1);
+    let approved = json!({"operation":fresh.1["id"],"approve":true});
+    fs::write(root.join("hold-installer"), "hold").unwrap();
+    let retry = api(
+        Method::POST,
+        &approval,
+        Some(approved.clone()),
+        Some(&cookie),
+    );
+    assert_eq!(
+        retry.0, 202,
+        "failed request needs a fresh reviewed retry: {}",
+        retry.1
+    );
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !root.join("installer-waiting").exists() {
+        assert!(Instant::now() < deadline, "installer must reach supervisor");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let quick_client = reqwest::blocking::Client::builder()
+        .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
+        .no_proxy()
+        .timeout(Duration::from_secs(3))
+        .build()
+        .unwrap();
+    let pending = quick_client
+        .get(format!("{origin}{path}"))
+        .header("cookie", &member_cookie)
+        .send();
+    fs::remove_file(root.join("hold-installer")).unwrap();
+    assert_eq!(
+        pending
+            .expect("status must remain readable during installation")
+            .status(),
+        200
+    );
+    let completed = wait_status("succeeded");
+    assert_eq!(completed["id"], id);
+    assert_eq!(completed["operationId"], fresh.1["id"]);
+    assert_eq!(
+        api(
+            Method::POST,
+            &approval,
+            Some(approved.clone()),
+            Some(&cookie)
+        )
+        .0,
+        202,
+        "completed approval is idempotent"
+    );
+    let replacement = api(
+        Method::POST,
+        "/api/modules/review",
+        Some(pick.clone()),
+        Some(&cookie),
+    );
+    assert_eq!(replacement.0, 200);
+    assert_eq!(
+        api(
+            Method::POST,
+            &approval,
+            Some(json!({"operation":replacement.1["id"],"approve":true})),
+            Some(&cookie)
+        )
+        .0,
+        409,
+        "REFUSAL: completed binding cannot be replaced"
+    );
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let result = api(
+            Method::GET,
+            "/api/m/sample.counter/health",
+            None,
+            Some(&member_cookie),
+        );
+        if result.0 == 200 {
+            assert_eq!(result.1["live"], true);
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "approved module must serve its real route: {}",
+            result.1
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let duplicate = api(
+        Method::POST,
+        "/api/modules/requests",
+        Some(pick),
+        Some(&member_cookie),
+    );
+    assert_eq!(duplicate.1["id"], id);
+    assert_eq!(duplicate.1["status"], "succeeded");
+    assert_eq!(notices(), before_notices);
+    println!("admin reviewed approval, stale-byte refusal, fresh-review retry and real module route: passed");
 }
