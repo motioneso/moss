@@ -116,6 +116,7 @@ async fn submit(
             review: None,
             lifecycle: Some(lifecycle),
             stage: ModuleOperationStage::Queued,
+            stages: vec![ModuleOperationStage::Queued],
             result: None,
         },
     };

@@ -75,18 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### JS-419: S5 host operation reporting scope — 2026-11-24
-
-Awaiting permission to extend persisted install reporting beyond read endpoints.
-The approved S5 mockup separates download, signature verification and data setup;
-the current host records only Checking and Installing, with Installing covering
-all three steps. Download and SQL failures share a generic installation failure.
-The task requires real persisted stages and distinct failure reasons but limits
-backend changes to small read endpoints. Proposed exception: add persisted stages
-and safe failure categories without changing installation or approval policy.
-Evidence: `rust-spike/shell/app/src/module_install.rs` and
-`rust-spike/module-host/src/store.rs` at main commit `4ec589298`.
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;

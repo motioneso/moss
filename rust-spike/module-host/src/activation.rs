@@ -1,6 +1,7 @@
 //! One transaction and recovery path for registry and owner-private local packages.
 use crate::{
     archive::Package,
+    install_progress::{InstallFailure, InstallStage, Progress},
     store::{Activation, Installed, Installer},
     trust,
 };
@@ -22,6 +23,7 @@ impl Installer {
         registry_trust: &trust::TrustedRegistry,
         key_id: &str,
         options: Activation,
+        progress: Progress<'_>,
     ) -> Result<()> {
         let state = self.catalog.load()?;
         let id = &package.manifest.id;
@@ -56,6 +58,7 @@ impl Installer {
                 local_owner: None,
             },
             options,
+            progress,
         )
     }
     pub(crate) fn activate_verified(
@@ -65,6 +68,7 @@ impl Installer {
         bytes: &[u8],
         origin: Origin,
         options: Activation,
+        progress: Progress<'_>,
     ) -> Result<()> {
         let Activation {
             approved,
@@ -110,7 +114,11 @@ impl Installer {
         };
         self.begin_change(id, &snapshot, Some(package.digest.clone()))?;
         let outcome = (|| -> Result<()> {
-            self.lifecycle.migrate(&package, old.as_ref())?;
+            progress(InstallStage::SettingUpData)?;
+            self.lifecycle
+                .migrate(&package, old.as_ref())
+                .map_err(|error| error.context(InstallFailure::Sql))?;
+            progress(InstallStage::Activating)?;
             if let Some(wasm) = package.files.get("code/module.wasm") {
                 self.host.call(
                     wasm,

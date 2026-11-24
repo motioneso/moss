@@ -161,6 +161,7 @@ fn preview_list(instance: &FsPath, actor: String, input: Value) -> Result<Value>
                 review: Some(review),
                 lifecycle: None,
                 stage: ModuleOperationStage::Reviewed,
+                stages: vec![ModuleOperationStage::Reviewed],
                 result: None,
             },
         };
