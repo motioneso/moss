@@ -89,7 +89,9 @@ impl Accounts {
 /// implementation here instead of the stub.
 fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
     let index = web.join("index.html");
+    let module_page = index.clone();
     Router::new()
+        .route("/settings/modules", get(move |uri: Uri| app_page(uri, module_page.clone())))
         .route(
             "/api/shell",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move {
