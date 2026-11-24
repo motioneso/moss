@@ -304,3 +304,10 @@ test("shared-host PRs run the registry API contract", () => {
     { module: "host", suite: "phase6-registry-api", gates: "test:rust-phase6-registry-api" }
   );
 });
+
+test("shared-host PRs run module policy server integration", () => {
+  assert.deepEqual(
+    rustCiEntries([], "pull_request", true).find(({ suite }) => suite === "phase6-module-policy"),
+    { module: "host", suite: "phase6-module-policy", gates: "test:rust-phase6-module-policy" }
+  );
+});

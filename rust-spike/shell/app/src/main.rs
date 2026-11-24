@@ -44,6 +44,8 @@ mod module_lists;
 mod module_local;
 mod module_management;
 mod module_operation;
+mod module_policy;
+mod module_refresh;
 mod module_registries;
 mod module_sources;
 mod module_updates;
@@ -59,6 +61,7 @@ struct Accounts {
     modules: modules::Slot,
     /// True when the server has an instance folder the module installer can work in.
     can_install_modules: bool,
+    module_admin: Option<Arc<module_admin::Admin>>,
     data: Mutex<HashMap<uuid::Uuid, Data>>,
 }
 
@@ -105,6 +108,9 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                     });
                 }
                 cx.commit().await?;
+                if let Some(admin) = &d.module_admin {
+                    module_refresh::app_open(admin.clone(), d.modules.clone());
+                }
                 Ok::<_, safety_core::error::ApiError>(Json::<ShellView>(shell))
             }),
         )
@@ -339,6 +345,7 @@ fn main() {
         let data = Arc::new(Accounts {
             platform: platform.clone(),
             can_install_modules: args.instance.is_some(),
+            module_admin: admin.clone(),
             runner: args.runner,
             modules: modules.clone(),
             data: Mutex::new(HashMap::new()),
@@ -387,7 +394,10 @@ fn main() {
             None => private,
         };
         let private = match admin {
-            Some(admin) => private.merge(module_admin::routes(admin)),
+            Some(admin) => {
+                module_refresh::start(admin.clone(), modules.clone(), stop.clone());
+                private.merge(module_admin::routes(admin))
+            },
             None => private,
         };
         let private = private.layer(Extension(modules.clone()));

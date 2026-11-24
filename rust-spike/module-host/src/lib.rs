@@ -99,3 +99,5 @@ mod activation;
 pub mod local_lifecycle;
 
 mod catalog_storage;
+
+pub mod module_policy;
