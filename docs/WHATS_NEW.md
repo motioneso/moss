@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-23
+
+#### Added
+
+- **Keep or recover removed module data.** Module removal can keep data for reinstalling or save a snapshot before deletion, with recovery after an interruption. [PR #4478](https://github.com/motioneso/moss/pull/4478)
+
 ### 2026-11-22
 
 #### Fixed
