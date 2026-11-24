@@ -69,9 +69,16 @@ async function vaultEvidence(project: string, meetingId: string): Promise<VaultE
   );
   return JSON.parse(stdout) as VaultEvidence[];
 }
-async function clickCommand(page: Page, name: string, path: string, method = "POST") {
+async function clickCommand(
+  page: Page,
+  name: string,
+  path: string,
+  method = "POST",
+  responseTimeout = 30_000
+) {
   const response = page.waitForResponse(
-    (r) => r.url().endsWith(path) && r.request().method() === method
+    (r) => r.url().endsWith(path) && r.request().method() === method,
+    { timeout: responseTimeout }
   );
   await page.getByRole("button", { name, exact: true }).click();
   const result = await response;
@@ -102,7 +109,7 @@ async function assertReceipt(page: Page, receipt: MeetingExportReceipt, version:
 test("reviewed summary versions create independent Tasks and private vault copies (#2981)", async ({
   page
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const project = requireUatProjectName();
   if (!project.startsWith("uat-")) throw new Error("Use isolated UAT provisioner");
   const fixtureName = `${project}-meeting-outputs-fixture`;
@@ -329,6 +336,8 @@ test("reviewed summary versions create independent Tasks and private vault copie
       await test.step("unsupported summary model explains real configuration recovery", async () => {
         // Change the real synthetic model, not a Moss response. The hard pin stays selected;
         // missing structured-output capability must fail before the provider is dispatched.
+        // Keep the cached available UI: refreshing would disable the button and bypass
+        // generation's configuration check, which must not wait for owner-context recall.
         try {
           expect(
             (
@@ -466,7 +475,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
         ).toBe(200);
       }
     });
-    const generated = await clickCommand(page, "Write summary", `${path}/outputs`);
+    // Invalid routes no longer warm owner-context embeddings. The first valid
+    // generation may load the local model; wait for its real response, not a sleep.
+    const generated = await clickCommand(page, "Write summary", `${path}/outputs`, "POST", 120_000);
     expect(generated.request().postDataJSON().requestKey).not.toBe(failedRequestKey);
     console.log(
       "MEETINGS_SUMMARY_RECOVERY_UAT explicit disabled-state Refresh hint; focused-review repair → Refresh → enabled; Settings repair → return → automatic availability recheck → Generate POST, without an extra Refresh click."
