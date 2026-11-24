@@ -115,7 +115,7 @@ type History = BTreeMap<String, SeenRegistry>;
 async fn history(admin: &Admin, access: &AccessContext) -> Result<History> {
     let cx = DataContext::open(&admin.platform.app, access)
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(|_| anyhow::anyhow!("Cannot read registry configuration history"))?;
     let present: bool = cx
         .db()
         .query_one(

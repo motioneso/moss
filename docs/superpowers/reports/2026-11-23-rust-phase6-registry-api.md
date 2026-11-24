@@ -26,7 +26,8 @@ identities, public fingerprints, health and reviews, omitting host paths and dat
 
 ## Verification state
 
-Implementation checkpoint; focused real-server verification and negative controls pending.
+Implementation checkpoint; the restored real-server run and guard-removal controls are pending.
+Full lint, formatting and TypeScript checks passed.
 Scoped ESLint, Prettier, `pnpm check:file-size`, and the Rust CI matrix's 15 Node tests pass.
 The matrix was observed failing first without the new registry entry (14 pass, 1 fail).
 Bundle manifest verification is shared with the publisher; the runner includes the existing
@@ -41,3 +42,35 @@ scripts/run-gate.sh wait --follow
 
 Early gate launches stopped before exercising Rust: first a missing `tsx`, then missing
 workspace dependency links. The declared offline workspace install repairs that setup.
+
+## Failing-first evidence
+
+- Before these endpoints, the real HTTPS gate against the pre-change shell failed with
+  `registry management endpoint must exist`: HTTP 404 instead of 200 (gate rc 101).
+- Review exposed a saved-history gap in the new API. The regression was observed failing:
+  `re-add refuses replayed registry history`: HTTP 200 instead of 422 (gate rc 101).
+  Add, confirm, file import and health now seed the shared validator from the canonical
+  configuration history, read through the signed-in administrator's data context under
+  the instance lock. This does not select private activation metadata.
+
+## Review decisions
+
+The first read-only review identified the history gap above and a pin-failure concern.
+The parent already finalizes a failed child, but pin failure now also records an explicit
+installed-without-pin result. Needlessly borrowed paths were removed.
+
+Package sidecar signatures are optional: the index's package signature is always checked;
+any supplied sidecar is checked too. List import uses ordinary per-module operation records,
+so it may partially complete. Repeating a preview does not rerun terminal operations; the
+existing executor returns their saved results. Preview records remain available for that
+journal behavior. Skipped existing modules are currently omitted from the additions response.
+Imported source folders remain after removal, and serial source health reads retain the
+existing 30-second per-file network timeout while holding the management fence. Storage
+reclamation, skipped-item presentation and finer health concurrency remain limitations.
+
+## Not proven
+
+- Screens, refresh scheduling, account switches and install requests are outside part 8c.
+- Production deployment, platform parity and the full foundation/browser suites were not run.
+- Offline file import uses signed fixtures through the real server; no production signing
+  keys or release-compiled bootstrap allowlist were used.
