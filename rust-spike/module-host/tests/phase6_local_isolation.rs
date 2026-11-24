@@ -348,3 +348,32 @@ fn account_switch_is_owner_only() {
         .unwrap()
         .contains("PRIVATE-CODE-MARKER"));
 }
+
+#[test]
+fn catalog_activity_is_owner_only() {
+    use moss_module_host::{
+        registry::RevocationLevel,
+        revocation::{Activity, ActivityAction},
+        store::CatalogStore,
+    };
+    let (f, host, digest) = installed();
+    let mut state = f.saved.load().unwrap();
+    state.activity.push(Activity {
+        at: chrono::Utc::now(),
+        module: f.id.clone(),
+        digest,
+        source: "local".into(),
+        target: f.id.clone(),
+        reason: "PRIVATE-ACTIVITY-MARKER".into(),
+        level: RevocationLevel::Warn,
+        action: ActivityAction::Revoked,
+    });
+    f.saved.commit(state.revision, &state).unwrap();
+    assert_eq!(host.activity_for(&f.owner).unwrap().len(), 1);
+    for actor in [&f.other, &f.admin] {
+        assert!(
+            host.activity_for(actor).unwrap().is_empty(),
+            "PRIVATE-ACTIVITY-MARKER leaked"
+        );
+    }
+}

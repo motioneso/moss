@@ -224,6 +224,7 @@ impl Fixture {
         )
         .unwrap();
         Artifact {
+            presentation: None,
             id: m.id,
             version: m.version,
             digest: digest.clone(),

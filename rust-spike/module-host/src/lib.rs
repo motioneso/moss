@@ -101,3 +101,5 @@ pub mod local_lifecycle;
 mod catalog_storage;
 
 pub mod module_policy;
+
+pub mod catalog_presentation;

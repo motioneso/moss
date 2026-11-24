@@ -1,5 +1,7 @@
 //! Real installed-package proofs. Run only through scripts/run-gate.sh.
 mod support;
+#[path = "support/worker_isolation.rs"]
+mod worker_isolation;
 use safety_core::db::DataContext;
 use safety_core::secret::Secret;
 use serde_json::{json, Value};
@@ -17,6 +19,7 @@ impl World {
     fn new() -> Self {
         let f = Fixture::new();
         let app = support::install::install(&f);
+        worker_isolation::reset(&f);
         // Instance switch on, as an admin would set it.
         f.rt.block_on(f.root.execute(
             "INSERT INTO app.instance_settings(key,value) VALUES('backtrack.storage','{\"value\":\"on\"}'::jsonb) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",

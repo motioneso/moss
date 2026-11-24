@@ -711,19 +711,7 @@ impl Manifest {
             .map(|cap| {
                 let public_web = matches!(cap.port.as_str(), "fetch" | "browser")
                     && cap.resources.contains(crate::public_web::PUBLIC_WEB);
-                let (group, headline) = match cap.port.as_str() {
-                    "browser" => ("network", "Open pages you confirm in a sandboxed browser"),
-                    _ if public_web => ("network", "Read public websites you add"),
-                    "db" | "kv" => ("data", "Store and read this module's data"),
-                    "vault" | "attachments" => ("files", "Read the files you give this module"),
-                    "fetch" | "credentials" => ("network", "Contact approved services"),
-                    "ai" | "embed" | "transcribe" => ("AI", "Use your chosen AI service"),
-                    "feedback" => ("data", "Record and take back your usefulness ratings for the kinds of item it lists"),
-                    "tools" | "action-policy" => {
-                        ("chat tools", "Offer tools under your approval rules")
-                    }
-                    _ => ("data", "Work with your Moss account"),
-                };
+                let (group, headline) = capability_summary(cap);
                 Permission {
                     port: cap.port.clone(),
                     group: group.into(),
@@ -812,4 +800,24 @@ fn reject_model_fields(value: &Value) -> Result<()> {
         _ => (),
     }
     Ok(())
+}
+
+/// Plain language shared by installed permissions and signed catalog offers.
+pub fn capability_summary(cap: &Capability) -> (&'static str, &'static str) {
+    let public_web = matches!(cap.port.as_str(), "fetch" | "browser")
+        && cap.resources.contains(crate::public_web::PUBLIC_WEB);
+    match cap.port.as_str() {
+        "browser" => ("network", "Open pages you confirm in a sandboxed browser"),
+        _ if public_web => ("network", "Read public websites you add"),
+        "db" | "kv" => ("data", "Store and read this module's data"),
+        "vault" | "attachments" => ("files", "Read the files you give this module"),
+        "fetch" | "credentials" => ("network", "Contact approved services"),
+        "ai" | "embed" | "transcribe" => ("AI", "Use your chosen AI service"),
+        "feedback" => (
+            "data",
+            "Record and take back your usefulness ratings for the kinds of item it lists",
+        ),
+        "tools" | "action-policy" => ("chat tools", "Offer tools under your approval rules"),
+        _ => ("data", "Work with your Moss account"),
+    }
 }

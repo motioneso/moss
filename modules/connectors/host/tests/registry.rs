@@ -35,6 +35,7 @@ fn connectors_downloads_from_a_signed_folder_registry() {
     let (root_key, index_key, publisher) = (key(), key(), key());
     let digest = trust::digest(&bytes);
     let artifact = Artifact {
+        presentation: None,
         id: manifest.id.clone(),
         version: manifest.version.clone(),
         digest: digest.clone(),

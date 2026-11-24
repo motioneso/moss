@@ -104,6 +104,7 @@ impl Keys {
         let bytes = bytes(version);
         let digest = trust::digest(&bytes);
         let artifact = Artifact {
+            presentation: None,
             id: manifest.id.clone(),
             version: manifest.version.clone(),
             digest: digest.clone(),

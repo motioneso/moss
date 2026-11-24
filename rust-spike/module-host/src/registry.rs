@@ -20,6 +20,8 @@ pub const MAX_INDEX: u64 = 8 * 1024 * 1024;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Artifact {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<crate::catalog_presentation::Presentation>,
     pub id: String,
     pub version: Version,
     pub digest: String,
@@ -414,6 +416,9 @@ impl Catalog {
         trust::verify(key, &bytes, &sig)?;
         let mut versions = BTreeSet::new();
         for artifact in &index.modules {
+            if let Some(presentation) = &artifact.presentation {
+                presentation.validate()?;
+            }
             ensure!(
                 crate::manifest::identifier(&artifact.id)
                     && trust::valid_digest(&artifact.digest)

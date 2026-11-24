@@ -43,6 +43,7 @@ pub fn write(folder: &Path, bytes: &[u8], manifest: &Manifest) -> Result<(String
         lifted_revocations: BTreeSet::new(),
     };
     let artifact = Artifact {
+        presentation: None,
         id: manifest.id.clone(),
         version: manifest.version.clone(),
         digest: digest.clone(),

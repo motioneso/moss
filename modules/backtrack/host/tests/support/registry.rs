@@ -45,6 +45,7 @@ pub fn publish_as(
     let publisher = PUBLISHER.get_or_init(key);
     let digest = trust::digest(bytes);
     let artifact = Artifact {
+        presentation: None,
         id: m.id.clone(),
         version: m.version.clone(),
         digest: digest.clone(),

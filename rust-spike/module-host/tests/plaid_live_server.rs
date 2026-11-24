@@ -241,6 +241,7 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
             )
             .unwrap();
             Artifact {
+                presentation: None,
                 id: manifest.id.clone(),
                 version: manifest.version.clone(),
                 digest: digest.clone(),

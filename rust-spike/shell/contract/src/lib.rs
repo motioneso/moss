@@ -245,3 +245,8 @@ pub mod stub;
 
 /// Module catalog, digest-bound reviews and durable operation results.
 pub mod module_management;
+
+/// Account-owned module install requests.
+pub mod install_requests;
+
+pub mod catalog_view;

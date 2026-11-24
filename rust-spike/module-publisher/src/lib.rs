@@ -184,6 +184,16 @@ impl<'a> Prepared<'a> {
             },
         };
         let artifact = Artifact {
+            presentation: package
+                .files
+                .get("ui/catalog.json")
+                .map(|bytes| -> Result<_> {
+                    let metadata: moss_module_host::catalog_presentation::Presentation =
+                        serde_json::from_slice(bytes)?;
+                    metadata.validate()?;
+                    Ok(metadata)
+                })
+                .transpose()?,
             id: manifest.id.clone(),
             version: manifest.version.clone(),
             digest,

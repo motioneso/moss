@@ -15,10 +15,13 @@ import { buildAppMap } from "../../scripts/build-app-map.js";
 describe("app-map integrity and truthfulness", () => {
   const rustRoutes = new Set(
     [
-      ...readFileSync(
-        new URL("../../rust-spike/network/src/web.rs", import.meta.url),
-        "utf8"
-      ).matchAll(/\.route\(\s*"([^" ]+)"/g)
+      ...["../../rust-spike/network/src/web.rs", "../../rust-spike/shell/app/src/main.rs"].flatMap(
+        (file) => [
+          ...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(
+            /\.route\(\s*"([^" ]+)"/g
+          )
+        ]
+      )
     ]
       .map((match) => match[1])
       // The shell serves Today at "/" through its fallback, not a declared route.
@@ -66,24 +69,63 @@ describe("app-map integrity and truthfulness", () => {
       narrative: ""
     });
     expect(rustMap.screens.map((entry) => entry.id)).toEqual([
+      "rust-modules-installed",
+      "rust-modules-browse",
+      "rust-module-detail",
       "rust-sign-in",
       "rust-today",
       "rust-desktop-connect"
     ]);
     expect(rustMap.settings.map((entry) => entry.id)).toEqual([
+      "rust-module-account-switch",
+      "rust-module-server-controls",
+      "rust-module-settings-cog",
       "rust-desktop-settings",
       "rust-network-sharing"
     ]);
     for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
-      expect(rustRoutes.has(entry.path ?? "")).toBe(true);
+      // Browse and detail are query views of the same declared shell route.
+      expect(
+        rustRoutes.has((entry.path ?? "").split("?")[0] ?? ""),
+        `Rust surface "${entry.id}" has no declared route: ${entry.path}`
+      ).toBe(true);
     }
     expect(rustMap.errors.some((entry) => entry.code === "host_refused")).toBe(true);
     for (const entry of rustMap.errors) {
+      // Catalog failures are a UI state rather than an emitted HTTP error code.
+      // Verify that state separately below; keep checking every wire error in Rust.
+      if (entry.code === "core.modules.catalog_unavailable") continue;
       expect(
         rustErrorCodes.has(entry.code ?? ""),
         `Rust error "${entry.code}" is not in Rust`
       ).toBe(true);
     }
+  });
+
+  it("documents the real catalog failure state and its retry destination", () => {
+    const catalogScreen = readFileSync(
+      new URL("../../rust-spike/shell/ui/src/modules_page.rs", import.meta.url),
+      "utf8"
+    );
+    expect(catalogScreen).toContain(
+      'Some(Err(_)) => view!{<EmptyState title="Modules could not be read."'
+    );
+    expect(catalogScreen).toMatch(/reload\.run\(\(\)\).*"Retry"/);
+    expect(CORE_APP_ERRORS).toContainEqual(
+      expect.objectContaining({
+        code: "core.modules.catalog_unavailable",
+        runtime: "rust",
+        class: "transient",
+        remediationRef: "core.modules.catalog_retry"
+      })
+    );
+    expect(CORE_APP_REMEDIATIONS).toContainEqual(
+      expect.objectContaining({
+        id: "core.modules.catalog_retry",
+        runtime: "rust",
+        path: "/settings/modules"
+      })
+    );
   });
 
   it("keeps Rust-only declarations out of the production TypeScript app map", () => {
@@ -223,7 +265,12 @@ describe("app-map integrity and truthfulness", () => {
   it("Rust core remediations point at declared Rust routes", () => {
     const rustRemediations = CORE_APP_REMEDIATIONS.filter((entry) => entry.runtime === "rust");
     expect(rustRemediations.length).toBeGreaterThan(0);
-    for (const entry of rustRemediations) expect(rustRoutes.has(entry.path ?? "")).toBe(true);
+    for (const entry of rustRemediations) {
+      expect(
+        rustRoutes.has(entry.path ?? ""),
+        `Rust remediation "${entry.id}" has no declared route: ${entry.path}`
+      ).toBe(true);
+    }
   });
 
   it("every app map remediation points at a truthful route", () => {
