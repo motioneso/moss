@@ -10,6 +10,8 @@ live-proof = ["moss-agents/live-proof"]
 
 [dependencies]
 base64 = "0.22"
+chrono = "0.4"
+vault = { path = "../../vault" }
 moss-agents = { path = "../../agents" }
 moss-shell-contract = { path = "../contract", features = ["stub"] }
 moss-network = { path = "../../network" }

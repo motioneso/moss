@@ -38,17 +38,14 @@ pub fn read(instance: &Path) -> Result<Vec<Registry>> {
         .map_err(|_| anyhow::anyhow!("No module registry is set up for this server"))?;
     decode(&bytes)
 }
-fn decode(bytes: &[u8]) -> Result<Vec<Registry>> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<Vec<Registry>> {
     let config: Configuration =
         serde_json::from_slice(bytes).context("The module registry settings are not valid")?;
     let sources = match config {
         Configuration::Legacy(source) => vec![source],
         Configuration::Several(config) => config.registries,
     };
-    ensure!(
-        !sources.is_empty() && sources.len() <= 16,
-        "Configure between one and sixteen registries"
-    );
+    ensure!(sources.len() <= 16, "Configure at most sixteen registries");
     let mut ids = BTreeSet::new();
     for source in &sources {
         ensure!(
@@ -67,4 +64,24 @@ pub fn select(instance: &Path, id: Option<&str>) -> Result<Registry> {
         .into_iter()
         .find(|r| id.is_none_or(|id| r.id == id))
         .context("The source registry is not configured")
+}
+
+pub fn write(instance: &Path, sources: &[Registry]) -> Result<()> {
+    let bytes = serde_json::to_vec(&serde_json::json!({"registries":sources}))?;
+    decode(&bytes)?;
+    moss_network::config::private_write(&instance.join(super::module_admin::REGISTRY_FILE), &bytes)
+        .map_err(anyhow::Error::msg)
+}
+impl Registry {
+    pub fn source(&self) -> Result<moss_module_host::registry::Source> {
+        match (&self.folder, &self.url) {
+            (Some(folder), None) => Ok(moss_module_host::registry::Source::Folder(folder.clone())),
+            (None, Some(url)) => Ok(moss_module_host::registry::Source::Https {
+                base: url.parse()?,
+                allow_private: false,
+                certificate_pem: None,
+            }),
+            _ => anyhow::bail!("Each registry needs one folder or URL"),
+        }
+    }
 }

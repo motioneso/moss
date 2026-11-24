@@ -52,9 +52,11 @@ impl Installer {
             .registries
             .get_mut(&config.id)
             .context("Registry is not trusted")?;
+        // Explicit configuration may restore a removed source. Refresh already checked
+        // its pinned root and replay floor; assertion must see this intentional restore.
+        seen.removed = false;
         catalog.assert_current(seen)?;
         seen.configuration = Some(config.clone());
-        seen.removed = false;
         state.revision += 1;
         self.catalog.commit(revision, &state)?;
         Ok(catalog)

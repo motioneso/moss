@@ -47,6 +47,8 @@ pub fn routes(admin: Arc<Admin>) -> Router {
         .route("/api/modules/install", post(install))
         .merge(crate::module_management::routes())
         .merge(crate::module_updates::routes())
+        .merge(crate::module_registries::routes())
+        .merge(crate::module_lists::routes())
         .merge(crate::module_lifecycle::routes())
         .merge(crate::module_local::routes())
         .with_state(admin)

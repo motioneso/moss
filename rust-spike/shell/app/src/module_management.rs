@@ -154,6 +154,7 @@ pub(crate) async fn review_selected(
             lifecycle: None,
             source_binding: source.binding()?,
             approved: false,
+            pin_after_install: false,
             view: ModuleOperation {
                 id: uuid::Uuid::new_v4().to_string(),
                 review: Some(review),

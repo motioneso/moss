@@ -3701,6 +3701,7 @@ dependencies = [
  "async-trait",
  "axum",
  "base64 0.22.1",
+ "chrono",
  "moss-agents",
  "moss-backtrack-host",
  "moss-calendar-host",
@@ -3727,6 +3728,7 @@ dependencies = [
  "tokio-postgres",
  "tower-http",
  "uuid",
+ "vault",
 ]
 
 [[package]]

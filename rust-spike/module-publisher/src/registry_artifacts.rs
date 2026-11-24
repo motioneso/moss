@@ -11,7 +11,7 @@ use moss_module_host::{
     trust,
 };
 use ring::signature::{Ed25519KeyPair, KeyPair};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -19,25 +19,7 @@ use std::{
     path::Path,
 };
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BundleEntry {
-    pub id: String,
-    pub version: semver::Version,
-    pub digest: String,
-    pub publisher_key: String,
-    pub signature: String,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Bundle {
-    pub registry: String,
-    pub index_digest: String,
-    pub serial: u64,
-    pub signing_key: String,
-    pub default: Vec<BundleEntry>,
-    pub optional: Vec<BundleEntry>,
-}
+pub use moss_module_host::bundle::{BundleEntry, BundleManifest as Bundle};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Selection {
@@ -171,40 +153,7 @@ impl Snapshot {
         Ok(snapshot)
     }
     fn verify_bundle(&self, bytes: &[u8], signature: &[u8]) -> Result<()> {
-        let bundle: Bundle = serde_json::from_slice(bytes)?;
-        ensure!(
-            bundle.signing_key == self.catalog.index.signing_key,
-            "Wrong bundle signing key"
-        );
-        trust::verify(
-            &self.catalog.trust.identity.index_keys[&bundle.signing_key],
-            bytes,
-            std::str::from_utf8(signature)?,
-        )?;
-        ensure!(
-            bundle.registry == self.catalog.trust.identity.id
-                && bundle.index_digest == trust::digest(&self.files["index.json"])
-                && bundle.serial == self.catalog.index.serial,
-            "Bundle does not match signed index"
-        );
-        let mut ids = BTreeSet::new();
-        for entry in bundle.default.iter().chain(&bundle.optional) {
-            ensure!(ids.insert(&entry.id), "Repeated bundle module");
-            let artifact = self
-                .catalog
-                .index
-                .modules
-                .iter()
-                .find(|a| a.id == entry.id && a.version == entry.version)
-                .context("Bundle version is missing")?;
-            ensure!(
-                entry.digest == artifact.digest
-                    && entry.publisher_key == artifact.publisher_key
-                    && entry.signature == artifact.signature,
-                "Bundle package does not match signed index"
-            );
-        }
-        Ok(())
+        self.catalog.verify_bundle(bytes, signature)
     }
     fn write(self, destination: &Path) -> Result<Value> {
         // create_dir refuses an existing destination, including symlinks. Nothing is overwritten.

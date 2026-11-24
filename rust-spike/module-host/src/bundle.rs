@@ -180,3 +180,24 @@ impl Bundle<'_> {
         Ok(())
     }
 }
+
+use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BundleEntry {
+    pub id: String,
+    pub version: semver::Version,
+    pub digest: String,
+    pub publisher_key: String,
+    pub signature: String,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BundleManifest {
+    pub registry: String,
+    pub index_digest: String,
+    pub serial: u64,
+    pub signing_key: String,
+    pub default: Vec<BundleEntry>,
+    pub optional: Vec<BundleEntry>,
+}
