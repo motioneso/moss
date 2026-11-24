@@ -100,10 +100,13 @@ fn current_path() -> String {
     // Mac and Android apps already in the field open the old approval address. It now lands on
     // Meetings, which keeps the one-time code after the "#" and asks for the approval.
     if path == "/link/trail-marker" {
-        let to = format!("/meetings{}", window().location().hash().unwrap_or_default());
-        let _ = window().history().and_then(|h| {
-            h.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&to))
-        });
+        let to = format!(
+            "/meetings{}",
+            window().location().hash().unwrap_or_default()
+        );
+        let _ = window()
+            .history()
+            .and_then(|h| h.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&to)));
         return "/meetings".into();
     }
     if path == "/" || path.is_empty() {
@@ -560,8 +563,12 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                             view! { <TodayPage /> }.into_any()
                         } else if path.get() == "/scratchpad-settings" {
                             view! { <iframe id="scratchpad-settings-frame" class="module-screen" title="Scratchpad settings" src="/module-frame?module=scratchpad&path=%2Fscratchpad-settings"></iframe> }.into_any()
-                        } else if path.get() == "/modules" {
+                        } else if path.get() == "/modules" || path.get() == "/settings/modules" {
                             view! { <crate::modules_page::ModulesPage /> }.into_any()
+                        } else if path.get().starts_with("/settings/modules/") {
+                            view! { <NotPortedYet /> }.into_any()
+                        } else if path.get().starts_with("/settings/") {
+                            view!{<crate::module_detail::ModuleSettingsPage path=path.get()/>}.into_any()
                         } else if let Some(m) = modules.iter().find(|m| m.path == path.get()) {
                             let mut src = format!(
                                 "/module-frame?module={}&path={}",

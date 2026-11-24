@@ -1,10 +1,4 @@
-import {
-  RUST_MODULE_FEATURES,
-  RUST_MODULE_REMEDIATIONS,
-  RUST_MODULE_SCREENS,
-  RUST_MODULE_SETTINGS,
-  RUST_MODULE_ERRORS
-} from "./app-map-rust-modules.js";
+import * as RustModules from "./app-map-rust-modules.js";
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
 import { RUST_CHAT_REMEDIATIONS } from "./app-map-rust-chat.js";
 import {
@@ -73,7 +67,7 @@ export interface AppMapArtifact {
 // Served by the Rust HTTPS listener, not the React web router. Keep these outside
 // CORE_APP_SCREENS so web route metadata never advertises a Rust-only page.
 export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
-  ...RUST_MODULE_SCREENS,
+  ...RustModules.RUST_MODULE_SCREENS,
   {
     id: "rust-sign-in",
     runtime: "rust",
@@ -98,7 +92,7 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
 export const CORE_APP_FEATURES: readonly (AppMapItem & {
   readonly id: string;
   readonly description: string;
-})[] = [...RUST_MODULE_FEATURES];
+})[] = [...RustModules.RUST_MODULE_FEATURES];
 
 export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
@@ -205,7 +199,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
 // source of truth for what a user can actually reach). Native Android settings
 // identify the installed activity instead of inventing a web settings route.
 export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
-  ...RUST_MODULE_SETTINGS,
+  ...RustModules.RUST_MODULE_SETTINGS,
   ...DESKTOP_APP_SETTINGS,
   {
     id: "rust-network-sharing",
@@ -605,7 +599,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 ];
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
-  ...RUST_MODULE_ERRORS,
+  ...RustModules.RUST_MODULE_ERRORS,
   {
     code: "sign_in_body_timeout",
     runtime: "rust",
@@ -861,7 +855,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     path: "/",
     scope: "user"
   },
-  ...RUST_MODULE_REMEDIATIONS,
+  ...RustModules.RUST_MODULE_REMEDIATIONS,
   {
     id: "core.modules.check_page_result",
     description:

@@ -6,6 +6,7 @@ publish.workspace = true
 description = "Leptos app frame, Today and chat drawer, compiled to WebAssembly"
 
 [dependencies]
+moss-module-ui = { path = "../../module-ui", features = ["csr"] }
 moss-shell-contract = { path = "../contract" }
 leptos = { version = "0.8", features = ["csr"] }
 gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }

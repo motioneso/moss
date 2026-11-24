@@ -1,0 +1,124 @@
+/* Catalog layout. Typography, surfaces, controls and colours come from Park Press. */
+.catalog-page {
+  width: 100%;
+  padding: var(--space-6);
+}
+.catalog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-block: var(--space-4);
+}
+.catalog-head h1,
+.catalog-head h2,
+.catalog-page p {
+  margin: 0;
+}
+.catalog-head > div,
+.catalog-row > div:first-child {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.catalog-tabs,
+.catalog-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.catalog-tabs {
+  margin-block: var(--space-5);
+}
+.catalog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-block: var(--space-5);
+  border-bottom: var(--border-w) solid var(--border);
+}
+.catalog-row > div:first-child {
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
+.catalog-row .catalog-actions {
+  justify-content: flex-end;
+}
+.catalog-filters {
+  display: grid;
+  grid-template-columns: minmax(14rem, 2fr) repeat(3, minmax(9rem, 1fr));
+  gap: var(--space-4);
+  margin-block: var(--space-6);
+}
+.catalog-filters .jds-field {
+  min-width: 0;
+}
+.catalog-summary {
+  display: grid;
+  gap: var(--space-3);
+  margin-block: var(--space-5);
+}
+.catalog-previews {
+  display: grid;
+  gap: var(--space-3);
+  margin-block: var(--space-7);
+}
+.catalog-previews figure {
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.catalog-preview {
+  display: block;
+  width: 100%;
+  height: min(36rem, 50vh);
+  object-fit: contain;
+}
+.catalog-admin {
+  margin-block: var(--space-7);
+}
+.catalog-admin > summary {
+  cursor: pointer;
+  padding-block: var(--space-3);
+}
+.catalog-choice {
+  display: grid;
+  gap: var(--space-3);
+}
+.catalog-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block: var(--space-5);
+}
+.catalog-activity {
+  display: grid;
+  gap: var(--space-1);
+  margin-block: var(--space-4);
+}
+@media (max-width: 900px) {
+  .catalog-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .catalog-page {
+    padding: var(--space-4);
+  }
+  .catalog-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .catalog-row {
+    align-items: flex-start;
+  }
+  .catalog-row > div:first-child {
+    flex-basis: 100%;
+  }
+  .catalog-row .catalog-actions {
+    justify-content: flex-start;
+  }
+}
