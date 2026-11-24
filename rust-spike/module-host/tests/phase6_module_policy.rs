@@ -390,6 +390,14 @@ fn phase6_module_policy() {
             Some(&cookie),
         );
         assert_eq!(response.0, 200, "{response:?}");
+        assert!(
+            response.1["sources"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|s| s["error"].is_null()),
+            "refresh source failed: {response:?}"
+        );
     };
     let policy = |automatic: bool, quiet: bool| {
         let response = api(
@@ -420,6 +428,22 @@ fn phase6_module_policy() {
     );
     std::thread::sleep(Duration::from_millis(100));
     assert_eq!(count() - before, 1, "open reaches real client once");
+    let before = count();
+    assert_eq!(
+        api(Method::GET, "/api/shell", None, Some(&member_cookie)).0,
+        200
+    );
+    std::thread::sleep(Duration::from_millis(100));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while count() == before {
+        assert!(
+            Instant::now() < deadline,
+            "app open reaches real client once"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(count() - before, 1, "app open reaches real client once");
     let pin = |version: Value| {
         assert_eq!(
             api(

@@ -4,7 +4,6 @@ use crate::{
     module_sources, modules,
 };
 use anyhow::{Context, Result};
-use moss_module_host::registry_manager::RegistryConfiguration;
 use moss_network::config::{private_read, private_write};
 use safety_core::access::AccessContext;
 use serde::{Deserialize, Serialize};
@@ -58,7 +57,7 @@ fn clock(instance: &Path) -> Result<Clock> {
 }
 /// Only configuration authority is used by the scheduler. Module data still uses its caller.
 async fn pass(admin: &Admin, slot: &modules::Slot, access: AccessContext) -> Result<Report> {
-    let host = modules::host(slot).context("Modules are not ready")?;
+    modules::host(slot).context("Modules are not ready")?;
     module_admin::require_admin(admin, &access)
         .await
         .map_err(|_| anyhow::anyhow!("Refresh needs configuration authority"))?;
@@ -67,15 +66,14 @@ async fn pass(admin: &Admin, slot: &modules::Slot, access: AccessContext) -> Res
         let sources = module_sources::read(&instance)?;
         // Persist attempts too: an unreachable source never causes a tight daily retry loop.
         private_write(&instance.join(CLOCK), &serde_json::to_vec(&Clock { last_attempt: now() })?).map_err(anyhow::Error::msg)?;
-        let policy = host.installer.update_policy(&access)?;
         let mut report = Report::default();
         for source in sources {
             let result = (|| -> Result<()> {
-                let catalog = host.installer.configure_registry(&access, &RegistryConfiguration {
-                    id: source.id.clone(), source: source.source()?, root_key: source.root_key.clone(), first_party_key: source.first_party_key.clone(),
-                })?;
-                let updates = host.installer.update(&access, &catalog, policy.quiet_time)?;
-                anyhow::ensure!(updates.failures.is_empty(), "Some updates need attention");
+                // Activation needs the existing short-lived lifecycle service's trusted login.
+                // The serving host deliberately cannot provision module roles.
+                let result = module_admin::run_json(&instance, &source, &["--refresh-policy".into()], &[], &access.actor_user_id().to_string())
+                    .map_err(anyhow::Error::msg)?;
+                anyhow::ensure!(result["failed"].as_u64() == Some(0), "Some updates need attention");
                 Ok(())
             })();
             report.sources.push(SourceResult { id: source.id, error: result.err().map(|_| "The registry or its updates could not be refreshed; saved installed modules remain available. Check the source and try again") });
@@ -109,6 +107,26 @@ pub(crate) async fn open(
             .context("The refresh failed; try again");
     }
     run(admin, slot, access.clone()).await
+}
+/// An authenticated shell open signals the same configuration-only check as the scheduler.
+/// Registry failure must not delay or prevent loading the account's shell.
+pub(crate) fn app_open(admin: Arc<Admin>, slot: modules::Slot) {
+    if modules::host(&slot).is_none() {
+        return;
+    }
+    tokio::spawn(async move {
+        let actor = modules::read_settings(&admin.instance.join("modules.json"))
+            .ok()
+            .and_then(|s| s.admin_user_id);
+        if let Some(actor) = actor {
+            let _ = open(
+                &admin,
+                &slot,
+                &AccessContext::new(actor, "module-registry-app-open"),
+            )
+            .await;
+        }
+    });
 }
 pub(crate) fn start(admin: Arc<Admin>, slot: modules::Slot, stop: Arc<AtomicBool>) {
     tokio::spawn(async move {

@@ -39,28 +39,32 @@ cargo([
   "--bin",
   "moss-network"
 ]);
-cargo(
-  [
-    "test",
-    "--offline",
-    "--locked",
-    "--manifest-path",
-    "rust-spike/module-host/Cargo.toml",
-    "--test",
-    "phase6_module_policy",
-    "--",
-    "--ignored",
-    "--nocapture",
-    "--test-threads=1"
-  ],
-  {
-    JS43_APP_URL: urls.app,
-    JS43_WORKER_URL: urls.worker,
-    JS43_BOOTSTRAP_URL: urls.bootstrap,
-    JS43_MIGRATION_URL: urls.migration,
-    JS170_AUTH_URL: urls.auth,
-    JS170_SERVER:
-      process.env.JS415_SERVER ?? join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
-    JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
-  }
-);
+for (const test of process.env.JS415_REGRESSION === "1"
+  ? ["phase6_module_policy", "phase6_update_api", "phase6_registry_api"]
+  : ["phase6_module_policy"]) {
+  cargo(
+    [
+      "test",
+      "--offline",
+      "--locked",
+      "--manifest-path",
+      "rust-spike/module-host/Cargo.toml",
+      "--test",
+      test,
+      "--",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    {
+      JS43_APP_URL: urls.app,
+      JS43_WORKER_URL: urls.worker,
+      JS43_BOOTSTRAP_URL: urls.bootstrap,
+      JS43_MIGRATION_URL: urls.migration,
+      JS170_AUTH_URL: urls.auth,
+      JS170_SERVER:
+        process.env.JS415_SERVER ?? join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
+      JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
+    }
+  );
+}

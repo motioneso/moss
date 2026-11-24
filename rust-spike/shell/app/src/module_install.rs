@@ -40,6 +40,7 @@ enum Mode {
     Install,
     List,
     CachedList,
+    Refresh,
     Export,
     RemoveRegistry,
     Plan,
@@ -65,6 +66,8 @@ fn parse(raw: Vec<String>) -> Result<Args> {
             mode = Mode::RemoveRegistry;
         } else if flag == "--export-list" {
             mode = Mode::Export;
+        } else if flag == "--refresh-policy" {
+            mode = Mode::Refresh;
         } else if flag == "--cached-list" {
             mode = Mode::CachedList;
         } else if flag == "--list" {
@@ -109,7 +112,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
     if modules.is_empty()
         && !matches!(
             mode,
-            Mode::List | Mode::CachedList | Mode::Export | Mode::RemoveRegistry
+            Mode::List | Mode::CachedList | Mode::Refresh | Mode::Export | Mode::RemoveRegistry
         )
     {
         return Err(need("module name"));
@@ -391,6 +394,17 @@ fn run_selected(
             },
         )?
     };
+    if args.mode == Mode::Refresh {
+        let policy = application.installer.update_policy(&access)?;
+        let updates = application
+            .installer
+            .update(&access, &catalog, policy.quiet_time)?;
+        println!(
+            "{}",
+            serde_json::json!({"refreshed": true, "failed": updates.failures.len()})
+        );
+        return Ok(());
+    }
     let installed_modules: std::collections::BTreeMap<_, _> = application
         .installer
         .installed_for(&access)?

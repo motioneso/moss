@@ -61,6 +61,7 @@ struct Accounts {
     modules: modules::Slot,
     /// True when the server has an instance folder the module installer can work in.
     can_install_modules: bool,
+    module_admin: Option<Arc<module_admin::Admin>>,
     data: Mutex<HashMap<uuid::Uuid, Data>>,
 }
 
@@ -107,6 +108,9 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                     });
                 }
                 cx.commit().await?;
+                if let Some(admin) = &d.module_admin {
+                    module_refresh::app_open(admin.clone(), d.modules.clone());
+                }
                 Ok::<_, safety_core::error::ApiError>(Json::<ShellView>(shell))
             }),
         )
@@ -341,6 +345,7 @@ fn main() {
         let data = Arc::new(Accounts {
             platform: platform.clone(),
             can_install_modules: args.instance.is_some(),
+            module_admin: admin.clone(),
             runner: args.runner,
             modules: modules.clone(),
             data: Mutex::new(HashMap::new()),
