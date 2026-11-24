@@ -101,19 +101,19 @@ pub fn ModuleDetail(module: ModuleView, can_manage: bool, reload: Callback<()>) 
 
 #[component]
 pub fn ModuleSettingsPage(path: String) -> impl IntoView {
-    let target = RwSignal::new(None::<Result<ModuleView, String>>);
+    let target = RwSignal::new(None::<Result<Option<ModuleView>, String>>);
     spawn_local(async move {
-        target.set(Some(module_catalog::read().await.and_then(|view| {
+        target.set(Some(module_catalog::read().await.map(|view| {
             view.modules
                 .into_iter()
                 .find(|m| m.settings_path.as_deref() == Some(&path))
-                .ok_or("Module settings unavailable.".into())
         })));
     });
     view! {{move || match target.get() {
         None => view!{<p role="status">"Reading module settings…"</p>}.into_any(),
         Some(Err(error)) => view!{<p role="alert">{error}</p><a class="jds-btn jds-btn--link" href="/settings/modules">"Modules"</a><Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|{let _ = web_sys::window().unwrap().location().reload();})>"Retry"</Button>}.into_any(),
-        Some(Ok(module)) => view!{<iframe class="module-screen" title=format!("{} settings", module.name) src=format!("/module-frame?module={}&path={}",js_sys::encode_uri_component(&module.id),js_sys::encode_uri_component(module.settings_path.as_deref().unwrap_or_default()))></iframe>}.into_any(),
+        Some(Ok(None)) => view!{<crate::frame::NotPortedYet/>}.into_any(),
+        Some(Ok(Some(module))) => view!{<iframe class="module-screen" title=format!("{} settings", module.name) src=format!("/module-frame?module={}&path={}",js_sys::encode_uri_component(&module.id),js_sys::encode_uri_component(module.settings_path.as_deref().unwrap_or_default()))></iframe>}.into_any(),
     }}}
 }
 

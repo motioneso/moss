@@ -607,7 +607,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
 }
 
 #[component]
-fn NotPortedYet() -> impl IntoView {
+pub(crate) fn NotPortedYet() -> impl IntoView {
     view! {
         <div class="jds-empty">
             <div class="jds-empty__title">"Not built in the Rust app yet"</div>

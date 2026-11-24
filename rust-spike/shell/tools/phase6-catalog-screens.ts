@@ -231,6 +231,11 @@ try {
   async function check(context: BrowserContext, role: string, width: number) {
     const page = await context.newPage();
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    await page.goto(`${origin}/not-yet-built-js418`);
+    await expect(page.getByText("Not built in the Rust app yet", { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await expect(page.getByText("Module settings unavailable.", { exact: true })).toHaveCount(0);
     // Reach the catalog from the actual shell navigation.
     await page.goto(`${origin}/today`);
     if (width === 390)
@@ -309,6 +314,10 @@ try {
     }
     await expect(page.getByRole("heading", { name: "What’s new" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Recently" })).toBeVisible();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Store and read this module's data" })
+    ).toHaveCount(1);
+    await expect(page.getByText("Today · Moss registry", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Registry notice: Publisher maintenance notice", { exact: true })
     ).toBeVisible();
