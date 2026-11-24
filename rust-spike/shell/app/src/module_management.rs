@@ -151,11 +151,13 @@ pub(crate) async fn review_selected(
         );
         let record = Record {
             actor,
+            lifecycle: None,
             source_binding: source.binding()?,
             approved: false,
             view: ModuleOperation {
                 id: uuid::Uuid::new_v4().to_string(),
-                review,
+                review: Some(review),
+                lifecycle: None,
                 stage: ModuleOperationStage::Reviewed,
                 result: None,
             },
@@ -178,7 +180,12 @@ async fn operation(
         return response;
     }
     match owned(&admin, &access, &id) {
-        Ok(record) => Json(record.view).into_response(),
+        Ok(record) => {
+            if record.lifecycle.is_some() && !record.view.stage.terminal() {
+                crate::module_lifecycle::launch(admin.clone(), access, id);
+            }
+            Json(record.view).into_response()
+        }
         Err(response) => response,
     }
 }
@@ -201,6 +208,10 @@ pub(crate) async fn execute(
         Ok(record) => record,
         Err(response) => return response,
     };
+    if record.lifecycle.is_some() {
+        crate::module_lifecycle::launch(admin, access, id);
+        return (StatusCode::ACCEPTED, Json(record.view)).into_response();
+    }
     let Ok(file) = module_operation::operation_lock(&admin.instance, &id) else {
         return unavailable();
     };
@@ -242,13 +253,18 @@ pub(crate) async fn execute(
             let actor = access.actor_user_id().to_string();
             match tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
                 let saved = Record::read(&instance, &task_id)?;
-                let source = module_sources::select(&instance, Some(&saved.view.review.source))?;
+                let review = saved
+                    .view
+                    .review
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Missing package review"))?;
+                let source = module_sources::select(&instance, Some(&review.source))?;
                 anyhow::ensure!(source.binding()? == saved.source_binding, "Source changed");
                 module_admin::run_json(
                     &instance,
                     &source,
                     &["--operation".into(), task_id],
-                    &[saved.view.review.module],
+                    &[review.module.clone()],
                     &actor,
                 )
                 .map_err(anyhow::Error::msg)?;

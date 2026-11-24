@@ -38,6 +38,8 @@ mod module_admin;
 mod module_ai;
 mod module_embedding;
 mod module_install;
+mod module_lifecycle;
+mod module_lifecycle_service;
 mod module_local;
 mod module_management;
 mod module_operation;
@@ -264,6 +266,15 @@ fn running_record(folder: &Path, config: &Config, port: u16) -> Result<instance:
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("lifecycle-module") {
+        if module_lifecycle_service::run(std::env::args().skip(2).collect()).is_err() {
+            eprintln!(
+                "moss-shell: The module lifecycle service stopped; read the operation result"
+            );
+            std::process::exit(1);
+        }
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("install-module") {
         let runtime_free = module_install::run(std::env::args().skip(2).collect());
         if let Err(error) = runtime_free {

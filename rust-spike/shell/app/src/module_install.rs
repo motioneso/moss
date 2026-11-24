@@ -241,11 +241,20 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         return Ok(());
     }
     anyhow::ensure!(record.approved, "Approve the reviewed package first");
-    let source = crate::module_sources::select(&args.instance, Some(&record.view.review.source))?;
+    let reviewed = record
+        .view
+        .review
+        .as_ref()
+        .context("Missing package review")?;
+    anyhow::ensure!(
+        record.lifecycle.is_none(),
+        "Use the lifecycle service for this operation"
+    );
+    let source = crate::module_sources::select(&args.instance, Some(&reviewed.source))?;
     anyhow::ensure!(
         source.binding()? == record.source_binding
             && source.id == args.registry_id
-            && args.modules == [record.view.review.module.clone()],
+            && args.modules == [reviewed.module.clone()],
         "The source changed; review again"
     );
     record.stage(&args.instance, ModuleOperationStage::Checking)?;
@@ -258,7 +267,10 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         };
         record.finish(
             &args.instance,
-            result.as_ref().map(|_| ()).map_err(|_| failure),
+            result
+                .as_ref()
+                .map(|_| "The module is installed")
+                .map_err(|_| failure),
         )?;
     }
     println!("{}", serde_json::to_string(&record.view)?);
@@ -453,7 +465,11 @@ fn run_selected(
             continue;
         }
         if let Some(record) = operation.as_deref_mut() {
-            let reviewed = &record.view.review;
+            let reviewed = record
+                .view
+                .review
+                .as_ref()
+                .context("Missing package review")?;
             if artifact.digest != reviewed.digest
                 || artifact.version.to_string() != reviewed.version
             {

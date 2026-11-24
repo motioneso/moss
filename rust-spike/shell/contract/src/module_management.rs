@@ -58,7 +58,10 @@ pub struct ModuleOperationResult {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ModuleOperation {
     pub id: String,
-    pub review: ModuleReview,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<ModuleReview>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<ModuleLifecycle>,
     pub stage: ModuleOperationStage,
     pub result: Option<ModuleOperationResult>,
 }
@@ -124,4 +127,44 @@ pub struct SkipModuleUpdate {
 pub struct PinModule {
     pub source: String,
     pub version: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LifecycleAction {
+    Remove,
+    DeleteData,
+    Restore,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ModuleLifecycle {
+    pub module: String,
+    pub action: LifecycleAction,
+    pub snapshot: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoveModule {
+    pub module: String,
+    #[serde(default)]
+    pub delete_data: bool,
+    #[serde(default)]
+    pub typed_name: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RestoreModule {
+    pub module: String,
+    pub snapshot: String,
+    pub typed_name: String,
+    pub acknowledge_data_loss: bool,
+}
+/// Metadata only: never serialize the private snapshot's previous activation or contents.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ModuleSnapshot {
+    pub module: String,
+    pub id: String,
+    pub created: String,
+    pub expires: String,
+    pub reason: String,
 }

@@ -40,12 +40,14 @@ impl Admin {
 }
 
 pub fn routes(admin: Arc<Admin>) -> Router {
+    crate::module_lifecycle::resume_pending(admin.clone());
     Router::new()
         .route("/api/modules", get(list))
         .route("/api/modules/plan", post(plan))
         .route("/api/modules/install", post(install))
         .merge(crate::module_management::routes())
         .merge(crate::module_updates::routes())
+        .merge(crate::module_lifecycle::routes())
         .merge(crate::module_local::routes())
         .with_state(admin)
 }

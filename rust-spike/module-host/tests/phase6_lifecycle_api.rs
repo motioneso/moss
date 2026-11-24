@@ -101,9 +101,7 @@ fn phase6_lifecycle_api() {
     fs::write(
         &supervisor,
         format!(
-            "#!/bin/sh\nwhile [ -e '{}' ]; do touch '{}'; sleep 0.1; done\necho '{}'\n",
-            root.join("hold-installer").display(),
-            root.join("installer-waiting").display(),
+            "#!/bin/sh\necho '{}'\n",
             json!({"install_url": bootstrap_url})
         ),
     )
@@ -276,6 +274,7 @@ fn phase6_lifecycle_api() {
         }
     };
     let before = revision();
+    let snapshots_before = api(Method::GET, "/api/modules/snapshots", None, Some(&cookie)).1;
     let (status, value) = api(
         Method::POST,
         "/api/modules/remove",
@@ -314,7 +313,10 @@ fn phase6_lifecycle_api() {
     files_kept();
     let (status, snapshots) = api(Method::GET, "/api/modules/snapshots", None, Some(&cookie));
     assert_eq!(status, 200, "{snapshots}");
-    assert_eq!(snapshots.as_array().unwrap().len(), 0);
+    assert_eq!(
+        snapshots, snapshots_before,
+        "a refusal must not take another snapshot"
+    );
     println!("PASS typed-name mismatch refused before changes");
     let submit = |path: &str, body: Value| {
         let (status, value) = api(Method::POST, path, Some(body), Some(&cookie));
@@ -438,7 +440,7 @@ fn phase6_lifecycle_api() {
     let tx = runtime.block_on(db.transaction()).unwrap();
     runtime
         .block_on(tx.query_one(
-            "SELECT revision FROM moss_modules.catalog WHERE id=true FOR UPDATE",
+            "SELECT pg_advisory_xact_lock(hashtext('moss:module-catalog'))",
             &[],
         ))
         .unwrap();
@@ -465,12 +467,36 @@ fn phase6_lifecycle_api() {
         if purged && root.join("modules/modules/operation.json").exists() {
             break;
         }
-        assert!(
-            Instant::now() < deadline,
-            "must interrupt after real purge before catalog activation"
-        );
+        if Instant::now() >= deadline {
+            let saved: Value = serde_json::from_slice(
+                &fs::read(
+                    root.join("module-operations")
+                        .join(format!("{interrupted}.json")),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let locks = runtime.block_on(tx.query("SELECT mode,granted,coalesce(relation::regclass::text,'') FROM pg_locks WHERE relation IS NOT NULL AND pid <> pg_backend_pid()", &[])).unwrap();
+            let locks: Vec<_> = locks
+                .iter()
+                .map(|r| {
+                    (
+                        r.get::<_, String>(0),
+                        r.get::<_, bool>(1),
+                        r.get::<_, String>(2),
+                    )
+                })
+                .collect();
+            panic!(
+                "purge boundary not reached: stage={} result={} journal={} locks={locks:?}",
+                saved["view"]["stage"],
+                saved["view"]["result"],
+                root.join("modules/modules/operation.json").exists()
+            );
+        }
         std::thread::sleep(Duration::from_millis(100));
     }
+    println!("PASS real purge committed while catalog activation is held");
     assert_eq!(
         api(
             Method::POST,
@@ -538,5 +564,11 @@ fn phase6_lifecycle_api() {
         recovered
     );
     println!("PASS child crash after purge and server restart recover all rows; queued cancel stays unchanged; results survive");
+    let expired_again = wait(&restore(snapshot_id));
+    assert_eq!(expired_again["stage"], "failed");
+    assert!(expired_again["result"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("expired"));
     let _ = &server;
 }
