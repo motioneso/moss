@@ -24,6 +24,11 @@ identities, public fingerprints, health and reviews, omitting host paths and dat
 ## Verification state
 
 Implementation checkpoint; focused real-server verification and negative controls pending.
+Scoped ESLint, Prettier, `pnpm check:file-size`, and the Rust CI matrix's 15 Node tests pass.
+The matrix was observed failing first without the new registry entry (14 pass, 1 fail).
+Bundle manifest verification is shared with the publisher; the runner includes the existing
+`phase6_registry_artifacts` tests. A source removal also marks its host configuration removed,
+retaining trust history; an explicit same-root re-add restores it after replay checks.
 The runner enforces one Cargo job, no debug information, and one test thread. Use from `~/Jarv1s`:
 
 ```bash

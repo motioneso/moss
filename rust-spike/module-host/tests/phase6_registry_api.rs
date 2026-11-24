@@ -605,6 +605,24 @@ fn phase6_registry_api() {
         "export works with zero registries"
     );
     health();
+    assert_eq!(api(Method::POST,"/api/modules/registries",Some(json!({"registry":{"id":"sample-registry","folder":registry,"rootKey":root_key,"firstPartyKey":publisher}})),Some(&cookie)).0,200);
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/registries/sample-registry/confirm",
+            Some(json!({"fingerprint":fingerprint})),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
+    let (status, restored) = api(Method::GET, "/api/modules/catalog", None, Some(&cookie));
+    assert_eq!(status, 200, "{restored}");
+    assert!(
+        restored["sources"][0]["error"].is_null(),
+        "same-root re-add preserves history and is usable: {restored}"
+    );
+    health();
     assert!(!health_view.to_string().contains("postgres://"));
     assert!(!health_view
         .to_string()
