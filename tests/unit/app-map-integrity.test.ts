@@ -13,6 +13,11 @@ import {
 import { buildAppMap } from "../../scripts/build-app-map.js";
 
 describe("app-map integrity and truthfulness", () => {
+  const installErrorStates: Record<string, string> = {
+    "core.modules.install_failed": "saved.stage==Stage::Failed",
+    "core.modules.install_review_changed": "This package changed. Review it again.",
+    "core.modules.install_status_unavailable": "Status unavailable. Check again."
+  };
   const rustRoutes = new Set(
     [
       ...["../../rust-spike/network/src/web.rs", "../../rust-spike/shell/app/src/main.rs"].flatMap(
@@ -69,6 +74,9 @@ describe("app-map integrity and truthfulness", () => {
       narrative: ""
     });
     expect(rustMap.screens.map((entry) => entry.id)).toEqual([
+      "rust-module-install-review",
+      "rust-module-install-progress",
+      "rust-module-request-route",
       "rust-modules-installed",
       "rust-modules-browse",
       "rust-module-detail",
@@ -84,7 +92,7 @@ describe("app-map integrity and truthfulness", () => {
       "rust-network-sharing"
     ]);
     for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
-      // Browse and detail are query views of the same declared shell route.
+      // Catalog and install screens are query views of the declared shell route.
       expect(
         rustRoutes.has((entry.path ?? "").split("?")[0] ?? ""),
         `Rust surface "${entry.id}" has no declared route: ${entry.path}`
@@ -95,11 +103,38 @@ describe("app-map integrity and truthfulness", () => {
       // Catalog failures are a UI state rather than an emitted HTTP error code.
       // Verify that state separately below; keep checking every wire error in Rust.
       if (entry.code === "core.modules.catalog_unavailable") continue;
+      if (entry.code && entry.code in installErrorStates) continue;
       expect(
         rustErrorCodes.has(entry.code ?? ""),
         `Rust error "${entry.code}" is not in Rust`
       ).toBe(true);
     }
+  });
+
+  it("documents install UI failure states and their declared retry screen", () => {
+    const installScreen = readFileSync(
+      new URL("../../rust-spike/shell/ui/src/module_install.rs", import.meta.url),
+      "utf8"
+    );
+    for (const [code, evidence] of Object.entries(installErrorStates)) {
+      expect(installScreen).toContain(evidence);
+      expect(CORE_APP_ERRORS).toContainEqual(
+        expect.objectContaining({
+          code,
+          runtime: "rust",
+          remediationRef: "core.modules.install_retry"
+        })
+      );
+    }
+    const progress = RUST_APP_SCREENS.find((entry) => entry.id === "rust-module-install-progress");
+    expect(progress).toBeDefined();
+    expect(CORE_APP_REMEDIATIONS).toContainEqual(
+      expect.objectContaining({
+        id: "core.modules.install_retry",
+        runtime: "rust",
+        path: progress?.path
+      })
+    );
   });
 
   it("documents the real catalog failure state and its retry destination", () => {
@@ -266,8 +301,12 @@ describe("app-map integrity and truthfulness", () => {
     const rustRemediations = CORE_APP_REMEDIATIONS.filter((entry) => entry.runtime === "rust");
     expect(rustRemediations.length).toBeGreaterThan(0);
     for (const entry of rustRemediations) {
+      const path = entry.path ?? "";
+      // A query view must name a declared screen on a real HTTP route.
       expect(
-        rustRoutes.has(entry.path ?? ""),
+        rustRoutes.has(path) ||
+          (rustRoutes.has(path.split("?")[0] ?? "") &&
+            RUST_APP_SCREENS.some((screen) => screen.path === path)),
         `Rust remediation "${entry.id}" has no declared route: ${entry.path}`
       ).toBe(true);
     }
