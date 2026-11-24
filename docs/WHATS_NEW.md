@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Module sources and portable lists.** Administrators can add trusted module sources and bring in module lists without deleting what is already installed. [PR #4480](https://github.com/motioneso/moss/pull/4480)
 - **Keep or recover removed module data.** Module removal can keep data for reinstalling or save a snapshot before deletion, with recovery after an interruption. [PR #4478](https://github.com/motioneso/moss/pull/4478)
 
 ### 2026-11-22
