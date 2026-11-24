@@ -60,3 +60,9 @@ Independent review is recorded in Herdr against the final reviewed commit; its r
 ## Limits
 
 No management screens, install requests, Finance evidence, production deployment, or cross-platform release builds. This runner proves backend behavior on Linux using generated signed fixtures, not production registry keys. Quiet-time eligibility is saved host configuration for the later preferences screen; it does not infer machine idleness. No new UI is claimed or tested.
+
+## CI follow-up
+
+PR unit checks caught the new Rust policy remediation pointing at the legacy module-settings route, which this backend-only part does not ship. The existing `tests/unit/app-map-integrity.test.ts` reproduced both failures locally (2 failed, 17 passed; exit 1). The remediation now points at the existing Rust `/sign-in` route, consistent with the other module-management remediations. No route or test assertion was added to conceal the mismatch.
+
+`pnpm exec vitest run tests/unit/app-map-integrity.test.ts` then passed all 19 tests (exit 0). Scoped ESLint and Prettier checks passed. The change is limited to the app-map destination; the previously verified server behavior is unchanged.

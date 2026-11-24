@@ -56,7 +56,7 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     runtime: "rust",
     description:
       "If modules are still starting, wait and try again. If a switch or policy cannot be read or saved, check that the module is installed and permits account switching. Use your own signed-in account for its switch, or sign in as an instance administrator for server controls and update policy. Private local modules have no server switch. A failed registry refresh retains installed modules and saved signed metadata; check its configured source and retry.",
-    path: "/settings?section=instmods",
+    path: "/sign-in",
     scope: "user"
   },
   {
