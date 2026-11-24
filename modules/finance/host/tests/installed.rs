@@ -561,9 +561,13 @@ const BUDGET_TABLES: [&str; 4] = [
 #[ignore = "Only through verify-gate"]
 fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_nothing() {
     const PAYEE: &str = "PLANTED-PAYEE-MARKER-41ac90";
+    // Eight-digit amounts distinguish private figures from incidental substrings in catalog hashes.
+    const BASIS: i64 = 23_131_078;
+    const PLAN: i64 = 23_131_500;
+    const ASSIGNED: i64 = 21_410_731;
     let w = World::new();
     let (a, b) = (w.f.a, w.f.b);
-    let account = w.account(a, Uuid::new_v4(), NAME, 5_000_000)["body"]["id"].as_str().unwrap().to_owned();
+    let account = w.account(a, Uuid::new_v4(), NAME, 95_000_000)["body"]["id"].as_str().unwrap().to_owned();
     let configured = w.call(a, "POST", "/finance/budget/configure", json!({"isoCurrency":"USD","acknowledgeLegacy":false}));
     assert_eq!(configured["status"], 200, "{configured}");
     let spend = |month: &str, cents: i64, name: &str| {
@@ -576,7 +580,7 @@ fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_n
         );
         assert_eq!(made["status"], 200, "{made}");
     };
-    for (month, cents) in [("2026-06", 30_000), ("2026-07", 31_234), ("2026-08", 32_000)] {
+    for (month, cents) in [("2026-06", 23_130_000), ("2026-07", 23_131_234), ("2026-08", 23_132_000)] {
         spend(month, cents, PAYEE);
     }
 
@@ -585,8 +589,8 @@ fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_n
     assert_eq!((built["status"].clone(), built["body"]["built"].clone()), (json!(200), json!(true)), "{built}");
     let draft = w.call(a, "GET", "/finance/budget/draft", Value::Null)["body"].clone();
     let line = &draft["draft"]["groups"][0]["lines"][0];
-    assert_eq!((line["categoryKey"].clone(), line["basisMonthlyCents"].clone(), line["planCents"].clone()), (json!("groceries"), json!(31_078), json!(31_500)));
-    println!("PASS draft: three stored months of 30000, 31234 and 32000 gave a monthly basis of 31078 and a plan of 31500");
+    assert_eq!((line["categoryKey"].clone(), line["basisMonthlyCents"].clone(), line["planCents"].clone()), (json!("groceries"), json!(BASIS), json!(PLAN)));
+    println!("PASS draft: three stored months of 23130000, 23131234 and 23132000 gave a monthly basis of {BASIS} and a plan of {PLAN}");
 
     // A review taken now goes stale when the ledger changes, and the save then writes nothing.
     let status = w.call(a, "GET", "/finance/budget/status?month=2026-11", Value::Null);
@@ -596,7 +600,7 @@ fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_n
         json!({"month":current,"categoryId":"dining","amountCents":cents,"previousCents":previous,
             "expectedRevision":expected["revision"],"expectedFingerprint":expected["fingerprint"]})
     };
-    let first = assign(&status, 10_731, 0);
+    let first = assign(&status, ASSIGNED, 0);
     spend("2026-08", 700, "Another");
     let counts = || (w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.finance_budget_assignments", &[])).unwrap().get::<_, i64>(0),
         w.f.rt.block_on(w.f.root.query_one("SELECT max(revision) FROM app.finance_budget_policy", &[])).unwrap().get::<_, i64>(0));
@@ -608,7 +612,7 @@ fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_n
 
     // A fresh review saves, and a second save holding the same review is refused.
     let fresh = w.call(a, "GET", &format!("/finance/budget/status?month={current}"), Value::Null)["body"].clone();
-    let one = assign(&fresh, 10_731, 0);
+    let one = assign(&fresh, ASSIGNED, 0);
     let two = json!({"month":current,"categoryId":"fuel","amountCents":5_000,"previousCents":0,
         "expectedRevision":fresh["revision"],"expectedFingerprint":fresh["fingerprint"]});
     assert_eq!(w.call(a, "POST", "/finance/budget/assign", one)["status"], 200);
@@ -636,7 +640,7 @@ fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_n
     }
     let theirs = w.call(b, "GET", &format!("/finance/budget/status?month={current}"), Value::Null);
     assert_eq!(theirs["body"]["setupRequired"], true, "{theirs}");
-    assert!(!theirs.to_string().contains("31500") && !theirs.to_string().contains("10731"));
+    assert!(!theirs.to_string().contains(&PLAN.to_string()) && !theirs.to_string().contains(&ASSIGNED.to_string()));
     let stolen = w.call(b, "POST", "/finance/budget/assign", assign(&fresh, 1, 0));
     assert!(stolen["status"].as_i64().unwrap() >= 400, "{stolen}");
     assert_eq!(counts().0, 1);
@@ -670,7 +674,13 @@ fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_n
             .collect()
     });
     for table in &tables {
-        for text in [PAYEE.to_owned(), NAME.to_owned(), "31078".to_owned(), "31500".to_owned(), "10731".to_owned()] {
+        for text in [
+            PAYEE.to_owned(),
+            NAME.to_owned(),
+            BASIS.to_string(),
+            PLAN.to_string(),
+            ASSIGNED.to_string(),
+        ] {
             let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&text])).unwrap().get(0);
             assert_eq!(hits, 0, "{table} holds {text}");
         }

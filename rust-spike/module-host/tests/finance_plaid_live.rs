@@ -278,6 +278,7 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),

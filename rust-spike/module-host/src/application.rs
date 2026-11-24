@@ -45,6 +45,7 @@ impl Application {
         admin: AccessContext,
         config: Configuration,
     ) -> Result<Self> {
+        let catalog_cipher = config.cipher.clone();
         let local = Arc::new(LocalPorts::new(data)?);
         let sql = Arc::new(DatabasePorts::new(database.clone(), local)?);
         let jobs = Arc::new(JobPorts::new(config.producer, database.clone(), sql)?);
@@ -62,12 +63,11 @@ impl Application {
             services = services.with_network(transport);
         }
         let services = Arc::new(services);
-        let lifecycle = Arc::new(PostgresLifecycle::new(
-            config.migrations,
-            database.clone(),
-            data,
-        )?);
-        let catalog = Arc::new(PostgresCatalog::new(database, admin)?);
+        let lifecycle = Arc::new(
+            PostgresLifecycle::new(config.migrations, database.clone(), data)?
+                .with_cipher(catalog_cipher.clone()),
+        );
+        let catalog = Arc::new(PostgresCatalog::new(database, admin)?.with_cipher(catalog_cipher));
         let limits = Limits {
             fuel_ceiling: config
                 .fuel_ceiling
@@ -112,6 +112,10 @@ impl Installer {
         let _disk = self.disk_lock(true)?;
         let state = self.catalog.load()?;
         let module = state.installed.get(id).context("Module is not installed")?;
+        ensure!(
+            module.visible_to(access),
+            "Module is unavailable for this account"
+        );
         ensure!(
             module.manifest.accounts.supports_user_disable,
             "This module must stay enabled"

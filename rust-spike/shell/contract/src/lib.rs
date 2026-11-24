@@ -242,3 +242,6 @@ pub mod hero_note;
 /// the database and chat runner exist. Every word here is invented; nothing is personal.
 #[cfg(feature = "stub")]
 pub mod stub;
+
+/// Module catalog, digest-bound reviews and durable operation results.
+pub mod module_management;

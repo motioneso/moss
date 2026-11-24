@@ -64,11 +64,23 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Use standard Ubuntu archive for browser dependencies
-        run: sudo python3 scripts/prepare-browser-apt-mirror.py
+      # Try the runner's default apt mirror first, then the standard Ubuntu archive.
       - name: Install browser
-        timeout-minutes: 5
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 12
+        run: |
+          status=0
+          for attempt in 1 2; do
+            if [ "$attempt" -eq 2 ]; then sudo python3 scripts/prepare-browser-apt-mirror.py; fi
+            status=0
+            # The timeout must own apt's privileges so it can stop apt before retrying.
+            sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m \
+              pnpm exec playwright install-deps chromium \
+              && timeout --verbose --signal=TERM --kill-after=15s 5m \
+                pnpm exec playwright install chromium \
+              || status=$?
+            if [ "$status" -eq 0 ]; then break; fi
+          done
+          exit "$status"
       - name: Build the isolated UAT image
         timeout-minutes: 10
         run: docker build -t "ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG}" -f Dockerfile .

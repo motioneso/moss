@@ -73,6 +73,7 @@ impl Registry {
             lifted_revocations: BTreeSet::new(),
         };
         let index = Index {
+            publish_reviews: Default::default(),
             serial: 1,
             expires: std::time::SystemTime::now()
                 .checked_add(std::time::Duration::from_secs(3600))

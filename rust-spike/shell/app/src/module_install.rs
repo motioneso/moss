@@ -28,7 +28,10 @@ struct Args {
     first_party_key: String,
     approve: bool,
     version: Option<String>,
+    actor: Option<uuid::Uuid>,
+    operation: Option<String>,
     mode: Mode,
+    skipped_digest: Option<String>,
     modules: Vec<String>,
 }
 
@@ -37,16 +40,24 @@ enum Mode {
     Install,
     List,
     Plan,
+    Skip,
+    Pin,
 }
 
 fn parse(raw: Vec<String>) -> Result<Args> {
     let (mut instance, mut id, mut source, mut root, mut first) = (None, None, None, None, None);
     let (mut approve, mut modules, mut mode) = (false, vec![], Mode::Install);
+    let mut skipped_digest = None;
     let mut version = None;
+    let mut actor = None;
+    let mut operation = None;
     let mut raw = raw.into_iter();
     while let Some(flag) = raw.next() {
         if flag == "--approve" {
             approve = true;
+        } else if flag == "--unpin" {
+            mode = Mode::Pin;
+            version = None;
         } else if flag == "--list" {
             mode = Mode::List;
         } else if flag == "--plan" {
@@ -69,6 +80,16 @@ fn parse(raw: Vec<String>) -> Result<Args> {
                 "root-key" => root = Some(value),
                 "first-party-key" => first = Some(value),
                 "version" => version = Some(value),
+                "skip-digest" => {
+                    mode = Mode::Skip;
+                    skipped_digest = Some(value);
+                }
+                "pin-version" => {
+                    mode = Mode::Pin;
+                    version = Some(value);
+                }
+                "actor" => actor = Some(value.parse().context("Invalid actor")?),
+                "operation" => operation = Some(value),
                 _ => bail!("unknown option {flag}\n{USAGE}"),
             }
         } else {
@@ -87,13 +108,16 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         first_party_key: first.ok_or_else(|| need("--first-party-key"))?,
         approve,
         version,
+        skipped_digest,
+        actor,
+        operation,
         mode,
         modules,
     })
 }
 
 /// The module tables each have one table that proves they exist, so a second run is a no-op.
-fn bootstrap_steps() -> [(&'static str, &'static str); 5] {
+fn bootstrap_steps() -> [(&'static str, &'static str); 6] {
     [
         (
             "moss_modules.catalog",
@@ -107,6 +131,10 @@ fn bootstrap_steps() -> [(&'static str, &'static str); 5] {
         (
             "moss_modules.paused_modules",
             moss_module_host::jobs::MIGRATION,
+        ),
+        (
+            "moss_modules.local_packages",
+            moss_module_host::local_packages::MIGRATION,
         ),
         (
             "moss_modules.approvals",
@@ -142,13 +170,15 @@ pub(crate) async fn ensure_device_sql(migrations_url: &str) -> Result<()> {
         .await?
         .get::<_, bool>(0);
     if ready {
-        db.batch_execute(moss_module_host::companion_devices::MIGRATION).await?;
+        db.batch_execute(moss_module_host::companion_devices::MIGRATION)
+            .await?;
     }
     Ok(())
 }
 
-/// Creates the module tables that are missing and returns the instance owner's id.
-async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
+/// Trusted host schema bootstrap, shared by registry installation and local trust.
+/// The caller holds the instance's module-install file lock across this operation.
+pub(crate) async fn prepare_host_schema(migrations_url: &str) -> Result<tokio_postgres::Client> {
     let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)
         .await
         .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
@@ -164,8 +194,21 @@ async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
             db.batch_execute(sql).await?;
         }
     }
+    let local_upgrade: bool = db.query_one(
+        "SELECT has_column_privilege('jarvis_app_runtime','moss_modules.local_packages','digest','UPDATE')", &[]
+    ).await?.get(0);
+    if !local_upgrade {
+        db.batch_execute(moss_module_host::local_packages::LIFECYCLE_MIGRATION)
+            .await?;
+    }
     // The server opens the host as the migration owner, so it must own what the steps made.
     db.batch_execute(HAND_OVER).await?;
+    Ok(db)
+}
+
+/// Creates the module tables that are missing and returns the instance owner's id.
+async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
+    let db = prepare_host_schema(migrations_url).await?;
     let owner = db
         .query_opt(
             "SELECT id::text FROM app.users ORDER BY is_instance_admin DESC, created_at LIMIT 1",
@@ -177,7 +220,67 @@ async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
 }
 
 pub fn run(raw: Vec<String>) -> Result<()> {
+    use moss_shell_contract::module_management::ModuleOperationStage;
     let args = parse(raw)?;
+    // Every child, including legacy and read-only calls, shares this instance fence.
+    let instance_lock =
+        crate::module_operation::lock_file(&args.instance.join("module-install.lock"))?;
+    instance_lock.lock()?;
+    let Some(id) = &args.operation else {
+        return run_selected(&args, None);
+    };
+    let operation_lock = crate::module_operation::operation_lock(&args.instance, id)?;
+    operation_lock.lock()?;
+    let mut record = crate::module_operation::Record::read(&args.instance, id)?;
+    anyhow::ensure!(
+        args.actor.is_some_and(|a| a.to_string() == record.actor),
+        "The review belongs to another account"
+    );
+    if record.view.stage.terminal() {
+        println!("{}", serde_json::to_string(&record.view)?);
+        return Ok(());
+    }
+    anyhow::ensure!(record.approved, "Approve the reviewed package first");
+    let reviewed = record
+        .view
+        .review
+        .as_ref()
+        .context("Missing package review")?;
+    anyhow::ensure!(
+        record.lifecycle.is_none(),
+        "Use the lifecycle service for this operation"
+    );
+    let source = crate::module_sources::select(&args.instance, Some(&reviewed.source))?;
+    anyhow::ensure!(
+        source.binding()? == record.source_binding
+            && source.id == args.registry_id
+            && args.modules == [reviewed.module.clone()],
+        "The source changed; review again"
+    );
+    record.stage(&args.instance, ModuleOperationStage::Checking)?;
+    let result = run_selected(&args, Some(&mut record));
+    // Never persist database errors or child environment values in browser-readable results.
+    if !record.view.stage.terminal() {
+        let failure = match record.view.stage {
+            ModuleOperationStage::Checking => "The signed registry or reviewed package could not be checked; review this module again",
+            _ => "Module installation failed; check the installed version and review this module again",
+        };
+        record.finish(
+            &args.instance,
+            result
+                .as_ref()
+                .map(|_| "The module is installed")
+                .map_err(|_| failure),
+        )?;
+    }
+    println!("{}", serde_json::to_string(&record.view)?);
+    Ok(())
+}
+
+fn run_selected(
+    args: &Args,
+    mut operation: Option<&mut crate::module_operation::Record>,
+) -> Result<()> {
     let file = args.instance.join("modules.json");
     let runtime = tokio::runtime::Runtime::new()?;
     let mut settings = modules::read_settings(&file)?;
@@ -185,6 +288,33 @@ pub fn run(raw: Vec<String>) -> Result<()> {
     // passes it in the environment for this one run; it is never written anywhere.
     if let Ok(url) = std::env::var(INSTALL_URL_VARIABLE) {
         settings.migrations_url = url;
+    }
+    let database = runtime
+        .block_on(Database::connect(
+            &settings.producer_url,
+            4,
+            RuntimeRole::App,
+        ))
+        .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
+    if let Some(actor) = args.actor {
+        runtime.block_on(async {
+            let access = AccessContext::new(actor, "module-management-authorization");
+            let cx = safety_core::db::DataContext::open(&database, &access)
+                .await
+                .map_err(|_| anyhow::anyhow!("Cannot check administrator permission"))?;
+            let row = cx
+                .db()
+                .query_opt(
+                    "SELECT is_instance_admin FROM app.get_user_by_id($1::uuid)",
+                    &[&actor],
+                )
+                .await?;
+            anyhow::ensure!(
+                row.is_some_and(|row| row.get::<_, bool>(0)),
+                "Only an instance administrator can manage modules"
+            );
+            Ok::<_, anyhow::Error>(())
+        })?;
     }
     let owner = runtime.block_on(prepare_database(&settings.migrations_url))?;
     // Record the owner so the server's host can open. The server may already be waiting.
@@ -196,23 +326,25 @@ pub fn run(raw: Vec<String>) -> Result<()> {
     if let Ok(url) = std::env::var(INSTALL_URL_VARIABLE) {
         settings.migrations_url = url;
     }
-    let database = runtime
-        .block_on(Database::connect(
-            &settings.producer_url,
-            4,
-            RuntimeRole::App,
-        ))
-        .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
     let migrations_url = settings.migrations_url.clone();
-    let application = modules::application(settings, database)?;
-    let access = AccessContext::new(owner, "module-install");
-    let catalog = application.installer.refresh(
+    settings.admin_user_id = Some(args.actor.unwrap_or(owner));
+    let application = modules::application(settings, database.clone())?;
+    let access = AccessContext::new(args.actor.unwrap_or(owner), "module-install");
+    let catalog = application.installer.configure_registry(
         &access,
-        args.source.clone(),
-        &args.root_key,
-        &args.first_party_key,
-        &args.registry_id,
+        &moss_module_host::registry_manager::RegistryConfiguration {
+            id: args.registry_id.clone(),
+            source: args.source.clone(),
+            root_key: args.root_key.clone(),
+            first_party_key: args.first_party_key.clone(),
+        },
     )?;
+    let installed_modules: std::collections::BTreeMap<_, _> = application
+        .installer
+        .installed_for(&access)?
+        .into_iter()
+        .map(|m| (m.manifest.id.clone(), m))
+        .collect();
     if args.mode == Mode::List {
         let installed: std::collections::BTreeSet<String> = application
             .installer
@@ -231,14 +363,42 @@ pub fn run(raw: Vec<String>) -> Result<()> {
                     "version": a.version.to_string(),
                     "changelog": a.changelog,
                     "installed": installed.contains(&a.id),
+                    "source": args.registry_id,
+                    "digest": a.digest,
+                    "publisher": catalog.trust.publisher(&a.publisher_key, &a.id).map(|p| p.key.clone()).unwrap_or_default(),
+                    "installedDigest": installed_modules.get(&a.id).map(|m| &m.digest),
+                    "pin": installed_modules.get(&a.id).and_then(|m| m.pin.as_ref()).map(ToString::to_string),
+                    "skippedDigest": installed_modules.get(&a.id).and_then(|m| m.skipped_digest.as_ref()),
+                    "urgent": a.urgent,
+                    "capabilities": a.capabilities,
+                    "migrations": a.migrations,
                 })
             })
             .collect();
-        println!("{}", serde_json::json!({ "registry": args.registry_id, "modules": modules }));
+        println!(
+            "{}",
+            serde_json::json!({ "registry": args.registry_id, "name": catalog.trust.identity.name, "modules": modules })
+        );
         drop(application);
         return Ok(());
     }
     for name in &args.modules {
+        if args.mode == Mode::Pin {
+            let old = installed_modules
+                .get(name)
+                .context("This module is not installed")?;
+            anyhow::ensure!(
+                old.local_owner.is_none() && old.registry == args.registry_id,
+                "Choose the installed module source"
+            );
+            application.installer.pin(
+                &access,
+                name,
+                args.version.as_deref().map(str::parse).transpose()?,
+            )?;
+            println!("{}", serde_json::json!({"ok":true}));
+            continue;
+        }
         let artifact: Artifact = catalog
             .index
             .modules
@@ -247,6 +407,26 @@ pub fn run(raw: Vec<String>) -> Result<()> {
             .max_by(|a, b| a.version.cmp(&b.version))
             .cloned()
             .with_context(|| format!("{name} is not in the registry"))?;
+        if args.mode == Mode::Skip {
+            let old = installed_modules
+                .get(name)
+                .context("This module is not installed")?;
+            anyhow::ensure!(
+                old.local_owner.is_none() && old.registry == args.registry_id,
+                "Choose the installed module source"
+            );
+            let digest = args
+                .skipped_digest
+                .as_deref()
+                .context("Choose the update digest")?;
+            anyhow::ensure!(
+                artifact.digest == digest && artifact.version > old.manifest.version,
+                "The offered update changed; review this module again"
+            );
+            application.installer.skip_update(&access, name, digest)?;
+            println!("{}", serde_json::json!({"ok":true}));
+            continue;
+        }
         if args.mode == Mode::Plan {
             let moss = "0.1.0".parse()?;
             let package = catalog
@@ -267,8 +447,49 @@ pub fn run(raw: Vec<String>) -> Result<()> {
                     "version": artifact.version.to_string(),
                     "permissions": permissions,
                     "migrations": approval.new_migrations.len(),
+                    "review": {
+                        "source": args.registry_id,
+                        "module": package.manifest.id,
+                        "name": package.manifest.name,
+                        "description": package.manifest.description,
+                        "version": artifact.version.to_string(),
+                        "digest": artifact.digest,
+                        "previous": installed_modules.get(name).map(|m| &m.digest),
+                        "capabilities": package.manifest.capabilities,
+                        "migrations": package.manifest.database.migrations,
+                        "permissions": permissions,
+                        "urgent": artifact.urgent,
+                    },
                 })
             );
+            continue;
+        }
+        if let Some(record) = operation.as_deref_mut() {
+            let reviewed = record
+                .view
+                .review
+                .as_ref()
+                .context("Missing package review")?;
+            if artifact.digest != reviewed.digest
+                || artifact.version.to_string() != reviewed.version
+            {
+                record.finish(
+                    &args.instance,
+                    Err("The selected package changed since review; review this module again"),
+                )?;
+                bail!("The module changed since review; review it again");
+            }
+            let consent = moss_module_host::store::Consent {
+                digest: reviewed.digest.clone(),
+                previous: reviewed.previous.clone(),
+            };
+            record.stage(
+                &args.instance,
+                moss_shell_contract::module_management::ModuleOperationStage::Installing,
+            )?;
+            application
+                .installer
+                .install_reviewed(&access, &catalog, &artifact, &consent)?;
             continue;
         }
         if let Some(reviewed) = &args.version {

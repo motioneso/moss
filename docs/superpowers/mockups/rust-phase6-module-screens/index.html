@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moss · Module screens · Draft</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../../apps/web/src/styles/components-forms.css" />
+    <link rel="stylesheet" href="mockups.css" />
+  </head>
+  <body>
+    <div class="review-bar">
+      <strong>Phase 6 · Design draft</strong
+      ><label
+        >Appearance
+        <select id="appearance" class="jds-select">
+          <option value="light">Forest · Light</option>
+          <option value="dark">Forest · Dark</option>
+          <option value="sage">Sage · Light</option>
+        </select></label
+      >
+    </div>
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="brand">Moss<span class="jds-eyebrow">Settings</span></div>
+        <nav aria-label="Settings">
+          <span>Profile</span><span>Appearance</span><span>Integrations</span
+          ><a href="#s1" aria-current="page">Modules</a>
+        </nav>
+        <nav class="screen-index" aria-label="Screen drafts">
+          <a href="#s1">S1 · Installed</a><a href="#s2">S2 · Browse</a><a href="#s3">S3 · Detail</a
+          ><a href="#s4">S4 · Install</a><a href="#s5">S5 · Progress</a><a href="#s6">S6 · Update</a
+          ><a href="#s7">S7 · Remove</a><a href="#s8">S8 · Restore</a
+          ><a href="#s9">S9 · Registries</a><a href="#s10">S10 · Notices</a
+          ><a href="#s11">S11 · Request</a>
+        </nav>
+      </aside>
+      <main>
+        <header class="page-head">
+          <div class="jds-eyebrow">Your server</div>
+          <h1>Modules</h1>
+        </header>
+        <article id="s1" class="screen" aria-labelledby="title-1">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S1 · Settings / Modules</div>
+              <h2 id="title-1">Modules</h2>
+            </div>
+            <a
+              class="jds-iconbtn"
+              href="#module-preferences"
+              aria-label="Module management settings"
+              ><svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z" />
+                <circle cx="12" cy="12" r="3" /></svg
+            ></a>
+          </header>
+          <nav class="tabs" aria-label="Modules views">
+            <a aria-current="page" href="#s1">Installed</a><a href="#s2">Browse</a
+            ><a href="#s9">Registries</a>
+          </nav>
+          <div class="section-label">On this server <span class="meta">On for you</span></div>
+          <div class="entry">
+            <div>
+              <strong>Tasks</strong>
+              <div class="meta">Moss registry · 1.4.0</div>
+            </div>
+            <div class="actions">
+              <span class="jds-badge jds-badge--forest">Up to date</span
+              ><label class="jds-switch"
+                ><input type="checkbox" aria-label="Tasks on for you" checked /><span
+                  class="jds-switch__track"
+                  ><span class="jds-switch__thumb"></span></span
+              ></label>
+            </div>
+          </div>
+          <div class="entry">
+            <div>
+              <strong><a href="#s3">Finance</a></strong>
+              <div class="meta">Moss registry · 0.6.0</div>
+            </div>
+            <div class="actions">
+              <a class="jds-badge jds-badge--amber" href="#s6">Update available</a
+              ><label class="jds-switch"
+                ><input type="checkbox" aria-label="Finance on for you" checked /><span
+                  class="jds-switch__track"
+                  ><span class="jds-switch__thumb"></span></span
+              ></label>
+            </div>
+          </div>
+          <div class="entry">
+            <div>
+              <strong>Meals</strong>
+              <div class="meta">Moss registry · 0.8.0</div>
+            </div>
+            <div class="actions">
+              <span class="jds-badge jds-badge--neutral">Off for you</span
+              ><label class="jds-switch"
+                ><input type="checkbox" aria-label="Meals on for you" /><span
+                  class="jds-switch__track"
+                  ><span class="jds-switch__thumb"></span></span
+              ></label>
+            </div>
+          </div>
+          <div class="entry">
+            <div>
+              <strong><a href="#s10">Weather</a></strong>
+              <div class="meta">Moss registry · 1.1.0</div>
+            </div>
+            <div class="actions"><span class="jds-badge jds-badge--red">Blocked</span></div>
+          </div>
+          <details class="admin">
+            <summary>Server controls</summary>
+            <div class="entry">
+              <div>
+                <strong>Meals</strong>
+                <div class="meta">Moss registry · All accounts</div>
+              </div>
+              <div class="actions">
+                <span class="jds-badge jds-badge--neutral">On for everyone</span
+                ><label class="jds-switch"
+                  ><input type="checkbox" aria-label="Meals on for everyone" checked /><span
+                    class="jds-switch__track"
+                    ><span class="jds-switch__thumb"></span></span
+                ></label>
+              </div>
+            </div>
+            <div class="entry">
+              <div>
+                <strong>Module list</strong>
+                <div class="meta">Move this server's modules to another server</div>
+              </div>
+              <div class="actions">
+                <a class="jds-btn jds-btn--link" href="#s9">Export</a
+                ><a class="jds-btn jds-btn--link" href="#s9">Import</a>
+              </div>
+            </div>
+          </details>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No modules installed. <a href="#s2">Browse modules</a></p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Reading installed modules…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Modules could not be read.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s1">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s2" class="screen" aria-labelledby="title-2">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S2 · Settings / Modules</div>
+              <h2 id="title-2">Browse</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <nav class="tabs">
+            <a href="#s1">Installed</a><a aria-current="page" href="#s2">Browse</a
+            ><a href="#s9">Registries</a>
+          </nav>
+          <div class="filters">
+            <label class="field"
+              ><span>Search</span
+              ><input class="jds-input" type="search" placeholder="Find a module" /></label
+            ><label class="field"
+              ><span>Publisher</span
+              ><select class="jds-select">
+                <option>All publishers</option>
+                <option>First-party</option>
+              </select></label
+            ><label class="field"
+              ><span>Category</span
+              ><select class="jds-select">
+                <option>All categories</option>
+                <option>Money</option>
+                <option>Home</option>
+              </select></label
+            ><label class="field"
+              ><span>Source</span
+              ><select class="jds-select">
+                <option>All registries</option>
+                <option>Moss registry</option>
+                <option>Community registry</option>
+              </select></label
+            >
+          </div>
+          <div class="entry">
+            <div>
+              <strong><a href="#s3">Finance</a></strong>
+              <div class="meta">Moss · Money · Moss registry</div>
+            </div>
+            <div class="actions"><span class="jds-badge jds-badge--forest">Installed</span></div>
+          </div>
+          <div class="entry">
+            <div>
+              <strong><a href="#s3">Meals</a></strong>
+              <div class="meta">Moss · Home · Moss registry</div>
+            </div>
+            <div class="actions"><a class="jds-btn jds-btn--secondary" href="#s3">View</a></div>
+          </div>
+          <div class="entry">
+            <div>
+              <strong><a href="#s3">Garden planner</a></strong>
+              <div class="meta">Garden Collective · Home · Community registry</div>
+            </div>
+            <div class="actions"><a class="jds-btn jds-btn--secondary" href="#s3">View</a></div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No modules match. Clear filters.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Checking registries…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Moss registry is offline. Cached catalog shown.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s2">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s3" class="screen" aria-labelledby="title-3">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S3 · Settings / Modules</div>
+              <h2 id="title-3">Finance</h2>
+            </div>
+            <a class="jds-iconbtn" href="#finance-settings" aria-label="Finance settings"
+              ><svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z" />
+                <circle cx="12" cy="12" r="3" /></svg
+            ></a>
+          </header>
+          <div class="detail-head">
+            <div>
+              <p class="lead">Your accounts, budget and bills.</p>
+              <p class="meta">Moss · Moss registry · 0.6.0</p>
+              <span class="jds-badge jds-badge--forest">Installed</span>
+            </div>
+          </div>
+          <div class="actions">
+            <a class="jds-btn jds-btn--primary" href="#s6">Review update</a
+            ><a class="jds-btn jds-btn--secondary" href="#s7">Remove</a
+            ><a class="jds-btn jds-btn--quiet" href="#s3">Pin 0.6.0</a>
+          </div>
+          <div class="preview-grid">
+            <figure>
+              <div class="preview">
+                <h3>Budget</h3>
+                <div class="entry">
+                  <div>
+                    <strong>Ready to assign</strong>
+                    <div class="meta">$240.00</div>
+                  </div>
+                  <div class="actions"></div>
+                </div>
+                <div class="entry">
+                  <div>
+                    <strong>Groceries</strong>
+                    <div class="meta">$180.00</div>
+                  </div>
+                  <div class="actions"></div>
+                </div>
+              </div>
+              <figcaption>Budget · Preview 1 of 2</figcaption>
+            </figure>
+            <figure>
+              <div class="preview">
+                <h3>Accounts</h3>
+                <div class="entry">
+                  <div>
+                    <strong>Cash</strong>
+                    <div class="meta">$420.00</div>
+                  </div>
+                  <div class="actions"></div>
+                </div>
+                <div class="entry">
+                  <div>
+                    <strong>Everyday account</strong>
+                    <div class="meta">$1,260.00</div>
+                  </div>
+                  <div class="actions"></div>
+                </div>
+              </div>
+              <figcaption>Accounts · Preview 2 of 2</figcaption>
+            </figure>
+          </div>
+          <section class="ruled">
+            <h3>What it can touch</h3>
+            <ul>
+              <li>Your Finance data</li>
+              <li>Your bank, through Moss</li>
+              <li>Background bank sync</li>
+            </ul>
+          </section>
+          <section class="ruled">
+            <h3>What’s new</h3>
+            <p>Clearer bill reminders.</p>
+          </section>
+          <section class="ruled">
+            <h3>Recently</h3>
+            <div class="entry">
+              <div>
+                <strong>Updated to 0.6.0</strong>
+                <div class="meta">Today · Moss registry</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+            <div class="entry">
+              <div>
+                <strong>Installed</strong>
+                <div class="meta">Nov 19 · Moss registry</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+          </section>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No screenshots provided.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Reading module details…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Module details are unavailable.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s3">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s4" class="screen" aria-labelledby="title-4">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S4 · Settings / Modules</div>
+              <h2 id="title-4">Install Meals</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <p class="meta">Moss · Moss registry · 0.8.0</p>
+          <section class="ruled">
+            <h3>Allow Meals to</h3>
+            <ul class="permissions">
+              <li>Keep your meal plans and pantry</li>
+              <li>Share meals you choose with your household</li>
+              <li>Ask Moss for recipe help</li>
+              <li>Send meal reminders</li>
+            </ul>
+          </section>
+          <div class="actions">
+            <a class="jds-btn jds-btn--primary" href="#s5">Install Meals</a
+            ><a class="jds-btn jds-btn--secondary" href="#s3">Cancel</a>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No extra permissions.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Checking this package…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">This package changed. Review it again.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s4">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s5" class="screen" aria-labelledby="title-5">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S5 · Settings / Modules</div>
+              <h2 id="title-5">Installing Meals</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <p class="meta">Moss registry · 0.8.0</p>
+          <ol class="progress">
+            <li>Downloaded</li>
+            <li>Signature checked</li>
+            <li aria-current="step"><strong>Setting up data…</strong></li>
+            <li>Ready</li>
+          </ol>
+          <div class="result">
+            <h3>Meals is ready</h3>
+            <p class="meta">Moss registry · 0.8.0</p>
+            <a class="jds-btn jds-btn--primary" href="#s1">Open Meals</a>
+          </div>
+          <div class="result failure" role="alert">
+            <h3>Download stopped</h3>
+            <p>The connection closed.</p>
+            <div class="actions">
+              <a class="jds-btn jds-btn--primary" href="#s5">Retry</a
+              ><a class="jds-btn jds-btn--secondary" href="#s2">Cancel</a>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No install running.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Reading install status…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Status unavailable. Check again.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s5">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s6" class="screen" aria-labelledby="title-6">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S6 · Settings / Modules</div>
+              <h2 id="title-6">Update Finance</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <p class="meta">Moss registry · 0.6.0 → 0.6.1</p>
+          <div class="actions">
+            <span class="jds-badge jds-badge--amber">Urgent</span
+            ><span class="jds-badge jds-badge--neutral">Data update</span>
+          </div>
+          <section class="ruled">
+            <h3>What’s new</h3>
+            <p>Bill reminders arrive on time.</p>
+          </section>
+          <section class="ruled">
+            <h3>New permission</h3>
+            <ul class="permissions">
+              <li>Send bill reminders</li>
+            </ul>
+          </section>
+          <div class="actions">
+            <a class="jds-btn jds-btn--primary" href="#s5">Update</a
+            ><a class="jds-btn jds-btn--secondary" href="#s1">Skip</a>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No new permissions.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Comparing versions…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">This update is no longer available.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s6">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s7" class="screen" aria-labelledby="title-7">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S7 · Settings / Modules</div>
+              <h2 id="title-7">Remove Finance</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <p class="meta">Moss registry · 0.6.0 · All accounts</p>
+          <section class="ruled">
+            <h3>Keep the data</h3>
+            <div class="actions">
+              <a class="jds-btn jds-btn--secondary" href="#s5">Remove Finance</a
+              ><a class="jds-btn jds-btn--quiet" href="#s1">Cancel</a>
+            </div>
+          </section>
+          <section class="ruled">
+            <h3>Delete the data too</h3>
+            <p>All accounts. A snapshot stays for 30 days.</p>
+            <label class="field"
+              ><span>Type Finance</span
+              ><input class="jds-input" placeholder="Finance" autocomplete="off"
+            /></label>
+            <div class="actions">
+              <button class="jds-btn jds-btn--danger" disabled>Remove and delete data</button
+              ><a class="jds-btn jds-btn--quiet" href="#s1">Cancel</a>
+            </div>
+          </section>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">Finance is already removed.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Checking Finance…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Finance could not be removed. Your data is kept.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s7">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s8" class="screen" aria-labelledby="title-8">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S8 · Settings / Modules</div>
+              <h2 id="title-8">Restore Finance</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <p class="meta">Moss registry · All accounts</p>
+          <label class="field"
+            ><span>Snapshot</span
+            ><select class="jds-select">
+              <option>Nov 21 · Before data deletion · 0.6.0</option>
+              <option>Nov 20 · Before update · 0.5.2</option>
+            </select></label
+          >
+          <div>
+            <div class="entry">
+              <div>
+                <strong>Available until</strong>
+                <div class="meta">Dec 21</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+            <div class="entry">
+              <div>
+                <strong>Restores</strong>
+                <div class="meta">Finance 0.6.0 · All accounts</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+            <div class="entry">
+              <div>
+                <strong>Replaces</strong>
+                <div class="meta">Current Finance data</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+          </div>
+          <div class="actions">
+            <a class="jds-btn jds-btn--primary" href="#s5">Restore snapshot</a
+            ><a class="jds-btn jds-btn--secondary" href="#s1">Cancel</a>
+          </div>
+          <section class="ruled">
+            <h3>Update failed</h3>
+            <p>Finance 0.6.0 was restored.</p>
+            <p class="meta">Moss registry</p>
+          </section>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No snapshots available.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Reading snapshots…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Restore stopped. Try again.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s8">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s9" class="screen" aria-labelledby="title-9">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S9 · Settings / Modules</div>
+              <h2 id="title-9">Registries</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <nav class="tabs">
+            <a href="#s1">Installed</a><a href="#s2">Browse</a
+            ><a aria-current="page" href="#s9">Registries</a>
+          </nav>
+          <div class="entry">
+            <div>
+              <strong>Moss registry</strong>
+              <div class="meta">Checked just now</div>
+            </div>
+            <div class="actions"><span class="jds-badge jds-badge--forest">Healthy</span></div>
+          </div>
+          <div class="entry">
+            <div>
+              <strong>Community registry</strong>
+              <div class="meta">Last checked yesterday</div>
+            </div>
+            <div class="actions"><span class="jds-badge jds-badge--amber">Offline</span></div>
+          </div>
+          <section class="ruled">
+            <h3>Add a registry</h3>
+            <label class="field"
+              ><span>Address or folder</span
+              ><input class="jds-input" placeholder="Registry address or folder" /></label
+            ><a class="jds-btn jds-btn--secondary" href="#s9">Check registry</a>
+            <div class="trust-check">
+              <h3>Community registry</h3>
+              <p class="meta">Root key fingerprint</p>
+              <samp
+                >6f18 2ad0 9c42 88ba 03de 7451 2cf0 9e81<br />7032 a9bb 6cd1 0fa4 5be2 8137 09ca
+                4d65</samp
+              >
+              <div class="actions">
+                <a class="jds-btn jds-btn--primary" href="#s9">Trust and add</a
+                ><a class="jds-btn jds-btn--secondary" href="#s9">Cancel</a>
+              </div>
+            </div>
+          </section>
+          <section class="ruled">
+            <h3>Import a package</h3>
+            <label class="field"
+              ><span>Package and signature</span
+              ><input type="file" multiple accept=".mosspkg,.sig" /></label
+            ><a class="jds-btn jds-btn--secondary" href="#s4">Review package</a>
+          </section>
+          <section class="ruled">
+            <h3>Local package</h3>
+            <p>Private to you · Signed on this server</p>
+            <label class="field"
+              ><span>Built package</span><input type="file" accept=".mosspkg" /></label
+            ><a class="jds-btn jds-btn--secondary" href="#s4">Sign and review</a>
+          </section>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No extra registries.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Checking registry signatures…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">The signature does not match. Nothing was added.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s9">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s10" class="screen" aria-labelledby="title-10">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S10 · Settings / Modules</div>
+              <h2 id="title-10">Weather is blocked</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <div class="notice blocked">
+            <h3>Weather stopped for everyone</h3>
+            <p>Moss registry · 1.1.0</p>
+            <p>Publisher key revoked.</p>
+          </div>
+          <section class="ruled">
+            <div class="entry">
+              <div>
+                <strong>Data</strong>
+                <div class="meta">Kept</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+            <div class="entry">
+              <div>
+                <strong>Source</strong>
+                <div class="meta">Moss registry</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+            <div class="entry">
+              <div>
+                <strong>Package</strong>
+                <div class="meta">Weather 1.1.0</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+            <div class="entry">
+              <div>
+                <strong>Next step</strong>
+                <div class="meta">Install a trusted replacement</div>
+              </div>
+              <div class="actions"></div>
+            </div>
+          </section>
+          <div class="actions">
+            <a class="jds-btn jds-btn--primary" href="#s6">Check for update</a
+            ><a class="jds-btn jds-btn--secondary" href="#s7">Remove</a>
+          </div>
+          <div class="notice warned">
+            <h3>Garden planner needs a look</h3>
+            <p>Community registry · 2.0.0</p>
+            <p>Publisher review pending. Still running.</p>
+            <a class="jds-btn jds-btn--secondary" href="#s3">View details</a>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No registry notices.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Reading registry notices…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Registry unavailable. Saved block still applies.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s10">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="s11" class="screen" aria-labelledby="title-11">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">S11 · Settings / Modules</div>
+              <h2 id="title-11">Request Meals</h2>
+            </div>
+            <a class="jds-btn jds-btn--quiet" href="#s1">Modules</a>
+          </header>
+          <p class="meta">Moss · Moss registry · 0.8.0</p>
+          <p class="lead">Meal plans for your household.</p>
+          <div class="actions">
+            <a class="jds-btn jds-btn--primary" href="#s11">Ask an admin</a
+            ><a class="jds-btn jds-btn--secondary" href="#s2">Cancel</a>
+          </div>
+          <section class="ruled">
+            <h3>Request sent</h3>
+            <p class="meta">Meals · Moss registry · 0.8.0</p>
+            <span class="jds-badge jds-badge--amber">Waiting for an admin</span>
+          </section>
+          <section class="ruled">
+            <h3>Admin review</h3>
+            <div class="entry">
+              <div>
+                <strong>Meals requested</strong>
+                <div class="meta">Household member · Moss registry · 0.8.0</div>
+              </div>
+              <div class="actions"><a class="jds-btn jds-btn--secondary" href="#s4">Review</a></div>
+            </div>
+          </section>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No requests yet.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Sending request…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert">Request not sent. Try again.</p>
+                <a class="jds-btn jds-btn--secondary" href="#s11">Retry</a>
+              </div>
+            </div>
+          </details>
+        </article>
+        <article id="module-preferences" class="screen">
+          <header class="screen-head">
+            <div>
+              <h2>Module preferences</h2>
+            </div>
+            <a href="#s3" class="jds-btn jds-btn--quiet">Back</a>
+          </header>
+          <div class="entry">
+            <div>
+              <strong>Automatic updates</strong>
+              <div class="meta">When nothing new is asked</div>
+            </div>
+            <div class="actions">
+              <label class="jds-switch"
+                ><input type="checkbox" aria-label="Automatic updates" checked /><span
+                  class="jds-switch__track"
+                  ><span class="jds-switch__thumb"></span></span
+              ></label>
+            </div>
+          </div>
+        </article>
+        <article id="finance-settings" class="screen">
+          <header class="screen-head">
+            <div>
+              <h2>Finance settings</h2>
+              <p class="meta">Moss registry · 0.6.0</p>
+            </div>
+            <a href="#s3" class="jds-btn jds-btn--quiet">Back</a>
+          </header>
+          <div class="entry">
+            <strong>Bank connection</strong><span class="meta">Not connected</span>
+          </div>
+          <div class="entry"><strong>Merchant rules</strong><span class="meta">No rules</span></div>
+        </article>
+      </main>
+    </div>
+    <script>
+      document.querySelector("#appearance").addEventListener("change", (event) => {
+        document.documentElement.dataset.colorMode =
+          event.target.value === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = event.target.value === "sage" ? "sage" : "";
+      });
+    </script>
+  </body>
+</html>

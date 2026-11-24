@@ -39,6 +39,7 @@ impl Application {
     where
         F: FnOnce(Arc<dyn Ports>) -> Result<Arc<dyn Ports>>,
     {
+        let catalog_cipher = config.cipher.clone();
         let local = Arc::new(LocalPorts::new(data)?);
         let sql = Arc::new(DatabasePorts::new(database.clone(), local)?);
         let jobs = Arc::new(JobPorts::new(config.producer, database.clone(), sql)?);
@@ -61,12 +62,11 @@ impl Application {
         )?));
         let context = Arc::new(ContextPorts::new(deferred));
         let ports = Arc::new(TransactionalDatabasePorts::new(database.clone(), context)?);
-        let lifecycle = Arc::new(PostgresLifecycle::new(
-            config.migrations,
-            database.clone(),
-            data,
-        )?);
-        let catalog = Arc::new(PostgresCatalog::new(database, admin)?);
+        let lifecycle = Arc::new(
+            PostgresLifecycle::new(config.migrations, database.clone(), data)?
+                .with_cipher(catalog_cipher.clone()),
+        );
+        let catalog = Arc::new(PostgresCatalog::new(database, admin)?.with_cipher(catalog_cipher));
         let limits = Limits {
             fuel_ceiling: config
                 .fuel_ceiling
@@ -109,6 +109,7 @@ impl Application {
         body: &str,
         client: Option<std::net::IpAddr>,
     ) -> Result<String> {
-        self.installer.dispatch_extended_from(access, method, path, body, client)
+        self.installer
+            .dispatch_extended_from(access, method, path, body, client)
     }
 }

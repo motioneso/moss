@@ -25,17 +25,26 @@ pub struct State {
     #[serde(default)]
     pub retained: BTreeMap<String, Installed>,
     pub registries: BTreeMap<String, SeenRegistry>,
+    #[serde(default)]
+    pub activity: Vec<crate::revocation::Activity>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Installed {
     pub manifest: Manifest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_owner: Option<uuid::Uuid>,
     pub digest: String,
     pub publisher_key: String,
     pub publisher_public_key: String,
     pub registry: String,
     pub pin: Option<Version>,
+    #[serde(default)]
+    pub skipped_digest: Option<String>,
     pub previous: Option<String>,
+    /// Manual install-wide switch; registry revocations are independent.
     pub disabled: Option<String>,
+    #[serde(default)]
+    pub revocations: Vec<crate::revocation::AppliedRevocation>,
 }
 /// Implementations must compare revision and atomically commit the row. The PostgreSQL
 /// implementation keeps activation in a database row; no symlink or file is the version pointer.
@@ -111,9 +120,9 @@ pub struct ModuleApproval {
     pub consent: Consent,
     pub changes: Approval,
 }
-struct Activation {
-    approved: bool,
-    pin_override: Option<Version>,
+pub(crate) struct Activation {
+    pub(crate) approved: bool,
+    pub(crate) pin_override: Option<Version>,
 }
 impl Approval {
     pub fn required(&self) -> bool {
@@ -148,9 +157,10 @@ impl Installer {
         };
         let _disk_lock = installer.disk_lock(true)?;
         installer.recover_locked()?;
+        installer.apply_cached_revocations()?;
         installer.cleanup_snapshots(chrono::Utc::now())?;
         for module in installer.catalog.load()?.installed.values() {
-            let package = installer.read_package(&module.digest)?;
+            let package = installer.read_package_trusted(&module.digest)?;
             installer.lifecycle.audit(&package)?;
         }
         for entry in std::fs::read_dir(installer.root.subdir("staging")?.path())? {
@@ -214,39 +224,10 @@ impl Installer {
             self.catalog.load()?.revision == previous,
             "Module settings changed during the registry transfer; refresh again"
         );
-        // Keep every prefix binding visible to the host even before anything is installed.
-        // Installation checks it against other configured registries.
-        let seen = &state.registries[registry_id];
-        for installed in state
-            .installed
-            .values_mut()
-            .filter(|m| m.registry == registry_id)
-        {
-            if [&installed.digest, &installed.publisher_key]
-                .iter()
-                .any(|k| {
-                    seen.revocations
-                        .get(*k)
-                        .is_some_and(|r| r.level == crate::registry::RevocationLevel::Block)
-                })
-            {
-                installed.disabled = Some("The registry blocked this module or publisher".into());
-                self.lifecycle.pause_jobs(&installed.manifest.id)?;
-            } else if installed.disabled.as_deref()
-                == Some("The registry blocked this module or publisher")
-            {
-                installed.disabled = None;
-            }
-        }
+        state.apply_revocations();
         state.revision += 1;
         self.catalog.commit(previous, &state)?;
-        for module in state
-            .installed
-            .values()
-            .filter(|m| m.registry == registry_id && m.disabled.is_none())
-        {
-            self.lifecycle.resume_jobs(&module.manifest.id)?;
-        }
+        self.reconcile_runtime(&state)?;
         catalog.save_metadata(
             self.root
                 .create_subdir("registries")?
@@ -282,6 +263,38 @@ impl Installer {
         approved: bool,
     ) -> Result<()> {
         self.install_selected(access, catalog, artifact, approved, None, None)
+    }
+    /// Execute one reviewed package without changing its pin. A replay after crash recovery
+    /// reports an already active digest instead of activating it twice.
+    pub fn install_reviewed(
+        &self,
+        access: &AccessContext,
+        catalog: &Catalog,
+        artifact: &Artifact,
+        consent: &Consent,
+    ) -> Result<()> {
+        self.admin(access)?;
+        ensure!(
+            consent.digest == artifact.digest,
+            "The package changed since review"
+        );
+        {
+            let _fence = self
+                .fence
+                .read()
+                .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+            let _disk = self.disk_lock(false)?;
+            let state = self.catalog.load()?;
+            if state
+                .installed
+                .get(&artifact.id)
+                .is_some_and(|m| m.digest == consent.digest)
+            {
+                self.check_selection(&state, catalog, artifact, None, None)?;
+                return Ok(());
+            }
+        }
+        self.install_selected(access, catalog, artifact, true, None, Some(consent))
     }
     fn install_selected(
         &self,
@@ -321,7 +334,7 @@ impl Installer {
             access,
             package,
             &bytes,
-            catalog,
+            &catalog.trust,
             &artifact.publisher_key,
             Activation {
                 approved,
@@ -401,10 +414,14 @@ impl Installer {
             .context("Trust and refresh the registry before importing a file")?;
         catalog.assert_current(seen)?;
         ensure!(
-            ![&digest, &publisher_key.to_string()].iter().any(|k| seen
-                .revocations
-                .get(*k)
-                .is_some_and(|r| r.level == crate::registry::RevocationLevel::Block)),
+            !seen.blocks_package(
+                &digest,
+                publisher_key,
+                &catalog
+                    .trust
+                    .publisher(publisher_key, &package.manifest.id)?
+                    .key
+            ),
             "This package or publisher is blocked"
         );
         for (id, range) in &package.manifest.requires {
@@ -420,126 +437,13 @@ impl Installer {
             access,
             package,
             bytes,
-            catalog,
+            &catalog.trust,
             publisher_key,
             Activation {
                 approved,
                 pin_override: None,
             },
         )
-    }
-    fn activate(
-        &self,
-        access: &AccessContext,
-        package: Package,
-        bytes: &[u8],
-        catalog: &Catalog,
-        key_id: &str,
-        options: Activation,
-    ) -> Result<()> {
-        let Activation {
-            approved,
-            pin_override,
-        } = options;
-        crate::sql::check(&package, &self.inventory)?;
-        if let Some(wasm) = package.files.get("code/module.wasm") {
-            self.host.validate(wasm, &package.manifest)?;
-        }
-        let mut state = self.catalog.load()?;
-        let revision = state.revision;
-        let id = &package.manifest.id;
-        let old = state
-            .installed
-            .get(id)
-            .or_else(|| state.retained.get(id))
-            .cloned();
-        let publisher = catalog.trust.publisher(key_id, id)?;
-        for (registry, seen) in &state.registries {
-            ensure!(
-                seen.removed
-                    || registry == &catalog.trust.identity.id
-                    || seen
-                        .publishers
-                        .get(&publisher.prefix)
-                        .is_none_or(|key| key == &publisher.key),
-                "Resolve conflicting registry publisher prefixes before installing"
-            );
-        }
-        if let Some(old) = &old {
-            ensure!(
-                package.manifest.version > old.manifest.version || package.digest == old.digest,
-                "An installed module cannot silently move backwards or replace a published version"
-            );
-            ensure!(
-                old.publisher_public_key == publisher.key
-                    || old.registry == catalog.trust.identity.id
-                        && publisher.replaces.contains(&old.publisher_public_key),
-                "Only the registry root may approve a publisher replacement"
-            );
-            let previous = self.read_package(&old.digest)?;
-            package.unchanged_sql(&previous)?;
-            ensure!(
-                pin_override
-                    .as_ref()
-                    .or(old.pin.as_ref())
-                    .is_none_or(|pin| pin == &package.manifest.version),
-                "This module is pinned to another version"
-            );
-        }
-        let approval = self.approval(&package, false)?;
-        ensure!(
-            approved || !approval.required(),
-            "This update asks for more access or new migrations and needs administrator approval"
-        );
-        self.stage(&package, bytes)?;
-        self.lifecycle.pause_jobs(id)?;
-        let snapshot = match self.lifecycle.snapshot(id) {
-            Ok(s) => s,
-            Err(e) => {
-                self.lifecycle.resume_jobs(id)?;
-                return Err(e);
-            }
-        };
-        self.begin_change(id, &snapshot, Some(package.digest.clone()))?;
-        let outcome = (|| -> Result<()> {
-            self.lifecycle.migrate(&package, old.as_ref())?;
-            if let Some(wasm) = package.files.get("code/module.wasm") {
-                self.host.call(
-                    wasm,
-                    Arc::new(package.manifest.clone()),
-                    access.clone(),
-                    self.ports.clone(),
-                    "install",
-                    "{}",
-                )?;
-                self.host.call(
-                    wasm,
-                    Arc::new(package.manifest.clone()),
-                    access.clone(),
-                    self.ports.clone(),
-                    "health",
-                    "{}",
-                )?;
-            }
-            state.retained.remove(id);
-            state.installed.insert(
-                id.clone(),
-                Installed {
-                    manifest: package.manifest.clone(),
-                    digest: package.digest.clone(),
-                    publisher_key: key_id.into(),
-                    publisher_public_key: publisher.key.clone(),
-                    registry: catalog.trust.identity.id.clone(),
-                    pin: pin_override.or_else(|| old.as_ref().and_then(|m| m.pin.clone())),
-                    previous: old.as_ref().map(|m| m.digest.clone()),
-                    disabled: None,
-                },
-            );
-            state.revision += 1;
-            self.catalog.commit(revision, &state)?;
-            Ok(())
-        })();
-        self.complete_change(id, &snapshot, outcome)
     }
     pub(crate) fn stage(&self, package: &Package, bytes: &[u8]) -> Result<()> {
         let blob = self.root.subdir("blobs/sha256")?;
@@ -603,12 +507,19 @@ impl Installer {
         Ok(())
     }
     pub fn read_package(&self, digest: &str) -> Result<Package> {
+        let package = self.read_package_trusted(digest)?;
+        ensure!(
+            !package.manifest.id.starts_with("local."),
+            "Local package reads need the builder account"
+        );
+        Ok(package)
+    }
+    pub(crate) fn read_package_trusted(&self, digest: &str) -> Result<Package> {
         ensure!(trust::valid_digest(digest), "Invalid installed digest");
         let bytes = self.root.subdir("blobs/sha256")?.read(digest)?;
         Package::read(&bytes, digest, &self.moss)
     }
     pub fn pin(&self, access: &AccessContext, id: &str, version: Option<Version>) -> Result<()> {
-        self.admin(access)?;
         let _fence = self
             .fence
             .write()
@@ -620,6 +531,7 @@ impl Installer {
             .installed
             .get_mut(id)
             .context("This module is not installed")?;
+        self.manage(access, installed)?;
         ensure!(
             version
                 .as_ref()
@@ -630,13 +542,31 @@ impl Installer {
         state.revision += 1;
         self.catalog.commit(revision, &state)
     }
+    /// Persist the exact offer declined by an administrator; later digests remain eligible.
+    pub fn skip_update(&self, access: &AccessContext, id: &str, digest: &str) -> Result<()> {
+        ensure!(trust::valid_digest(digest), "Invalid skipped digest");
+        let _fence = self
+            .fence
+            .write()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _disk = self.disk_lock(true)?;
+        let mut state = self.catalog.load()?;
+        let revision = state.revision;
+        let installed = state
+            .installed
+            .get_mut(id)
+            .context("This module is not installed")?;
+        self.manage(access, installed)?;
+        installed.skipped_digest = Some(digest.into());
+        state.revision += 1;
+        self.catalog.commit(revision, &state)
+    }
     pub fn remove(
         &self,
         access: &AccessContext,
         id: &str,
         delete_data: Option<&str>,
     ) -> Result<()> {
-        self.admin(access)?;
         let _fence = self
             .fence
             .write()
@@ -651,6 +581,7 @@ impl Installer {
             .or_else(|| state.retained.get(id))
             .cloned()
             .context("This module has no installed code or retained data")?;
+        self.manage(access, &module)?;
         ensure!(
             module.manifest.removable(),
             "This module is part of Moss and cannot be removed"
@@ -860,13 +791,15 @@ impl Installer {
         for (id, module) in &state.installed {
             if module.registry != catalog.trust.identity.id
                 || module.pin.is_some()
-                || module.disabled.is_some()
+                || module.is_blocked()
             {
                 continue;
             }
             let result = (|| -> Result<Option<Approval>> {
                 let artifact = catalog.select(id, None, &self.moss, &installed, seen)?;
-                if artifact.version <= module.manifest.version {
+                if artifact.version <= module.manifest.version
+                    || module.skipped_digest.as_deref() == Some(&artifact.digest)
+                {
                     return Ok(None);
                 }
                 let package = catalog.download(artifact, &self.moss)?;
@@ -890,9 +823,15 @@ impl Installer {
     /// Hold the same fences as removal while a trusted host operation uses a module's data.
     /// The callback must not call another Installer method.
     pub fn while_installed<T>(&self, id: &str, action: impl FnOnce() -> Result<T>) -> Result<T> {
-        let _fence = self.fence.read().map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _fence = self
+            .fence
+            .read()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk_lock = self.disk_lock(false)?;
-        ensure!(self.catalog.load()?.installed.contains_key(id), "This module is not installed");
+        ensure!(
+            self.catalog.load()?.installed.contains_key(id),
+            "This module is not installed"
+        );
         action()
     }
 
@@ -903,6 +842,7 @@ impl Installer {
                 .load()?
                 .installed
                 .into_iter()
+                .filter(|(_, m)| m.local_owner.is_none() && !m.manifest.id.starts_with("local."))
                 .map(|(id, m)| ModulePin {
                     id,
                     registry: m.registry,

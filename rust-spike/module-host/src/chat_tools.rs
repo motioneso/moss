@@ -174,7 +174,8 @@ impl Installer {
         let mut out = Vec::new();
         for (id, installed) in &state.installed {
             let manifest = &installed.manifest;
-            if installed.disabled.is_some()
+            if !installed.visible_to(access)
+                || installed.is_blocked()
                 || !self
                     .lifecycle
                     .account_enabled(id, access, manifest.accounts.default_enabled)?
@@ -219,7 +220,7 @@ impl Installer {
             .installed
             .get(module)
             .context("Chat module unavailable")?;
-        ensure!(installed.disabled.is_none(), "Chat module disabled");
+        ensure!(!installed.is_blocked(), "Chat module disabled");
         // call_unfenced rechecks the account switch immediately before guest dispatch.
         let manifest = installed.manifest.clone();
         let tool = manifest

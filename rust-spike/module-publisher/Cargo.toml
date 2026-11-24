@@ -1,0 +1,32 @@
+[package]
+name = "moss-module-publisher"
+version = "0.1.0"
+edition = "2021"
+publish = false
+default-run = "moss-module-publisher"
+
+[workspace]
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+anyhow = "1"
+access-context = { path = "../access-context" }
+safety-core = { path = "../safety-core" }
+vault = { path = "../vault" }
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+moss-module-host = { path = "../module-host" }
+ring = "0.17"
+semver = { version = "1", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+tempfile = "3"
+
+[dev-dependencies]
+wat = "=1.239.0"
+
+[profile.dev]
+debug = 0

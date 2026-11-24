@@ -135,6 +135,7 @@ impl Keys {
             lifted_revocations: BTreeSet::new(),
         };
         let index = Index {
+            publish_reviews: Default::default(),
             serial,
             expires: chrono::Utc::now() + chrono::Duration::days(1),
             signing_key: "online".into(),

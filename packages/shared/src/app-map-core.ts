@@ -1,3 +1,4 @@
+import { RUST_MODULE_FEATURES, RUST_MODULE_REMEDIATIONS } from "./app-map-rust-modules.js";
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
 import { RUST_CHAT_REMEDIATIONS } from "./app-map-rust-chat.js";
 import {
@@ -90,15 +91,7 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
 export const CORE_APP_FEATURES: readonly (AppMapItem & {
   readonly id: string;
   readonly description: string;
-})[] = [
-  {
-    moduleId: "core",
-    id: "rust-module-chat",
-    runtime: "rust",
-    description:
-      "Moss can use the chat tools of modules you have installed and switched on for your account. Tools with a declared input schema are available. Scratchpad can read your private note through chat. Commitments can list suggestions and show their evidence. Chat asks before deleting, sending outside your account, or pinned actions; approve or reject the card in the chat drawer. After you approve a card, Moss is told you approved it, and when a setting lets an action run without a card it is told that too, so it never says no approval was needed. Agent tool permissions also show a card. Outcomes say Approved, You declined or Timed out. If approval timed out or is no longer available, ask Moss again. Plain writes run unless you chose to ask first, and show Done with the labelled before and after values from the tool. Codex keeps its starting tool list until a fresh conversation."
-  }
-];
+})[] = [...RUST_MODULE_FEATURES];
 
 export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
@@ -435,7 +428,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "modules",
     label: "Modules",
     description:
-      "Enable or disable user-toggleable modules. Every page header shows the page title with the date under it (for example SUN · OCT 4), including a Workshop project and the new-project page. Tasks, Calendar, Wellness, News and Sports also show a settings cog beside the title, which opens that module's own settings here. Today, The Workshop, Notifications and Settings have no cog because they have no settings of their own. A module that declares its own settings page sends its cog to that page, and this Modules list shows it as a link to the page instead of its own switches. Turning an external module off asks an admin to confirm, because waiting background jobs for that module are cancelled for good, jobs already running can finish, and turning the module back on starts its regular schedule again without bringing cancelled jobs back. When a single user loses access to a module, that user's waiting jobs for it are cancelled the same way. Installed module pages can save through host-provided tools. Destructive and outbound actions open a Moss confirmation dialog with Confirm action and Cancel; the decision expires after two minutes. The host holds one operation at a time and drops open decisions on page or account changes. A failed or uncertain response asks the person to refresh and check the result before trying again, rather than repeating a write automatically. A change that saved but whose result was too large to show says it saved and asks for a refresh. Older hosts without this handle cannot run these page actions.",
+      "Enable or disable user-toggleable modules. Every page header shows the page title with the date under it (for example SUN · OCT 4), including a Workshop project and the new-project page. Tasks, Calendar, Wellness, News and Sports also show a settings cog beside the title, which opens that module's own settings here. Today, The Workshop, Notifications and Settings have no cog because they have no settings of their own. A module that declares its own settings page sends its cog to that page, and this Modules list shows it as a link to the page instead of its own switches. Turning an external module off asks an admin to confirm, because waiting background jobs for that module are cancelled for good, jobs already running can finish, and turning the module back on starts its regular schedule again without bringing cancelled jobs back. When a single user loses access to a module, that user's waiting jobs for it are cancelled the same way. Installed module pages can save through host-provided tools. Destructive and outbound actions open a Moss confirmation dialog with Confirm action and Cancel; the decision expires after two minutes. The host holds one operation at a time and drops open decisions on page or account changes. A failed or uncertain response asks the person to refresh and check the result before trying again, rather than repeating a write automatically. A change that saved but whose result was too large to show says it saved and asks for a refresh. Older hosts without this handle cannot run these page actions. On hosts with the Unix keystore, the host can sign and verify locally built packages for the signed-in account under local.<account id>.* names. Local trust uses this install's encrypted signing key and checks the package bytes, imports and SQL; a foreign install, wrong owner or renamed prefix is refused. These records are local, never registry-reviewed. Other platforms report that local signing is unavailable. Signing and verification do not enable a module. The host supports private installation, upgrade, removal and restart recovery for the builder account, including when another account is an admin. Local packages have no install-wide storage or shared declarations and are omitted from portable module lists. Private local lifecycle management screens are not available yet. The installed-module lifecycle API is available to instance administrators and still requires the builder account for private local modules.",
     path: "/settings?section=modules",
     scope: "user"
   },
@@ -859,6 +852,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     path: "/",
     scope: "user"
   },
+  ...RUST_MODULE_REMEDIATIONS,
   {
     id: "core.modules.check_page_result",
     description:

@@ -24,6 +24,17 @@ struct Journal {
     target: Option<String>,
 }
 impl Installer {
+    /// The caller holds the startup disk fence; no guest or worker can run yet.
+    pub(crate) fn apply_cached_revocations(&self) -> Result<()> {
+        let mut state = self.catalog.load()?;
+        let revision = state.revision;
+        if state.apply_revocations() {
+            state.revision += 1;
+            self.catalog.commit(revision, &state)?;
+        }
+        self.reconcile_runtime(&state)
+    }
+
     pub(crate) fn begin_change(
         &self,
         id: &str,
@@ -93,7 +104,9 @@ impl Installer {
                 return Err(anyhow::anyhow!(errors.join("; ")));
             }
         }
-        if let Err(error) = self.lifecycle.resume_jobs(id) {
+        if let Err(error) =
+            self.reconcile_module_runtime(id, self.catalog.load()?.installed.get(id))
+        {
             errors.push(format!("Resuming the queue remains pending: {error}"));
             return Err(anyhow::anyhow!(errors.join("; ")));
         }
@@ -117,7 +130,7 @@ impl Installer {
         };
         let journal: Journal = serde_json::from_slice(&bytes)?;
         ensure!(
-            crate::manifest::identifier(&journal.module)
+            crate::manifest::package_identifier(&journal.module)
                 && uuid::Uuid::parse_str(&journal.snapshot).is_ok(),
             "Invalid lifecycle journal"
         );
@@ -141,19 +154,103 @@ impl Installer {
         if !committed {
             self.lifecycle.restore(&journal.module, &journal.snapshot)?;
         }
-        self.lifecycle.resume_jobs(&journal.module)?;
+        self.reconcile_module_runtime(&journal.module, current.installed.get(&journal.module))?;
         self.clear_journal()
     }
+    /// Finish recovery before a service reports a failed change. Leave the journal intact
+    /// when recovery is still unavailable so the next trusted child can try again.
+    pub fn recover_lifecycle(&self) -> Result<()> {
+        let _fence = self
+            .fence
+            .write()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _disk = self.disk_lock(true)?;
+        self.recover_locked()?;
+        self.reconcile_runtime(&self.catalog.load()?)
+    }
+    /// Configuration metadata for the lifecycle service. Private local activations still
+    /// require their builder; instance administrator status never overrides that ownership.
+    pub fn lifecycle_status(
+        &self,
+        access: &AccessContext,
+        id: &str,
+    ) -> Result<(u64, bool, Option<Installed>)> {
+        let state = self.catalog.load()?;
+        let module = state
+            .installed
+            .get(id)
+            .or_else(|| state.retained.get(id))
+            .cloned();
+        if let Some(module) = &module {
+            self.manage(access, module)?;
+        } else {
+            self.admin(access)?;
+        }
+        Ok((state.revision, state.installed.contains_key(id), module))
+    }
+    /// Resolve only host-owned metadata, including an expired snapshot's small tombstone.
+    pub fn snapshot_for_restore(
+        &self,
+        access: &AccessContext,
+        module: &str,
+        id: &str,
+    ) -> Result<Snapshot> {
+        ensure!(
+            crate::manifest::package_identifier(module) && uuid::Uuid::parse_str(id).is_ok(),
+            "Invalid snapshot identity"
+        );
+        if module.starts_with("local.") {
+            ensure!(
+                module.starts_with(&format!("local.{}.", access.actor_user_id())),
+                "Module is unavailable for this account"
+            );
+        } else {
+            self.admin(access)?;
+        }
+        let snapshot = match self
+            .snapshots_internal()?
+            .into_iter()
+            .find(|s| s.module == module && s.id == id)
+        {
+            Some(snapshot) => snapshot,
+            None => {
+                let bytes = self
+                    .root
+                    .create_subdir("expired-snapshots")?
+                    .read(&format!("{id}.json"))
+                    .map_err(|_| anyhow::anyhow!("The snapshot is unavailable"))?;
+                serde_json::from_slice::<Snapshot>(&bytes)?
+            }
+        };
+        ensure!(
+            snapshot.module == module && snapshot.id == id,
+            "The snapshot is unavailable"
+        );
+        ensure!(snapshot.expires > Utc::now(), "The snapshot has expired");
+        Ok(snapshot)
+    }
     pub fn snapshots(&self, access: &AccessContext) -> Result<Vec<Snapshot>> {
-        self.admin(access)?;
-        self.snapshots_internal()
+        let admin = self.lifecycle.is_admin(access)?;
+        Ok(self
+            .snapshots_internal()?
+            .into_iter()
+            .filter(|s| {
+                if s.module.starts_with("local.") {
+                    s.module
+                        .starts_with(&format!("local.{}.", access.actor_user_id()))
+                } else {
+                    admin
+                }
+            })
+            .collect())
     }
     fn snapshots_internal(&self) -> Result<Vec<Snapshot>> {
         let mut snapshots = Vec::new();
         let root = self.root.subdir("snapshots")?;
         for module in root.list("")? {
             ensure!(
-                module.kind == vault::EntryKind::Dir && crate::manifest::identifier(&module.name),
+                module.kind == vault::EntryKind::Dir
+                    && crate::manifest::package_identifier(&module.name),
                 "Invalid snapshot module folder"
             );
             let module_root = root.subdir(&module.name)?;
@@ -192,6 +289,17 @@ impl Installer {
         );
         for snapshot in self.snapshots_internal()? {
             if snapshot.expires <= now {
+                // Save the expiry reason before deleting data, so a restart can still explain
+                // a refused restore. The tombstone contains no previous module or saved rows.
+                let mut tombstone = snapshot.clone();
+                tombstone.previous = None;
+                let expired = self.root.create_subdir("expired-snapshots")?;
+                expired.write(
+                    &format!("{}.json", snapshot.id),
+                    &serde_json::to_vec(&tombstone)?,
+                )?;
+                sync_directory(expired.path())?;
+                sync_directory(self.root.path())?;
                 self.lifecycle
                     .discard_snapshot(&snapshot.module, &snapshot.id)?;
             }
@@ -216,27 +324,30 @@ impl Installer {
         typed_name: &str,
         acknowledge_data_loss: bool,
     ) -> Result<()> {
-        self.admin(access)?;
         let _fence = self
             .fence
             .write()
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk = self.disk_lock(true)?;
-        let stored = self
-            .snapshots_internal()?
-            .into_iter()
-            .find(|s| s.module == snapshot.module && s.id == snapshot.id)
-            .context("The snapshot is unavailable")?;
-        ensure!(stored.expires > Utc::now(), "The snapshot has expired");
-        let module = stored
+        self.recover_locked()?;
+        let stored = self.snapshot_for_restore(access, &snapshot.module, &snapshot.id)?;
+        let mut module = stored
             .previous
             .context("This snapshot contains no previous module data")?;
+        self.manage(access, &module)?;
         ensure!(
             typed_name == module.manifest.name && acknowledge_data_loss,
             "Confirm the module name and that newer writes will be lost"
         );
         let mut state = self.catalog.load()?;
         let revision = state.revision;
+        if let Some(current) = state
+            .installed
+            .get(&snapshot.module)
+            .or_else(|| state.retained.get(&snapshot.module))
+        {
+            module.disabled = current.disabled.clone();
+        }
         self.lifecycle.pause_jobs(&snapshot.module)?;
         let backup = match self.lifecycle.snapshot(&snapshot.module) {
             Ok(s) => s,
@@ -248,11 +359,12 @@ impl Installer {
         self.begin_change(&snapshot.module, &backup, Some(module.digest.clone()))?;
         let outcome = (|| {
             self.lifecycle.restore(&snapshot.module, &snapshot.id)?;
-            let package = self.read_package(&module.digest)?;
+            let package = self.read_package_trusted(&module.digest)?;
             let bytes = self.root.subdir("blobs/sha256")?.read(&module.digest)?;
             self.stage(&package, &bytes)?;
             state.retained.remove(&snapshot.module);
             state.installed.insert(snapshot.module.clone(), module);
+            state.apply_revocations();
             state.revision += 1;
             self.catalog.commit(revision, &state)
         })();

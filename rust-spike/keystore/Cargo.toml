@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+ring = "0.17"
 aes-gcm = "0.10"
 base64 = "0.22"
 bip39 = "2"

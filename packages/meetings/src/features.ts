@@ -420,7 +420,7 @@ export const meetingFeatures = [
         code: "meeting_output_route_unavailable",
         class: "validation",
         description:
-          "Moss couldn’t write this summary because no AI is chosen for summaries yet. Transcript and notes are kept. Admins choose one in Settings → AI providers; members ask an admin. Then use Rewrite summary."
+          "Summary AI is unavailable. Checked before owner-context reads; transcript and notes are kept. Admins choose a supported model in Settings → AI providers; members ask an admin. Then use Rewrite summary."
       },
       {
         code: "meeting_output_route_changed",

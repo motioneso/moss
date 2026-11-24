@@ -49,6 +49,33 @@ pub struct TrustedRegistry {
     first_party_key: String,
 }
 impl TrustedRegistry {
+    /// Release-compiled first-party trust for bootstrap, without observing an index.
+    pub(crate) fn bundled(registry: &str, key: &str) -> Result<Self> {
+        ensure!(
+            crate::manifest::identifier(registry),
+            "Invalid bundle registry"
+        );
+        let public = STANDARD.decode(key)?;
+        ensure!(public.len() == 32, "Invalid bundle publisher key");
+        Ok(Self {
+            identity: RegistryIdentity {
+                id: registry.into(),
+                name: "Bundled first-party packages".into(),
+                root_fingerprint: digest(&public),
+                index_keys: BTreeMap::new(),
+                publishers: BTreeMap::from([(
+                    "first-party".into(),
+                    Publisher {
+                        key: key.into(),
+                        prefix: String::new(),
+                        replaces: BTreeSet::new(),
+                    },
+                )]),
+                lifted_revocations: BTreeSet::new(),
+            },
+            first_party_key: key.into(),
+        })
+    }
     /// Root trust is supplied by the host's approved configuration, never by the download.
     pub fn open(
         bytes: &[u8],
@@ -80,6 +107,10 @@ impl TrustedRegistry {
         })
     }
     pub fn publisher(&self, key_id: &str, module_id: &str) -> Result<&Publisher> {
+        ensure!(
+            !module_id.starts_with("local."),
+            "Local packages cannot claim registry trust"
+        );
         let key = self
             .identity
             .publishers

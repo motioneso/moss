@@ -3,7 +3,7 @@
 //! never an unchecked Host/Forwarded header, and apply every returned header.
 use crate::{
     archive::Package,
-    manifest::{identifier, relative_path},
+    manifest::{package_identifier, relative_path},
     store::Installer,
 };
 use access_context::AccessContext;
@@ -84,20 +84,32 @@ impl AssetPolicy {
 impl Installer {
     // Caller holds the catalog/disk read fence. Recheck activation and every installed byte,
     // just as code dispatch does, including UI-only packages.
-    fn verified_ui_package(&self, id: &str, digest: Option<&str>) -> Result<Package> {
-        ensure!(identifier(id), "Invalid module id");
+    fn verified_ui_package(
+        &self,
+        access: Option<&AccessContext>,
+        id: &str,
+        digest: Option<&str>,
+    ) -> Result<Package> {
+        ensure!(package_identifier(id), "Invalid module id");
         ensure!(
             !self.root.path().join("operation.json").exists(),
             "Module recovery must finish first"
         );
         let state = self.catalog.load()?;
         let installed = state.installed.get(id).context("Module is not installed")?;
-        ensure!(installed.disabled.is_none(), "Module is disabled");
+        ensure!(
+            access.map_or(
+                installed.local_owner.is_none() && !id.starts_with("local."),
+                |a| installed.visible_to(a)
+            ),
+            "Module is unavailable for this account"
+        );
+        ensure!(!installed.is_blocked(), "Module is disabled");
         ensure!(
             digest.is_none_or(|d| d == installed.digest),
             "This screen version is no longer active"
         );
-        let package = self.read_package(&installed.digest)?;
+        let package = self.read_package_trusted(&installed.digest)?;
         let dir = self
             .root
             .subdir("installed")?
@@ -122,7 +134,8 @@ impl Installer {
         let mut entries: Vec<(i64, NavEntry)> = Vec::new();
         for (id, installed) in &state.installed {
             let manifest = &installed.manifest;
-            if installed.disabled.is_some()
+            if !installed.visible_to(access)
+                || installed.is_blocked()
                 || !self
                     .lifecycle
                     .account_enabled(id, access, manifest.accounts.default_enabled)?
@@ -159,7 +172,7 @@ impl Installer {
             .read()
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk = self.disk_lock(false)?;
-        let package = self.verified_ui_package(id, None)?;
+        let package = self.verified_ui_package(Some(access), id, None)?;
         ensure!(
             self.lifecycle.account_enabled(
                 id,
@@ -189,6 +202,17 @@ impl Installer {
         path: &str,
         policy: &AssetPolicy,
     ) -> Result<Asset> {
+        self.ui_asset_for(None, id, digest, path, policy)
+    }
+    /// Local code is private too; its assets require a session-derived account.
+    pub fn ui_asset_for(
+        &self,
+        access: Option<&AccessContext>,
+        id: &str,
+        digest: &str,
+        path: &str,
+        policy: &AssetPolicy,
+    ) -> Result<Asset> {
         ensure!(
             path.starts_with("ui/") && relative_path(path),
             "Only safe UI assets can be served"
@@ -198,7 +222,7 @@ impl Installer {
             .read()
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk = self.disk_lock(false)?;
-        let package = self.verified_ui_package(id, Some(digest))?;
+        let package = self.verified_ui_package(access, id, Some(digest))?;
         let body = package
             .files
             .get(path)

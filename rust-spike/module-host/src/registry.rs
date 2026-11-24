@@ -15,6 +15,8 @@ use std::{
 };
 use url::Url;
 
+pub const MAX_INDEX: u64 = 8 * 1024 * 1024;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Artifact {
@@ -44,6 +46,8 @@ pub enum Channel {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Index {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub publish_reviews: BTreeMap<String, crate::registry_review::PublishReview>,
     pub serial: u64,
     pub expires: DateTime<Utc>,
     pub signing_key: String,
@@ -58,7 +62,7 @@ pub struct Revocation {
     pub reason: String,
     pub level: RevocationLevel,
 }
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum RevocationLevel {
     Warn,
@@ -73,6 +77,10 @@ pub struct SeenRegistry {
     pub index_digest: String,
     pub revocations: BTreeMap<String, Revocation>,
     pub versions: BTreeMap<String, String>,
+    /// Resolve publisher aliases to the key revoked at observation time. A root-approved
+    /// replacement using the alias does not inherit the compromised key's revocation.
+    #[serde(default)]
+    pub revoked_publisher_keys: BTreeMap<String, String>,
     #[serde(default)]
     pub publishers: BTreeMap<String, String>,
     #[serde(default)]
@@ -128,21 +136,58 @@ impl SeenRegistry {
             }
             next.revocations.insert(rev.target.clone(), rev.clone());
         }
+        for revocation in next.revocations.values() {
+            if let Some(publisher) = trust.identity.publishers.get(&revocation.target) {
+                next.revoked_publisher_keys
+                    .entry(revocation.target.clone())
+                    .or_insert_with(|| {
+                        let key = if self.revocations.contains_key(&revocation.target) {
+                            self.publishers
+                                .get(&publisher.prefix)
+                                .unwrap_or(&publisher.key)
+                        } else {
+                            &publisher.key
+                        };
+                        key.clone()
+                    });
+            }
+        }
         for target in &trust.identity.lifted_revocations {
             next.revocations.remove(target);
+            next.revoked_publisher_keys.remove(target);
         }
         next.serial = index.serial;
         next.index_digest = digest;
         *self = next;
         Ok(())
     }
-    pub fn blocked(&self, artifact: &Artifact) -> bool {
-        [&artifact.digest, &artifact.publisher_key].iter().any(|k| {
-            self.revocations
-                .get(*k)
-                .is_some_and(|r| r.level == RevocationLevel::Block)
+    pub(crate) fn targets_package(
+        &self,
+        target: &str,
+        digest: &str,
+        publisher_id: &str,
+        public_key: &str,
+    ) -> bool {
+        target == digest
+            || target == public_key
+            || self
+                .revoked_publisher_keys
+                .get(target)
+                .map_or(target == publisher_id, |key| key == public_key)
+    }
+    /// Shared block policy for installers, runtime dispatch and publisher validation.
+    pub fn blocks_package(
+        &self,
+        digest: &str,
+        publisher_id: &str,
+        public_key: &str,
+    ) -> bool {
+        self.revocations.values().any(|revocation| {
+            revocation.level == RevocationLevel::Block
+                && self.targets_package(&revocation.target, digest, publisher_id, public_key)
         })
     }
+
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(
@@ -329,7 +374,7 @@ impl Catalog {
         let sig = String::from_utf8(source.fetch("registry.json.sig", 4096)?)?;
         let root_signature = sig.as_bytes().to_vec();
         let trust = TrustedRegistry::open(&identity, &sig, root_key, first_party_key)?;
-        let bytes = source.fetch("index.json", 8 * 1024 * 1024)?;
+        let bytes = source.fetch("index.json", MAX_INDEX)?;
         let sig = String::from_utf8(source.fetch("index.json.sig", 4096)?)?;
         let index: Index = serde_json::from_slice(&bytes)?;
         let key = trust
@@ -422,7 +467,14 @@ impl Catalog {
             .max_by_key(|a| &a.version)
             .context("This module version is not in the registry")?;
         ensure!(
-            !seen.blocked(artifact),
+            !seen.blocks_package(
+                &artifact.digest,
+                &artifact.publisher_key,
+                &self
+                    .trust
+                    .publisher(&artifact.publisher_key, &artifact.id)?
+                    .key
+            ),
             "This package or its publisher has been blocked"
         );
         ensure!(
@@ -442,11 +494,26 @@ impl Catalog {
         let bytes = self.source.fetch(&path, artifact.size)?;
         self.read_download(artifact, &bytes, moss)
     }
+    /// Authenticate a historical release for publish review, regardless of its host range.
+    pub fn download_for_review(&self, artifact: &Artifact) -> Result<crate::archive::Package> {
+        let path = format!("packages/{}.mosspkg", artifact.digest);
+        let bytes = self.source.fetch(&path, artifact.size)?;
+        self.read_download_for_review(artifact, &bytes)
+    }
     pub fn read_download(
         &self,
         artifact: &Artifact,
         bytes: &[u8],
         moss: &Version,
+    ) -> Result<crate::archive::Package> {
+        let package = self.read_download_for_review(artifact, bytes)?;
+        package.manifest.check_moss_version(moss)?;
+        Ok(package)
+    }
+    fn read_download_for_review(
+        &self,
+        artifact: &Artifact,
+        bytes: &[u8],
     ) -> Result<crate::archive::Package> {
         ensure!(
             bytes.len() as u64 == artifact.size,
@@ -458,7 +525,7 @@ impl Catalog {
             &artifact.digest,
             &artifact.signature,
         )?;
-        let package = crate::archive::Package::read(bytes, &artifact.digest, moss)?;
+        let package = crate::archive::Package::read_for_review(bytes, &artifact.digest)?;
         compare_manifest(&package.manifest, artifact)?;
         Ok(package)
     }

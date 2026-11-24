@@ -463,7 +463,7 @@
   },
   "lifecycle": {
     "required": false,
-    "bundled": false,
+    "bundled": true,
     "removable": true
   },
   "screens": {

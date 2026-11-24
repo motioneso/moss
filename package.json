@@ -80,6 +80,10 @@
     "test:rust-people-server": "tsx rust-spike/module-host/tools/people-server-gate.ts",
     "test:rust-chat-host": "tsx rust-spike/module-host/tools/chat-host-gate.ts",
     "test:rust-module-bootstrap": "tsx rust-spike/module-host/tools/bootstrap-server-gate.ts",
+    "test:rust-phase6-revocation-runtime": "tsx rust-spike/module-host/tools/phase6-revocation-runtime-gate.ts",
+    "test:rust-phase6-update-api": "tsx rust-spike/module-host/tools/phase6-update-api-gate.ts",
+    "test:rust-phase6-lifecycle-api": "tsx rust-spike/module-host/tools/phase6-lifecycle-api-gate.ts",
+    "test:rust-phase6-catalog-and-review": "tsx rust-spike/module-host/tools/phase6-catalog-and-review-gate.ts",
     "test:rust-install-endpoints": "tsx rust-spike/module-host/tools/install-endpoints-gate.ts",
     "test:rust-calendar-review-live": "tsx modules/calendar/tools/review-live-gate.ts",
     "test:rust-calendar-server": "tsx modules/calendar/tools/server-gate.ts",
@@ -357,7 +361,12 @@
     "test:rust-meetings-companion": "tsx modules/meetings/tools/companion-gate.ts",
     "test:rust-meetings-companion-server": "MOSS_COMPANION_STARTUP_ONLY=1 bash modules/meetings/tools/live.sh",
     "test:rust-chat-bridge": "tsx rust-spike/shell/tools/chat-bridge-gate.ts",
-    "test:rust-chat-bridge-live": "tsx rust-spike/shell/tools/chat-bridge-live.ts"
+    "test:rust-chat-bridge-live": "tsx rust-spike/shell/tools/chat-bridge-live.ts",
+    "test:rust-phase6-offline-bundle": "bash rust-spike/module-publisher/tools/release-check.sh",
+    "test:rust-phase6-local-isolation": "tsx rust-spike/module-host/tools/phase6-local-isolation-gate.ts",
+    "test:rust-phase6-local-trust": "tsx rust-spike/module-host/tools/phase6-local-trust-gate.ts",
+    "test:rust-phase6-registry-artifacts": "bash rust-spike/module-publisher/tools/artifacts-check.sh",
+    "test:rust-module-publisher": "bash rust-spike/module-publisher/tools/check.sh"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
