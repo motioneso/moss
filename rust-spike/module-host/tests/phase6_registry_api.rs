@@ -676,6 +676,24 @@ fn phase6_registry_api() {
         "same-root re-add preserves history and is usable: {restored}"
     );
     health();
+    // Configuration power does not let a second admin approve another actor's preview.
+    member_rt
+        .block_on(member_db.execute(
+            "UPDATE app.users SET is_instance_admin=true WHERE id=$1",
+            &[&member],
+        ))
+        .unwrap();
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/list/import",
+            Some(json!({"preview":empty["preview"],"approve":true})),
+            Some(&member_cookie)
+        )
+        .0,
+        422,
+        "list preview belongs to actor"
+    );
     assert!(!health_view.to_string().contains("postgres://"));
     assert!(!health_view
         .to_string()

@@ -29,6 +29,12 @@ def guard(source, message):
 app = 'rust-spike/shell/app/src/'
 host = 'rust-spike/module-host/src/'
 controls = [
+    ('admin', 'registry configuration is admin-only', {}, {
+        app + 'module_registries.rs': lambda s: replace(s, 'if let Err(response) = module_admin::require_admin(&admin, &access).await {\n        return response;\n    }', ''),
+    }),
+    ('preview-actor', 'list preview belongs to actor', {}, {
+        app + 'module_lists.rs': lambda s: guard(s, 'Preview belongs to another account'),
+    }),
     ('pending-root', 'pending source cannot install', {}, {
         app + 'module_registries.rs': lambda s: replace(s, 'save_pending(instance, &staged)?;', 'module_sources::write(instance, &staged)?; save_pending(instance, &staged)?;'),
     }),
