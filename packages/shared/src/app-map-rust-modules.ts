@@ -41,7 +41,7 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     runtime: "rust",
     description:
       "A missing installed module, mismatched review, unapproved update, stale digest, invalid pin or unavailable source refuses the update choice. Sign in as an instance administrator, check the saved operation and current catalog, obtain a fresh review and approve it. Lift a pin before updating; pin only the installed version. A failed update retains the previous digest: check it before trying again. Payload account fields are refused; use the signed-in account.",
-    path: "/settings?section=instmods",
+    path: "/sign-in",
     scope: "admin"
   },
   {
