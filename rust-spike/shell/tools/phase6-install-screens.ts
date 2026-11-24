@@ -170,6 +170,7 @@ try {
   const control = process.env.INSTALL_CONTROL;
   if (control === "member") {
     const response = await admin.request.post(`${origin}/api/modules/review`, {
+      headers: { origin },
       data: { module: "install-desktop-success", source: "moss-fixture" }
     });
     assert.equal(response.status(), 200);
@@ -367,6 +368,11 @@ try {
     await request.screenshot({ path: join(out, `${width}-member-request.png`) });
     await request.close();
     console.log(`PASS ${width}: member install entry and direct install URL route to S11`);
+  }
+  if (process.env.INSTALL_INSPECT === "1") {
+    writeFileSync(join(hold, "inspection-ready"), origin);
+    console.log("Real fixture is ready for the task browser", origin);
+    await waitFor(join(hold, "inspection-complete"), 300_000);
   }
   await admin.close();
   await member.close();
