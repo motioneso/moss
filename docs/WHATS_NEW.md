@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-24
+
+#### Added
+
+- **Independent module controls.** Each account keeps its module choices while administrators control availability and safe updates for the installation. [PR #4482](https://github.com/motioneso/moss/pull/4482)
+
 ### 2026-11-23
 
 #### Added
