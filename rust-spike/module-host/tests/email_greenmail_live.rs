@@ -226,6 +226,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
         assert_eq!(manifest.id, *id);
         fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
         Artifact {
+            presentation: None,
             id: manifest.id.clone(),
             version: manifest.version.clone(),
             digest: digest.clone(),

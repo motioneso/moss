@@ -45,7 +45,7 @@ out = Path(sys.argv[1])
 out.mkdir(parents=True, exist_ok=True)
 seen: set = set()
 (out / "app.css").write_text(
-    "\n".join(flatten(p, seen) for p in ENTRIES) + "\n" + (Path(__file__).parent / "shell-extra.css").read_text()
+    "\n".join(flatten(p, seen) for p in ENTRIES) + "\n" + (Path(__file__).parent / "shell-extra.css").read_text() + "\n" + (Path(__file__).parent / "module-catalog.css").read_text()
 )
 for folder in ["fonts", "textures"]:
     shutil.copytree(WEB / "public" / folder, out / folder, dirs_exist_ok=True)

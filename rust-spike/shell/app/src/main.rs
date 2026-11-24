@@ -36,6 +36,7 @@ mod desktop_notices;
 mod integrations;
 mod module_admin;
 mod module_ai;
+mod module_catalog_view;
 mod module_embedding;
 mod module_install;
 mod module_install_requests;
@@ -88,7 +89,9 @@ impl Accounts {
 /// implementation here instead of the stub.
 fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
     let index = web.join("index.html");
+    let module_page = index.clone();
     Router::new()
+        .route("/settings/modules", get(move |uri: Uri| app_page(uri, module_page.clone())))
         .route(
             "/api/shell",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move {
@@ -97,11 +100,11 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                 let mut shell = d.for_actor(&access).shell();
                 shell.account.display_name = row.get(0);
                 shell.account.is_admin = row.get(1);
-                if d.can_install_modules && row.get::<_, bool>(1) {
+                if d.can_install_modules {
                     shell.nav.push(moss_shell_contract::NavSection {
-                        label: Some("Instance".into()),
+                        label: Some("Settings".into()),
                         links: vec![moss_shell_contract::NavLink {
-                            path: "/modules".into(),
+                            path: "/settings/modules".into(),
                             label: "Modules".into(),
                             icon: "package".into(),
                             unread: 0,

@@ -219,6 +219,7 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
             )
             .unwrap();
             Artifact {
+                presentation: None,
                 id: manifest.id.clone(),
                 version: manifest.version.clone(),
                 digest: digest.clone(),

@@ -31,6 +31,7 @@ pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
     let m = moss_weather_host::package::manifest().unwrap();
     let digest = trust::digest(bytes);
     let artifact = Artifact {
+        presentation: None,
         id: m.id.clone(),
         version: m.version.clone(),
         digest: digest.clone(),

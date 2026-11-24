@@ -245,6 +245,7 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
             )
             .unwrap();
             Artifact {
+                presentation: None,
                 id: manifest.id.clone(),
                 version: manifest.version.clone(),
                 digest: digest.clone(),

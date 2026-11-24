@@ -105,3 +105,6 @@ pub fn Masthead(
     }
     view! {<header class=class><div class="jds-masthead__row"><div class="jds-masthead__main">{eyebrow.map(|s|view!{<p class="jds-masthead__eyebrow">{s}</p>})}<h1 class="jds-masthead__title"><span>{title}</span></h1>{lede.map(|s|view!{<p class="jds-masthead__lede">{s}</p>})}</div>{children.map(|aside|view!{<div class="jds-masthead__aside">{aside()}</div>})}</div></header>}
 }
+
+mod catalog;
+pub use catalog::{Badge, BadgeTone, Switch, TabLink};
