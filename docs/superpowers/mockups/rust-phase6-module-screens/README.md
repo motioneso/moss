@@ -1,4 +1,4 @@
-# Module screens: approval draft
+# Module screens: approved
 
 JS-66, Phase 6 M9. Open `index.html` for all eleven screens. These are static fixtures for Ben's
 look check, not working product screens or proof of package installation. Screen-index links,
@@ -52,5 +52,5 @@ preference. The Finance cog opens a separate `finance-settings` illustration of 
 settings. The product route remains `/settings/finance`; this task does not redesign it.
 No module-settings text link is introduced.
 
-The coordinator sends S1–S11 to Ben. Before any screen is built, record his approval and changed
-section 8 assumptions in the package/registry spec. This PR grants no design approval.
+Ben approved S1–S11 on 2026-11-23, with the quieter Installed-tab controls from PR 4477. The
+approval and the section 8 assumptions it confirms are recorded in the package/registry spec.

@@ -653,6 +653,12 @@ Open questions for Ben, each with the answer this spec assumes until he rules:
    that installed them, under `local.<account>.*` ids (slice M11). The alternative is admin-only
    local install, or dropping local packages until Workshop is redone.
 
+**Approved 2026-11-23.** Ben approved the S1–S11 mockups in
+`docs/superpowers/mockups/rust-phase6-module-screens/`, with the Installed-tab change in PR 4477
+(update shown as a badge, the server-wide control as a switch, export and import as links). The
+mockups draw all eight assumptions above, so each stands as written. Screen slices may build
+against them.
+
 ## 9. Slices and where they sit in the plan
 
 ### 9.1 New phase order
