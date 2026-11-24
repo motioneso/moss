@@ -267,11 +267,14 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         args.version = Some(reviewed.version.clone());
     }
     record.stage(&args.instance, ModuleOperationStage::Checking)?;
-    let result = run_selected(&args, Some(&mut record));
+    let mut result = run_selected(&args, Some(&mut record));
     if result.is_ok() && record.pin_after_install {
         args.operation = None;
         args.mode = Mode::Pin;
-        run_selected(&args, None)?;
+        result = run_selected(&args, None);
+        if result.is_err() {
+            record.finish(&args.instance, Err("The module is installed, but its pin could not be applied; check the installed version and pin it again"))?;
+        }
     }
     // Never persist database errors or child environment values in browser-readable results.
     if !record.view.stage.terminal() {

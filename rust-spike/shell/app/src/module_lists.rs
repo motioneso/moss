@@ -135,19 +135,19 @@ async fn import(
 
 fn preview_list(instance: &FsPath, actor: String, input: Value) -> Result<Value> {
     let list = ModuleList::parse(&serde_json::to_vec(&input)?)?;
-    let installed = export_list(&instance, &actor)?;
+    let installed = export_list(instance, &actor)?;
     let mut records = vec![];
     for item in list.modules {
         // Lists never change an existing install, its source, pin, or data.
         if installed.modules.iter().any(|m| m.id == item.id) {
             continue;
         }
-        let source = module_sources::select(&instance, Some(&item.registry))?;
+        let source = module_sources::select(instance, Some(&item.registry))?;
         let mut args = vec!["--plan".into()];
         if let Some(version) = &item.version {
             args.extend(["--version".into(), version.to_string()]);
         }
-        let value = module_admin::run_json(&instance, &source, &args, &[item.id], &actor)
+        let value = module_admin::run_json(instance, &source, &args, &[item.id], &actor)
             .map_err(anyhow::Error::msg)?;
         let review: ModuleReview = serde_json::from_value(value["review"].clone())?;
         let record = Record {
@@ -168,7 +168,7 @@ fn preview_list(instance: &FsPath, actor: String, input: Value) -> Result<Value>
     }
     let id = uuid::Uuid::new_v4().to_string();
     for record in &records {
-        record.save(&instance)?;
+        record.save(instance)?;
     }
     let saved = Preview {
         actor,

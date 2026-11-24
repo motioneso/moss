@@ -17,7 +17,7 @@ use moss_module_host::{
     trust,
 };
 use moss_network::config::{private_read, private_write};
-use safety_core::access::AccessContext;
+use safety_core::{access::AccessContext, db::DataContext};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::Path as FsPath, sync::Arc};
@@ -111,12 +111,42 @@ fn first_party_key(instance: &FsPath) -> Result<String> {
     private_write(&path, &serde_json::to_vec(&key)?).map_err(anyhow::Error::msg)?;
     Ok(key)
 }
-fn checked(source: &Registry) -> Result<Catalog> {
+type History = BTreeMap<String, SeenRegistry>;
+async fn history(admin: &Admin, access: &AccessContext) -> Result<History> {
+    let cx = DataContext::open(&admin.platform.app, access)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let present: bool = cx
+        .db()
+        .query_one(
+            "SELECT to_regclass('moss_modules.catalog') IS NOT NULL",
+            &[],
+        )
+        .await?
+        .get(0);
+    if !present {
+        return Ok(BTreeMap::new());
+    }
+    // Read configuration history only; sealed private activation records are not selected.
+    let row = cx
+        .db()
+        .query_opt(
+            "SELECT state->'registries' FROM moss_modules.catalog WHERE id=true",
+            &[],
+        )
+        .await?;
+    Ok(match row {
+        Some(row) => serde_json::from_value(row.get(0))?,
+        None => BTreeMap::new(),
+    })
+}
+fn checked(source: &Registry, history: &History) -> Result<Catalog> {
+    let mut seen = history.get(&source.id).cloned().unwrap_or_default();
     let catalog = Catalog::fetch(
         source.source()?,
         &source.root_key,
         &source.first_party_key,
-        &mut SeenRegistry::default(),
+        &mut seen,
     )?;
     ensure!(
         catalog.trust.identity.id == source.id,
@@ -124,13 +154,13 @@ fn checked(source: &Registry) -> Result<Catalog> {
     );
     Ok(catalog)
 }
-fn stage(instance: &FsPath, source: Registry) -> Result<Value> {
+fn stage(instance: &FsPath, source: Registry, history: &History) -> Result<Value> {
     module_sources::decode(&serde_json::to_vec(&json!({"registries":[&source]}))?)?;
     ensure!(
         !sources(instance)?.iter().any(|r| r.id == source.id),
         "Registry already configured"
     );
-    let catalog = checked(&source)?;
+    let catalog = checked(&source, history)?;
     let mut staged = pending(instance)?;
     ensure!(
         staged.len() < 16 && !staged.iter().any(|r| r.id == source.id),
@@ -149,17 +179,31 @@ fn refused() -> Response {
 }
 async fn work<F>(admin: Arc<Admin>, access: AccessContext, task: F) -> Response
 where
-    F: FnOnce(&FsPath) -> Result<Value> + Send + 'static,
+    F: FnOnce(&FsPath, &History) -> Result<Value> + Send + 'static,
 {
     let _gate = admin.gate.lock().await;
     if let Err(response) = module_admin::require_admin(&admin, &access).await {
         return response;
     }
     let instance = admin.instance.clone();
-    match tokio::task::spawn_blocking(move || {
+    let lock = match tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
         let lock = crate::module_operation::lock_file(&instance.join("module-install.lock"))?;
         lock.lock()?;
-        task(&instance)
+        Ok(lock)
+    })
+    .await
+    {
+        Ok(Ok(lock)) => lock,
+        _ => return refused(),
+    };
+    let history = match history(&admin, &access).await {
+        Ok(history) => history,
+        Err(_) => return refused(),
+    };
+    let instance = admin.instance.clone();
+    match tokio::task::spawn_blocking(move || {
+        let _lock = lock;
+        task(&instance, &history)
     })
     .await
     {
@@ -172,7 +216,7 @@ async fn add(
     Extension(access): Extension<AccessContext>,
     Json(input): Json<Add>,
 ) -> Response {
-    work(admin, access, move |instance| {
+    work(admin, access, move |instance, history| {
         stage(
             instance,
             Registry {
@@ -182,6 +226,7 @@ async fn add(
                 root_key: input.registry.root_key,
                 first_party_key: first_party_key(instance)?,
             },
+            history,
         )
     })
     .await
@@ -192,14 +237,14 @@ async fn confirm(
     Path(id): Path<String>,
     Json(input): Json<Confirm>,
 ) -> Response {
-    work(admin, access, move |instance| {
+    work(admin, access, move |instance, history| {
         let mut staged = pending(instance)?;
         let source = staged
             .iter()
             .find(|r| r.id == id)
             .context("No pending registry")?
             .clone();
-        let catalog = checked(&source)?;
+        let catalog = checked(&source, history)?;
         ensure!(
             input.fingerprint == catalog.trust.identity.root_fingerprint,
             "Confirm the actual root fingerprint"
@@ -233,6 +278,7 @@ async fn remove(
         {
             let lock = crate::module_operation::lock_file(&instance.join("module-install.lock"))?;
             lock.lock()?;
+            first_party_key(&instance)?;
             let mut trusted = sources(&instance)?;
             trusted.retain(|r| r.id != id);
             module_sources::write(&instance, &trusted)?;
@@ -271,11 +317,11 @@ async fn list(
     State(admin): State<Arc<Admin>>,
     Extension(access): Extension<AccessContext>,
 ) -> Response {
-    work(admin, access, move |instance| {
+    work(admin, access, move |instance, history| {
         let mut views = vec![];
         for (registries, confirmed) in [(sources(instance)?, true), (pending(instance)?, false)] {
             for source in registries {
-                let result = checked(&source);
+                let result = checked(&source, history);
                 let (name, fingerprint, health) = match result {
                     Ok(catalog) => (catalog.trust.identity.name, catalog.trust.identity.root_fingerprint,
                         if catalog.index.expires <= chrono::Utc::now() {"expired"} else {"healthy"}),
@@ -292,7 +338,7 @@ async fn import(
     Extension(access): Extension<AccessContext>,
     Json(input): Json<Import>,
 ) -> Response {
-    work(admin, access, move |instance| {
+    work(admin, access, move |instance, history| {
         ensure!(
             moss_module_host::manifest::identifier(&input.id),
             "Invalid registry ID"
@@ -352,7 +398,7 @@ async fn import(
             };
             // Mirror validation includes content hashes; ordinary expired-index rules still
             // apply when a person later installs from an imported bundle.
-            let catalog = checked(&source)?;
+            let catalog = checked(&source, history)?;
             let bundle = folder.path().join("bundle.json").exists();
             let signature = folder.path().join("bundle.json.sig").exists();
             ensure!(bundle == signature, "Bundle needs its signature");
@@ -385,7 +431,7 @@ async fn import(
                     );
                 }
             }
-            stage(instance, source)
+            stage(instance, source, history)
         })();
         if result.is_err() {
             let _ = std::fs::remove_dir_all(folder.path());
