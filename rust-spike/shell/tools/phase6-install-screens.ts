@@ -320,7 +320,7 @@ try {
     assert(!failed.stages.includes("activating"), "SQL failure never claimed activation");
     for (const privateText of [
       "private_marker",
-      `app.install_${width}_sql_entries`,
+      `app.install__${width}__sql_entries`,
       "CREATE TABLE",
       "postgres://",
       registry,

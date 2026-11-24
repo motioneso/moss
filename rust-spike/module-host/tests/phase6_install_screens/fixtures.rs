@@ -30,8 +30,8 @@ fn offer(
     let mut files = common::files(&manifest);
     if kind == "sql" {
         manifest.database.migrations = vec!["sql/001_entries.sql".into()];
-        manifest.database.owned_tables = vec![format!("app.install_{width}_sql_entries")];
-        files.insert("sql/001_entries.sql".into(),format!("CREATE TABLE app.install_{width}_sql_entries (id uuid PRIMARY KEY, owner_user_id uuid NOT NULL);").into_bytes());
+        manifest.database.owned_tables = vec![format!("app.install__{width}__sql_entries")];
+        files.insert("sql/001_entries.sql".into(),format!("CREATE TABLE app.install__{width}__sql_entries (id uuid PRIMARY KEY, owner_user_id uuid NOT NULL);").into_bytes());
     }
     manifest
         .screens
@@ -116,13 +116,13 @@ pub fn serve(
                 }
                 "sql-conflict" => {
                     rt.block_on(db.batch_execute(&format!(
-                        "CREATE TABLE app.install_{width}_sql_entries (private_marker text)"
+                        "CREATE TABLE app.install__{width}__sql_entries (private_marker text)"
                     )))
                     .unwrap();
                 }
                 "sql-repair" => {
                     rt.block_on(
-                        db.batch_execute(&format!("DROP TABLE app.install_{width}_sql_entries")),
+                        db.batch_execute(&format!("DROP TABLE app.install__{width}__sql_entries")),
                     )
                     .unwrap();
                 }
