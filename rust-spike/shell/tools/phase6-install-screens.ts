@@ -238,6 +238,11 @@ try {
     await page.screenshot({ path: join(out, `${width}-result.png`) });
     await page.getByRole("link", { name: `Open ${width} success`, exact: true }).click();
     await expect(page).toHaveURL(`${origin}/install-${width}-success`);
+    await expect(
+      page
+        .frameLocator("iframe.module-screen")
+        .getByRole("heading", { name: `${width} success`, exact: true })
+    ).toBeVisible();
     assert.equal(
       (await member.request.get(`${origin}/api/modules/operations/${first.id}`)).status(),
       403,
