@@ -173,18 +173,54 @@ async fn remove(
     Extension(access): Extension<AccessContext>,
     Path(id): Path<String>,
 ) -> Response {
-    work(admin, access, move |instance| {
-        let mut trusted = sources(instance)?;
-        trusted.retain(|r| r.id != id);
-        module_sources::write(instance, &trusted)?;
-        let mut staged = pending(instance)?;
-        staged.retain(|r| r.id != id);
-        save_pending(instance, &staged)?;
-        // Signed replay/revocation history and installed modules are retained by the host.
+    let _gate = admin.gate.lock().await;
+    if let Err(response) = module_admin::require_admin(&admin, &access).await {
+        return response;
+    }
+    let actor = access.actor_user_id().to_string();
+    let instance = admin.instance.clone();
+    match tokio::task::spawn_blocking(move || -> Result<Value> {
+        ensure!(
+            moss_module_host::manifest::identifier(&id),
+            "Invalid registry ID"
+        );
+        {
+            let lock = crate::module_operation::lock_file(&instance.join("module-install.lock"))?;
+            lock.lock()?;
+            let mut trusted = sources(&instance)?;
+            trusted.retain(|r| r.id != id);
+            module_sources::write(&instance, &trusted)?;
+            let mut staged = pending(&instance)?;
+            staged.retain(|r| r.id != id);
+            save_pending(&instance, &staged)?;
+        }
+        // The child has its own instance fence and rechecks the session actor. Remove the
+        // persisted host configuration too, so later refresh cannot resurrect this source.
+        // This mode never fetches source metadata, including for a pending or offline root.
+        let source = Registry {
+            id: id.clone(),
+            folder: Some(instance.clone()),
+            url: None,
+            root_key: String::new(),
+            first_party_key: String::new(),
+        };
+        module_admin::run_json(
+            &instance,
+            &source,
+            &["--remove-registry".into()],
+            &[],
+            &actor,
+        )
+        .map_err(anyhow::Error::msg)?;
         Ok(json!({"id":id,"removed":true}))
     })
     .await
+    {
+        Ok(Ok(value)) => Json(value).into_response(),
+        _ => refused(),
+    }
 }
+
 async fn list(
     State(admin): State<Arc<Admin>>,
     Extension(access): Extension<AccessContext>,
@@ -237,7 +273,9 @@ async fn import(
                             "registry.json",
                             "registry.json.sig",
                             "index.json",
-                            "index.json.sig"
+                            "index.json.sig",
+                            "bundle.json",
+                            "bundle.json.sig"
                         ]
                         .contains(&name.as_str()),
                         "Unexpected registry file"
@@ -255,6 +293,18 @@ async fn import(
             // Mirror validation includes content hashes; ordinary expired-index rules still
             // apply when a person later installs from an imported bundle.
             let catalog = checked(&source)?;
+            let bundle = folder.path().join("bundle.json").exists();
+            let signature = folder.path().join("bundle.json.sig").exists();
+            ensure!(bundle == signature, "Bundle needs its signature");
+            if bundle {
+                catalog.verify_bundle(
+                    &catalog
+                        .source
+                        .fetch("bundle.json", moss_module_host::registry::MAX_INDEX)?,
+                    &catalog.source.fetch("bundle.json.sig", 4096)?,
+                )?;
+            }
+
             for artifact in &catalog.index.modules {
                 let name = format!("packages/{}.mosspkg", artifact.digest);
                 if folder.path().join(&name).exists() {

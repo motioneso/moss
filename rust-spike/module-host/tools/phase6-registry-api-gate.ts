@@ -64,3 +64,15 @@ cargo(
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
   }
 );
+
+cargo([
+  "test",
+  "--offline",
+  "--locked",
+  "--manifest-path",
+  "rust-spike/module-publisher/Cargo.toml",
+  "--test",
+  "phase6_registry_artifacts",
+  "--",
+  "--test-threads=1"
+]);

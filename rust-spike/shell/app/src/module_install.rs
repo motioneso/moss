@@ -40,6 +40,7 @@ enum Mode {
     Install,
     List,
     Export,
+    RemoveRegistry,
     Plan,
     Skip,
     Pin,
@@ -59,6 +60,8 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         } else if flag == "--unpin" {
             mode = Mode::Pin;
             version = None;
+        } else if flag == "--remove-registry" {
+            mode = Mode::RemoveRegistry;
         } else if flag == "--export-list" {
             mode = Mode::Export;
         } else if flag == "--list" {
@@ -100,7 +103,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         }
     }
     let need = |what: &str| anyhow::anyhow!("missing {what}\n{USAGE}");
-    if modules.is_empty() && !matches!(mode, Mode::List | Mode::Export) {
+    if modules.is_empty() && !matches!(mode, Mode::List | Mode::Export | Mode::RemoveRegistry) {
         return Err(need("module name"));
     }
     Ok(Args {
@@ -341,6 +344,20 @@ fn run_selected(
     settings.admin_user_id = Some(args.actor.unwrap_or(owner));
     let application = modules::application(settings, database.clone())?;
     let access = AccessContext::new(args.actor.unwrap_or(owner), "module-install");
+    if args.mode == Mode::RemoveRegistry {
+        if application
+            .installer
+            .registries(&access)?
+            .iter()
+            .any(|r| r.id == args.registry_id)
+        {
+            application
+                .installer
+                .remove_registry(&access, &args.registry_id)?;
+        }
+        println!("{}", serde_json::json!({"removed":true}));
+        return Ok(());
+    }
     if args.mode == Mode::Export {
         println!(
             "{}",

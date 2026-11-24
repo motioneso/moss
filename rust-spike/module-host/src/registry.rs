@@ -176,18 +176,12 @@ impl SeenRegistry {
                 .map_or(target == publisher_id, |key| key == public_key)
     }
     /// Shared block policy for installers, runtime dispatch and publisher validation.
-    pub fn blocks_package(
-        &self,
-        digest: &str,
-        publisher_id: &str,
-        public_key: &str,
-    ) -> bool {
+    pub fn blocks_package(&self, digest: &str, publisher_id: &str, public_key: &str) -> bool {
         self.revocations.values().any(|revocation| {
             revocation.level == RevocationLevel::Block
                 && self.targets_package(&revocation.target, digest, publisher_id, public_key)
         })
     }
-
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(
@@ -350,6 +344,41 @@ pub struct Catalog {
     documents: BTreeMap<String, Vec<u8>>,
 }
 impl Catalog {
+    pub fn verify_bundle(&self, bytes: &[u8], signature: &[u8]) -> Result<()> {
+        let bundle: crate::bundle::BundleManifest = serde_json::from_slice(bytes)?;
+        ensure!(
+            bundle.signing_key == self.index.signing_key,
+            "Wrong bundle signing key"
+        );
+        trust::verify(
+            &self.trust.identity.index_keys[&bundle.signing_key],
+            bytes,
+            std::str::from_utf8(signature)?,
+        )?;
+        ensure!(
+            bundle.registry == self.trust.identity.id
+                && bundle.index_digest == trust::digest(&self.documents["index.json"])
+                && bundle.serial == self.index.serial,
+            "Bundle does not match signed index"
+        );
+        let mut ids = BTreeSet::new();
+        for entry in bundle.default.iter().chain(&bundle.optional) {
+            ensure!(ids.insert(&entry.id), "Repeated bundle module");
+            let artifact = self
+                .index
+                .modules
+                .iter()
+                .find(|a| a.id == entry.id && a.version == entry.version)
+                .context("Bundle version is missing")?;
+            ensure!(
+                entry.digest == artifact.digest
+                    && entry.publisher_key == artifact.publisher_key
+                    && entry.signature == artifact.signature,
+                "Bundle package does not match signed index"
+            );
+        }
+        Ok(())
+    }
     pub fn assert_current(&self, seen: &SeenRegistry) -> Result<()> {
         ensure!(
             !seen.removed

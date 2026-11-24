@@ -205,7 +205,11 @@ fn phase6_registry_api() {
         "registry management endpoint must exist"
     );
     // Reuse the existing credential hash to sign in a non-admin through real auth.
-    let member_rt = tokio::runtime::Runtime::new().unwrap();
+    let member_rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
     let (member_db, member_connection) = member_rt
         .block_on(tokio_postgres::connect(
             &bootstrap_url,
@@ -270,6 +274,7 @@ fn phase6_registry_api() {
         } else {
             common::Keys::sign(&keys.index, &index)
         };
+        let bundle = serde_json::to_vec(&json!({"registry":if corrupt == "bundle" {"wrong-registry"} else {id},"indexDigest":trust::digest(&index),"serial":1,"signingKey":"online","default":[{"id":"sample.counter","version":"1.0.0","digest":first.digest,"publisherKey":"sample","signature":first.signature}],"optional":[]})).unwrap();
         let mut files = serde_json::Map::new();
         for (name, bytes) in [
             ("registry.json".to_string(), identity.clone()),
@@ -279,6 +284,11 @@ fn phase6_registry_api() {
             ),
             ("index.json".into(), index),
             ("index.json.sig".into(), signature.into_bytes()),
+            ("bundle.json".into(), bundle.clone()),
+            (
+                "bundle.json.sig".into(),
+                common::Keys::sign(&keys.index, &bundle).into_bytes(),
+            ),
             (
                 format!("packages/{}.mosspkg", first.digest),
                 fs::read(registry.join(format!("packages/{}.mosspkg", first.digest))).unwrap(),
@@ -288,7 +298,7 @@ fn phase6_registry_api() {
         }
         json!({"id":id,"rootKey":root_key,"firstPartyKey":publisher,"files":files})
     };
-    for fault in ["signature", "publisher"] {
+    for fault in ["signature", "publisher", "bundle"] {
         if std::env::var("JS414_FAULT").is_ok_and(|only| only != fault) {
             continue;
         }
@@ -344,6 +354,48 @@ fn phase6_registry_api() {
             Method::POST,
             "/api/modules/registries/second-registry/confirm",
             Some(json!({"fingerprint":fingerprint})),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
+    // Adding an existing host folder has the same pending-root boundary as file import.
+    let folder = root.join("folder-registry");
+    fs::create_dir_all(folder.join("packages")).unwrap();
+    let upload = uploaded("folder-registry", "");
+    for (name, bytes) in upload["files"].as_object().unwrap() {
+        fs::write(
+            folder.join(name),
+            STANDARD.decode(bytes.as_str().unwrap()).unwrap(),
+        )
+        .unwrap();
+    }
+    let source = json!({"registry":{"id":"folder-registry","folder":folder,"rootKey":root_key,"firstPartyKey":publisher}});
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/registries",
+            Some(source),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/registries/folder-registry/confirm",
+            Some(json!({"fingerprint":fingerprint})),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
+    assert_eq!(
+        api(
+            Method::DELETE,
+            "/api/modules/registries/folder-registry",
+            None,
             Some(&cookie)
         )
         .0,
@@ -440,7 +492,11 @@ fn phase6_registry_api() {
     health();
     let before = api(Method::GET, "/api/modules/list/export", None, Some(&cookie)).1;
     assert_eq!(before["modules"][0]["version"], "1.0.0", "portable pin");
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
     let (db, connection) = rt
         .block_on(tokio_postgres::connect(
             &bootstrap_url,
