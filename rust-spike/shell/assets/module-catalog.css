@@ -122,3 +122,17 @@
     justify-content: flex-start;
   }
 }
+
+.catalog-install {
+  display: grid;
+  gap: var(--space-5);
+}
+.catalog-permissions {
+  display: grid;
+  gap: var(--space-3);
+  padding-left: var(--space-5);
+}
+.catalog-progress {
+  margin: 0;
+  padding-left: var(--space-5);
+}
