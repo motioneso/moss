@@ -222,6 +222,8 @@ fn status(active: &Installed, enabled: bool) -> String {
         "Off for everyone"
     } else if !enabled {
         "Off for you"
+    } else if !active.revocations.is_empty() {
+        "Registry warning"
     } else {
         "Up to date"
     }

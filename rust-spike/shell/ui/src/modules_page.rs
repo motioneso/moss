@@ -41,7 +41,7 @@ pub fn ModulesPage() -> impl IntoView {
         <div class="catalog-page">
             {move || match catalog.get() {
                 None => view!{<p role="status" aria-busy="true">{if selected.get_value().is_some(){"Reading module details…"}else if browse.get(){"Checking registries…"}else{"Reading installed modules…"}}</p>}.into_any(),
-                Some(Err(_)) => view!{<EmptyState title="Modules could not be read."><div role="alert">"Try again."</div><Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|reload.run(()))>"Retry"</Button></EmptyState>}.into_any(),
+                Some(Err(_)) => view!{<EmptyState title="Modules could not be read."><Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|reload.run(()))>"Retry"</Button></EmptyState>}.into_any(),
                 Some(Ok(view)) => {
                     if let Some(id)=selected.get_value() {
                         return match view.modules.into_iter().find(|m|m.id==id && source.with_value(|s|s.as_deref()==Some(&m.source))) {
@@ -65,7 +65,7 @@ pub fn ModulesPage() -> impl IntoView {
                             {can_manage.then(||view!{<TabLink href="/settings/modules/registries">"Registries"</TabLink>})}
                         </nav>
                         {move ||preferences.get().then(||view!{<Preferences on_close=Callback::new(move |_|preferences.set(false))/>})}
-                        {view.sources.iter().filter(|s|s.error.is_some()).map(|s|view!{<div class="catalog-notice" role="alert"><span>{format!("{} is offline. Cached catalog shown.",s.name)}</span><Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|reload.run(()))>"Retry"</Button></div>}).collect_view()}
+                        {view.sources.iter().filter(|s|s.error.is_some()).map(|s|view!{<div class="catalog-notice" role="alert"><span>{format!("{} is offline.",s.name)}</span><Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|reload.run(()))>"Retry"</Button></div>}).collect_view()}
                         <Show when=move ||browse.get()>
                             <div class="catalog-filters">
                                 <Field><FormLabel control_id="catalog-search">"Search"</FormLabel><input id="catalog-search" class="jds-input" type="search" placeholder="Find a module" prop:value=move ||search.get() on:input=move |e|search.set(event_target_value(&e))/></Field>
@@ -108,6 +108,7 @@ fn CatalogRow(module: ModuleView, installed: bool, reload: Callback<()>) -> impl
     let tone = match module.status.as_str() {
         "Blocked" => BadgeTone::Red,
         "Up to date" => BadgeTone::Forest,
+        "Registry warning" => BadgeTone::Amber,
         _ => BadgeTone::Neutral,
     };
     let url = module_catalog::detail_url(&module.id, &module.source);

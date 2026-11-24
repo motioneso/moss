@@ -97,7 +97,15 @@ pub fn publish(keys: &common::Keys, folder: &Path, first: bool, media: Option<&P
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
         modules: artifacts.clone(),
-        revoked: vec![],
+        revoked: if media.is_some() {
+            vec![moss_module_host::registry::Revocation {
+                target: artifacts[0].digest.clone(),
+                reason: "Publisher maintenance notice".into(),
+                level: moss_module_host::registry::RevocationLevel::Warn,
+            }]
+        } else {
+            vec![]
+        },
     };
     let bytes = serde_json::to_vec(&index).unwrap();
     fs::write(folder.join("index.json"), &bytes).unwrap();

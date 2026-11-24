@@ -1,7 +1,14 @@
 /** Real Rust dev instance + signed fixture records. No request interception or response rewriting. */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium, expect, type BrowserContext, type Page } from "@playwright/test";
@@ -10,8 +17,9 @@ import { getMossDatabaseUrls } from "../../../packages/db/src/urls.js";
 assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
 const target = process.env.CARGO_TARGET_DIR!;
 const out = process.env.CATALOG_OUT ?? "/tmp/js418/proof";
-const hold = join(out, "fixture");
-mkdirSync(hold, { recursive: true });
+mkdirSync(out, { recursive: true });
+const hold = mkdtempSync(join(out, "fixture-"));
+writeFileSync(join(out, "active-fixture"), hold);
 const urls = getMossDatabaseUrls();
 const fixture = spawn(
   "cargo",
@@ -208,7 +216,24 @@ try {
     ).json();
     assert.equal(theirs.enabled, true, "other account switch unchanged");
     await choice.check();
+    await expect(choice).toBeEnabled();
     await expect(choice).toBeChecked();
+    if (role === "admin") {
+      await page.getByText("Server controls", { exact: true }).click();
+      await expect(
+        page.getByRole("checkbox", { name: "Notes on for everyone", exact: true })
+      ).toBeChecked();
+      await expect(page.getByRole("link", { name: "Export", exact: true })).toHaveAttribute(
+        "href",
+        "/api/modules/list/export"
+      );
+      await expect(page.getByRole("link", { name: "Import", exact: true })).toHaveAttribute(
+        "href",
+        "/settings/modules/registries#import"
+      );
+      assert.equal((await context.request.get(`${origin}/api/modules/list/export`)).status(), 200);
+      await page.getByText("Server controls", { exact: true }).click();
+    }
     await page.screenshot({ path: join(out, `${role}-${width}-installed.png`), fullPage: true });
     await browse(page);
     await filters(page);
@@ -222,6 +247,7 @@ try {
     await expect(page.getByRole("heading", { name: "What it can touch" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "What’s new" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Recently" })).toBeVisible();
+    await expect(page.getByText("Publisher maintenance notice", { exact: true })).toBeVisible();
     await expect(page.getByText(/Preview 1 of 2/)).toBeVisible();
     await expect(page.locator("img.catalog-preview")).toHaveJSProperty("naturalWidth", 1440);
     await page.getByRole("button", { name: "Next screenshot" }).click();
