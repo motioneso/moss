@@ -255,7 +255,6 @@ fn phase6_registry_api() {
         403
     );
     let root_key = common::Keys::public(&keys.root);
-    let publisher = common::Keys::public(&keys.publisher);
     let fingerprint = trust::digest(&STANDARD.decode(&root_key).unwrap());
     let uploaded = |id: &str, corrupt: &str| {
         let mut identity: Value =
@@ -265,16 +264,28 @@ fn phase6_registry_api() {
         if corrupt == "publisher" {
             identity["publishers"]["sample"]["prefix"] = json!("foreign");
         }
+        let impostor = common::Keys::new();
+        if corrupt == "first-party" {
+            identity["publishers"]["sample"]["prefix"] = json!("");
+            identity["publishers"]["sample"]["key"] =
+                json!(common::Keys::public(&impostor.publisher));
+        }
         let identity = serde_json::to_vec(&identity).unwrap();
-        let index: Index =
+        let mut index: Index =
             serde_json::from_slice(&fs::read(registry.join("index.json")).unwrap()).unwrap();
+        if corrupt == "first-party" {
+            index.modules[0].id = "tasks".into();
+            index.modules[0].signature =
+                common::Keys::sign(&impostor.publisher, index.modules[0].digest.as_bytes());
+        }
+        let entry = index.modules[0].clone();
         let index = serde_json::to_vec(&index).unwrap();
         let signature = if corrupt == "signature" {
             common::Keys::sign(&keys.publisher, &index)
         } else {
             common::Keys::sign(&keys.index, &index)
         };
-        let bundle = serde_json::to_vec(&json!({"registry":if corrupt == "bundle" {"wrong-registry"} else {id},"indexDigest":trust::digest(&index),"serial":1,"signingKey":"online","default":[{"id":"sample.counter","version":"1.0.0","digest":first.digest,"publisherKey":"sample","signature":first.signature}],"optional":[]})).unwrap();
+        let bundle = serde_json::to_vec(&json!({"registry":if corrupt == "bundle" {"wrong-registry"} else {id},"indexDigest":trust::digest(&index),"serial":1,"signingKey":"online","default":[{"id":entry.id,"version":"1.0.0","digest":entry.digest,"publisherKey":"sample","signature":entry.signature}],"optional":[]})).unwrap();
         let mut files = serde_json::Map::new();
         for (name, bytes) in [
             ("registry.json".to_string(), identity.clone()),
@@ -296,9 +307,9 @@ fn phase6_registry_api() {
         ] {
             files.insert(name, json!(STANDARD.encode(bytes)));
         }
-        json!({"id":id,"rootKey":root_key,"firstPartyKey":publisher,"files":files})
+        json!({"id":id,"rootKey":root_key,"files":files})
     };
-    for fault in ["signature", "publisher", "bundle"] {
+    for fault in ["signature", "publisher", "bundle", "first-party"] {
         if std::env::var("JS414_FAULT").is_ok_and(|only| only != fault) {
             continue;
         }
@@ -370,7 +381,7 @@ fn phase6_registry_api() {
         )
         .unwrap();
     }
-    let source = json!({"registry":{"id":"folder-registry","folder":folder,"rootKey":root_key,"firstPartyKey":publisher}});
+    let source = json!({"registry":{"id":"folder-registry","folder":folder,"rootKey":root_key}});
     assert_eq!(
         api(
             Method::POST,
@@ -605,7 +616,16 @@ fn phase6_registry_api() {
         "export works with zero registries"
     );
     health();
-    assert_eq!(api(Method::POST,"/api/modules/registries",Some(json!({"registry":{"id":"sample-registry","folder":registry,"rootKey":root_key,"firstPartyKey":publisher}})),Some(&cookie)).0,200);
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/registries",
+            Some(json!({"registry":{"id":"sample-registry","folder":registry,"rootKey":root_key}})),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
     assert_eq!(
         api(
             Method::POST,

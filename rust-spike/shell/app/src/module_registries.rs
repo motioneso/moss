@@ -26,7 +26,15 @@ const PENDING: &str = "pending-registries.json";
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Add {
-    registry: Registry,
+    registry: Location,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Location {
+    id: String,
+    folder: Option<std::path::PathBuf>,
+    url: Option<String>,
+    root_key: String,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,7 +48,6 @@ struct Confirm {
 struct Import {
     id: String,
     root_key: String,
-    first_party_key: String,
     files: BTreeMap<String, String>,
 }
 
@@ -73,6 +80,31 @@ fn sources(instance: &FsPath) -> Result<Vec<Registry>> {
         return Ok(vec![]);
     }
     module_sources::read(instance)
+}
+// This is install-wide authority provisioned by the host, never an uploaded registry field.
+fn first_party_key(instance: &FsPath) -> Result<String> {
+    let path = instance.join("registry-first-party-key.json");
+    if path.exists() {
+        return Ok(serde_json::from_slice(
+            &private_read(&path).map_err(anyhow::Error::msg)?,
+        )?);
+    }
+    let configured = sources(instance)?;
+    let key = configured
+        .first()
+        .context("Set up host first-party trust before adding registries")?
+        .first_party_key
+        .clone();
+    ensure!(
+        configured.iter().all(|r| r.first_party_key == key),
+        "Host first-party keys disagree"
+    );
+    ensure!(
+        STANDARD.decode(&key)?.len() == 32,
+        "Invalid host first-party key"
+    );
+    private_write(&path, &serde_json::to_vec(&key)?).map_err(anyhow::Error::msg)?;
+    Ok(key)
 }
 fn checked(source: &Registry) -> Result<Catalog> {
     let catalog = Catalog::fetch(
@@ -107,7 +139,7 @@ fn stage(instance: &FsPath, source: Registry) -> Result<Value> {
 fn refused() -> Response {
     module_admin::say(
         StatusCode::UNPROCESSABLE_ENTITY,
-        "Registry refused; check the signed files, publisher and root fingerprint, then try again",
+        "Registry refused; check host first-party trust, signed files, publisher and root fingerprint, then try again",
     )
 }
 async fn work<F>(admin: Arc<Admin>, access: AccessContext, task: F) -> Response
@@ -136,7 +168,16 @@ async fn add(
     Json(input): Json<Add>,
 ) -> Response {
     work(admin, access, move |instance| {
-        stage(instance, input.registry)
+        stage(
+            instance,
+            Registry {
+                id: input.registry.id,
+                folder: input.registry.folder,
+                url: input.registry.url,
+                root_key: input.registry.root_key,
+                first_party_key: first_party_key(instance)?,
+            },
+        )
     })
     .await
 }
@@ -288,7 +329,7 @@ async fn import(
                 folder: Some(folder.path().into()),
                 url: None,
                 root_key: input.root_key,
-                first_party_key: input.first_party_key,
+                first_party_key: first_party_key(instance)?,
             };
             // Mirror validation includes content hashes; ordinary expired-index rules still
             // apply when a person later installs from an imported bundle.

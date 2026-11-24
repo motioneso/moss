@@ -6,8 +6,8 @@ account switches or install-request workflow are added.
 - `GET/POST /api/modules/registries`: source health and pending source creation.
 - `POST /api/modules/registries/{id}/confirm`: independently confirm the root fingerprint.
 - `DELETE /api/modules/registries/{id}`: remove configuration; retain installed modules and data.
-- `POST /api/modules/registries/import`: upload a JSON envelope with `id`, `rootKey`,
-  `firstPartyKey` and a `files` map of relative signed-document/package names to base64 bytes.
+- `POST /api/modules/registries/import`: upload a JSON envelope with `id`, `rootKey`
+  and a `files` map of relative signed-document/package names to base64 bytes.
   Import remains pending until the admin confirms its fingerprint. Uploaded bundles use the
   normal signed registry checks, including index expiry for new installations. They cannot
   supply the release-compiled offline-bootstrap allowlist.
@@ -18,7 +18,9 @@ account switches or install-request workflow are added.
   are left alone; omissions never request removal. Optional pins apply to new additions.
 
 Authorization comes from the signed-in account. Pending source labels and keys are never
-accepted as root confirmation. Imported registry directories are host-owned. Responses project
+accepted as root confirmation. First-party publisher authority comes from existing trusted
+host configuration and is pinned separately, including after the last source is removed;
+uploaded files cannot choose it. Adding a registry requires that host trust to be provisioned. Imported registry directories are host-owned. Responses project
 identities, public fingerprints, health and reviews, omitting host paths and database logins.
 
 ## Verification state

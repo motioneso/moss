@@ -41,6 +41,9 @@ controls = [
     ('publisher', 'reject publisher', {'JS414_FAULT':'publisher'}, {
         host + 'trust.rs': lambda s: guard(s, 'The publisher cannot sign this module name'),
     }),
+    ('first-party', 'reject first-party', {'JS414_FAULT':'first-party'}, {
+        host + 'trust.rs': lambda s: guard(s, 'The publisher cannot sign this module name'),
+    }),
     ('bundle', 'reject bundle', {'JS414_FAULT':'bundle'}, {
         host + 'registry.rs': lambda s: guard(s, 'Bundle does not match signed index'),
     }),
