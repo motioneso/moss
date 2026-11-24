@@ -178,8 +178,8 @@ fn phase6_module_policy() {
     };
     assert_eq!(
         api(Method::GET, "/api/modules/policy", None, Some(&cookie)).0,
-        200,
-        "module policy endpoint must exist"
+        503,
+        "module policy endpoint exists before modules are ready"
     );
     // A second account signs in through the same real authentication boundary.
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -265,6 +265,11 @@ fn phase6_module_policy() {
         std::thread::sleep(Duration::from_millis(100));
     }
     assert_eq!(health(&member_cookie), 200);
+    assert_eq!(
+        api(Method::GET, "/api/modules/policy", None, Some(&cookie)).1,
+        json!({"automatic":true,"quietTime":false}),
+        "safe default update policy"
+    );
     assert_eq!(
         api(
             Method::POST,
@@ -461,12 +466,35 @@ fn phase6_module_policy() {
     assert_ne!(digest(), first.digest, "safe quiet-time update activates");
     let safe = digest();
     for (serial, growth) in [(3, "capability"), (4, "migration")] {
+        if std::env::var("JS415_GROWTH").is_ok_and(|only| only != growth) {
+            continue;
+        }
         fixtures::publish_update(&keys, &registry, &format!("{serial}.0.0"), serial, growth);
         refresh();
         assert_eq!(digest(), safe, "{growth} growth never auto-activates");
     }
     println!("PASS automatic updates: pin, manual policy, quiet time, urgent capability/migration growth");
     policy(false, true);
+    assert_eq!(
+        api(
+            Method::POST,
+            account_path,
+            Some(json!({"enabled":false})),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            server_path,
+            Some(json!({"enabled":false})),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
     // A restart is a new start event regardless of the persisted daily timestamp.
     let before = count();
     server.0.kill().unwrap();
@@ -511,6 +539,26 @@ fn phase6_module_policy() {
     }
     std::thread::sleep(Duration::from_secs(2));
     assert_eq!(count() - before, 1, "daily reaches real client once");
+    assert_ne!(
+        health(&member_cookie),
+        200,
+        "server-off persists across restart"
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            server_path,
+            Some(json!({"enabled":true})),
+            Some(&cookie)
+        )
+        .0,
+        200
+    );
+    assert_ne!(
+        health(&cookie),
+        200,
+        "manual account-off persists across restart and admin lift"
+    );
     assert_eq!(health(&member_cookie), 200);
     println!("PASS refresh: start, daily and open each read the real signed index exactly once; policy survives restart");
     drop(server);

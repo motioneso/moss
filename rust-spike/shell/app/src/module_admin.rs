@@ -21,6 +21,8 @@ pub const REGISTRY_FILE: &str = "registry.json";
 const DATABASE_FOLDER: &str = "database";
 
 pub struct Admin {
+    pub(crate) refresh_report: std::sync::Mutex<Option<crate::module_refresh::Report>>,
+    pub(crate) refresh_generation: std::sync::atomic::AtomicU64,
     pub platform: Arc<Platform>,
     pub instance: PathBuf,
     /// One install at a time; a second request waits.
@@ -31,6 +33,8 @@ pub struct Admin {
 impl Admin {
     pub fn new(platform: Arc<Platform>, instance: PathBuf) -> Self {
         Self {
+            refresh_report: Default::default(),
+            refresh_generation: Default::default(),
             platform,
             instance,
             gate: tokio::sync::Mutex::new(()),
@@ -47,6 +51,7 @@ pub fn routes(admin: Arc<Admin>) -> Router {
         .route("/api/modules/install", post(install))
         .merge(crate::module_management::routes())
         .merge(crate::module_updates::routes())
+        .merge(crate::module_policy::routes())
         .merge(crate::module_registries::routes())
         .merge(crate::module_lists::routes())
         .merge(crate::module_lifecycle::routes())

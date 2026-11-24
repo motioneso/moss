@@ -44,6 +44,8 @@ mod module_lists;
 mod module_local;
 mod module_management;
 mod module_operation;
+mod module_policy;
+mod module_refresh;
 mod module_registries;
 mod module_sources;
 mod module_updates;
@@ -387,7 +389,10 @@ fn main() {
             None => private,
         };
         let private = match admin {
-            Some(admin) => private.merge(module_admin::routes(admin)),
+            Some(admin) => {
+                module_refresh::start(admin.clone(), modules.clone(), stop.clone());
+                private.merge(module_admin::routes(admin))
+            },
             None => private,
         };
         let private = private.layer(Extension(modules.clone()));

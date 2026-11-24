@@ -53,7 +53,11 @@ controls = [
     ('quiet-time', 'ordinary update waits for quiet time', {
         host + 'store.rs': lambda s: replace(s, 'state.update_policy.automatic && (quiet_time || artifact.urgent)', 'state.update_policy.automatic'),
     }),
-    ('growth', 'capability growth never auto-activates', {
+    ('growth-capability', 'capability growth never auto-activates', {
+        host + 'store.rs': lambda s: replace(s, 'if approval.required() {', 'if false {'),
+        host + 'activation.rs': lambda s: guard(s, 'This update asks for more access or new migrations and needs administrator approval'),
+    }),
+    ('growth-migration', 'migration growth never auto-activates', {
         host + 'store.rs': lambda s: replace(s, 'if approval.required() {', 'if false {'),
         host + 'activation.rs': lambda s: guard(s, 'This update asks for more access or new migrations and needs administrator approval'),
     }),
@@ -74,7 +78,8 @@ for name, marker, edits in controls:
         for path, weaken in edits.items():
             Path(path).write_text(weaken(originals[path]))
         print(f'CONTROL {name}: protection removed', flush=True)
-        start = subprocess.run(['scripts/run-gate.sh', 'start', '--gate', 'test:rust-phase6-module-policy'], text=True, capture_output=True)
+        env = {**os.environ, **({'JS415_GROWTH': 'migration'} if name == 'growth-migration' else {})}
+        start = subprocess.run(['scripts/run-gate.sh', 'start', '--gate', 'test:rust-phase6-module-policy'], env=env, text=True, capture_output=True)
         print(start.stdout, end='', flush=True)
         if start.returncode:
             raise RuntimeError(start.stderr + start.stdout)

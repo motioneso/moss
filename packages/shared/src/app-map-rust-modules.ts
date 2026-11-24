@@ -20,6 +20,13 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
   },
   {
     moduleId: "core",
+    id: "rust-module-policy-service",
+    runtime: "rust",
+    description:
+      "The signed-in account reads or changes its own module switch at GET or POST /api/modules/{module}/account-switch with enabled. An instance administrator separately controls POST /api/modules/{module}/server-switch. Server off stops every account; turning it on preserves each account's saved choice. The account projection returns enabled, onForEveryone, blocked and digest, so future screens can show the On for everyone badge independently. GET or POST /api/modules/policy persists the administrator's automatic and quietTime choices. Automatic updates default on, but ordinary updates wait for quiet-time eligibility, which defaults off. Pins, skipped offers, permission growth and new migrations still stop automatic activation, including urgent permission growth. Startup, daily checks and opening the module catalog refresh configured sources through the existing signed client; catalog rendering uses saved metadata instead of fetching again. Concurrent refresh requests share an in-flight pass. POST /api/modules/refresh lets an administrator request the same refresh. Payload account fields are refused; the session supplies every request actor. No switch or policy management screens ship in this part."
+  },
+  {
+    moduleId: "core",
     id: "rust-module-lifecycle-service",
     runtime: "rust",
     description:
@@ -44,6 +51,14 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 
 // Management failures are HTTP statuses and saved result messages, not emitted error codes.
 export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.policy_refused",
+    runtime: "rust",
+    description:
+      "If modules are still starting, wait and try again. If a switch or policy cannot be read or saved, check that the module is installed and permits account switching. Use your own signed-in account for its switch, or sign in as an instance administrator for server controls and update policy. Private local modules have no server switch. A failed registry refresh retains installed modules and saved signed metadata; check its configured source and retry.",
+    path: "/settings?section=instmods",
+    scope: "user"
+  },
   {
     id: "core.modules.update_choice_refused",
     runtime: "rust",

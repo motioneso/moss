@@ -42,7 +42,11 @@ pub(crate) fn owned(admin: &Admin, access: &AccessContext, id: &str) -> Result<R
 }
 
 /// Source failures stay attached to their source; publisher collisions refuse the catalog.
-async fn projection(admin: &Admin, access: &AccessContext) -> Result<ModuleCatalog, Response> {
+async fn projection(
+    admin: &Admin,
+    access: &AccessContext,
+    cached: bool,
+) -> Result<ModuleCatalog, Response> {
     let sources = module_sources::read(&admin.instance).map_err(|_| {
         module_admin::say(
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -55,7 +59,7 @@ async fn projection(admin: &Admin, access: &AccessContext) -> Result<ModuleCatal
         let mut result = ModuleCatalog { sources: vec![], modules: vec![] };
         let mut publishers = BTreeMap::new();
         for source in sources {
-            let reply = module_admin::run_json(&instance, &source, &["--list".into()], &[], &actor)
+            let reply = module_admin::run_json(&instance, &source, &[if cached { "--cached-list" } else { "--list" }.into()], &[], &actor)
                 .and_then(|value| {
                     let modules: Vec<CatalogModule> = serde_json::from_value(value["modules"].clone())
                         .map_err(|_| "Unreadable module catalog".to_owned())?;
@@ -81,14 +85,31 @@ async fn projection(admin: &Admin, access: &AccessContext) -> Result<ModuleCatal
 
 async fn catalog(
     State(admin): State<Arc<Admin>>,
+    Extension(slot): Extension<crate::modules::Slot>,
     Extension(access): Extension<AccessContext>,
 ) -> Response {
-    let _gate = admin.gate.lock().await;
     if let Err(response) = module_admin::require_admin(&admin, &access).await {
         return response;
     }
-    match projection(&admin, &access).await {
-        Ok(value) => Json(value).into_response(),
+    let cached = crate::modules::host(&slot).is_some();
+    let refreshed = if cached {
+        match crate::module_refresh::open(&admin, &slot, &access).await {
+            Ok(report) => report,
+            Err(_) => return unavailable(),
+        }
+    } else {
+        crate::module_refresh::Report::default()
+    };
+    let _gate = admin.gate.lock().await;
+    match projection(&admin, &access, cached).await {
+        Ok(mut value) => {
+            for source in &mut value.sources {
+                if let Some(error) = refreshed.error(&source.id) {
+                    source.error = Some(error.into());
+                }
+            }
+            Json(value).into_response()
+        }
         Err(response) => response,
     }
 }
@@ -119,7 +140,7 @@ pub(crate) async fn review_selected(
         );
     };
     // Refresh every source so the host and projection see publisher collisions before approval.
-    let catalog = match projection(&admin, &access).await {
+    let catalog = match projection(&admin, &access, false).await {
         Ok(value) => value,
         Err(response) => return response,
     };

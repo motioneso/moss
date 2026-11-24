@@ -39,6 +39,7 @@ struct Args {
 enum Mode {
     Install,
     List,
+    CachedList,
     Export,
     RemoveRegistry,
     Plan,
@@ -64,6 +65,8 @@ fn parse(raw: Vec<String>) -> Result<Args> {
             mode = Mode::RemoveRegistry;
         } else if flag == "--export-list" {
             mode = Mode::Export;
+        } else if flag == "--cached-list" {
+            mode = Mode::CachedList;
         } else if flag == "--list" {
             mode = Mode::List;
         } else if flag == "--plan" {
@@ -103,7 +106,12 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         }
     }
     let need = |what: &str| anyhow::anyhow!("missing {what}\n{USAGE}");
-    if modules.is_empty() && !matches!(mode, Mode::List | Mode::Export | Mode::RemoveRegistry) {
+    if modules.is_empty()
+        && !matches!(
+            mode,
+            Mode::List | Mode::CachedList | Mode::Export | Mode::RemoveRegistry
+        )
+    {
         return Err(need("module name"));
     }
     Ok(Args {
@@ -368,22 +376,28 @@ fn run_selected(
         );
         return Ok(());
     }
-    let catalog = application.installer.configure_registry(
-        &access,
-        &moss_module_host::registry_manager::RegistryConfiguration {
-            id: args.registry_id.clone(),
-            source: args.source.clone(),
-            root_key: args.root_key.clone(),
-            first_party_key: args.first_party_key.clone(),
-        },
-    )?;
+    let catalog = if args.mode == Mode::CachedList {
+        application
+            .installer
+            .saved_catalog(&access, &args.registry_id)?
+    } else {
+        application.installer.configure_registry(
+            &access,
+            &moss_module_host::registry_manager::RegistryConfiguration {
+                id: args.registry_id.clone(),
+                source: args.source.clone(),
+                root_key: args.root_key.clone(),
+                first_party_key: args.first_party_key.clone(),
+            },
+        )?
+    };
     let installed_modules: std::collections::BTreeMap<_, _> = application
         .installer
         .installed_for(&access)?
         .into_iter()
         .map(|m| (m.manifest.id.clone(), m))
         .collect();
-    if args.mode == Mode::List {
+    if matches!(args.mode, Mode::List | Mode::CachedList) {
         let installed: std::collections::BTreeSet<String> = application
             .installer
             .export_list()?

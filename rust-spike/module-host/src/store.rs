@@ -21,6 +21,8 @@ use std::{
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct State {
     pub revision: u64,
+    #[serde(default)]
+    pub update_policy: crate::module_policy::UpdatePolicy,
     pub installed: BTreeMap<String, Installed>,
     #[serde(default)]
     pub retained: BTreeMap<String, Installed>,
@@ -807,7 +809,7 @@ impl Installer {
                 if approval.required() {
                     return Ok(Some(approval));
                 }
-                if quiet_time || artifact.urgent {
+                if state.update_policy.automatic && (quiet_time || artifact.urgent) {
                     self.install(access, catalog, artifact, false)?;
                 }
                 Ok(None)
