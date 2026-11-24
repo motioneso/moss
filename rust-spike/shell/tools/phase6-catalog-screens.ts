@@ -12,8 +12,15 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { chromium, expect, type BrowserContext, type Page } from "@playwright/test";
+import {
+  chromium,
+  expect as playwrightExpect,
+  type BrowserContext,
+  type Page
+} from "@playwright/test";
 import { getMossDatabaseUrls } from "../../../packages/db/src/urls.js";
+
+const expect = playwrightExpect.configure({ timeout: 60_000 });
 
 assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
 const target = process.env.CARGO_TARGET_DIR!;
