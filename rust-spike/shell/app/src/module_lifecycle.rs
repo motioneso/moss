@@ -104,6 +104,7 @@ async fn submit(
         actor: access.actor_user_id().to_string(),
         source_binding: String::new(),
         approved: true,
+        pin_after_install: false,
         lifecycle: Some(LifecycleState {
             typed_name,
             acknowledge_data_loss,
