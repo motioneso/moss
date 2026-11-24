@@ -304,16 +304,20 @@ fn phase6_registry_api() {
                 format!("packages/{}.mosspkg.sig", first.digest),
                 entry.signature.clone().into_bytes(),
             ),
-            (
-                format!("packages/{}.mosspkg", first.digest),
-                fs::read(registry.join(format!("packages/{}.mosspkg", first.digest))).unwrap(),
-            ),
+            (format!("packages/{}.mosspkg", first.digest), {
+                let mut bytes =
+                    fs::read(registry.join(format!("packages/{}.mosspkg", first.digest))).unwrap();
+                if corrupt == "bytes" {
+                    bytes[0] ^= 1;
+                }
+                bytes
+            }),
         ] {
             files.insert(name, json!(STANDARD.encode(bytes)));
         }
         json!({"id":id,"rootKey":root_key,"files":files})
     };
-    for fault in ["signature", "publisher", "bundle", "first-party"] {
+    for fault in ["signature", "publisher", "bundle", "first-party", "bytes"] {
         if std::env::var("JS414_FAULT").is_ok_and(|only| only != fault) {
             continue;
         }

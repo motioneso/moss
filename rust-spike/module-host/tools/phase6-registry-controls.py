@@ -48,6 +48,9 @@ controls = [
     ('bundle', 'reject bundle', {'JS414_FAULT':'bundle'}, {
         host + 'registry.rs': lambda s: guard(s, 'Bundle does not match signed index'),
     }),
+    ('bytes', 'reject bytes', {'JS414_FAULT':'bytes'}, {
+        app + 'module_registries.rs': lambda s: guard(s, 'Wrong package bytes'),
+    }),
     ('expiry', 'expired index refuses actual installation', {}, {
         host + 'registry.rs': lambda s: guard(s, 'This registry index has expired; installed modules keep running'),
     }),
