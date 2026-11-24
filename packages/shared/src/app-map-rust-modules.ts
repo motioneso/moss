@@ -20,6 +20,14 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
   },
   {
     moduleId: "core",
+    id: "rust-module-lifecycle-service",
+    runtime: "rust",
+    description:
+      "The authenticated Rust management API accepts remove and typed remove-and-delete-data at POST /api/modules/remove, lists snapshot metadata at GET /api/modules/snapshots and restores at POST /api/modules/restore. Remove keeps every account's rows, key-value data, files and credentials for reinstallation. Deleting data first takes a snapshot of every account's module data, kept for 30 days; a wrong typed module name refuses before changing that data. Restore requires the module name and acknowledgement that newer writes will be lost. Expired snapshots refuse with a plain reason, including after restart. GET /api/modules/operations/{id} returns the signed-in administrator's saved result and recovers interrupted changes through the migration service. POST /api/modules/operations/{id}/cancel cancels queued lifecycle work; an operation already changing data refuses cancellation and completes or recovers safely. Administrator power manages configuration and never grants access to other accounts' private rows or another builder's private local module. These endpoints support later screens; no lifecycle screens are shipped here."
+  },
+
+  {
+    moduleId: "core",
     id: "rust-module-runtime-revocation",
     runtime: "rust",
     description:
@@ -44,6 +52,15 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     path: "/sign-in",
     scope: "admin"
   },
+  {
+    id: "core.modules.lifecycle_result",
+    runtime: "rust",
+    description:
+      "Read the saved operation result before retrying removal or restore. Type the exact module name for deletion, or confirm the name and loss of newer writes for restore. Choose a current snapshot when one expired or is unavailable. Remove dependent modules first when removal is refused. A running change cannot be cancelled: let it finish and read its result; a restart recovers interrupted data changes before reporting the outcome.",
+    path: "/sign-in",
+    scope: "admin"
+  },
+
   {
     id: "core.modules.registry_revocation",
     description:

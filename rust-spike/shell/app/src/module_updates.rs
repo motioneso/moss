@@ -43,7 +43,12 @@ async fn update(
         Ok(record) => record,
         Err(response) => return response,
     };
-    if record.view.review.module != module || record.view.review.previous.is_none() {
+    if !record
+        .view
+        .review
+        .as_ref()
+        .is_some_and(|review| review.module == module && review.previous.is_some())
+    {
         return module_admin::say(
             StatusCode::BAD_REQUEST,
             "Review this installed module before updating",

@@ -13,9 +13,18 @@ use std::{
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Record {
     pub actor: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<LifecycleState>,
     pub source_binding: String,
     pub approved: bool,
     pub view: ModuleOperation,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LifecycleState {
+    pub typed_name: String,
+    pub acknowledge_data_loss: bool,
+    pub before_revision: Option<u64>,
+    pub expected_digest: Option<String>,
 }
 fn folder(instance: &Path) -> Result<PathBuf> {
     let folder = instance.join("module-operations");
@@ -45,7 +54,11 @@ impl Record {
         self.view.stage = stage;
         self.save(instance)
     }
-    pub fn finish(&mut self, instance: &Path, result: std::result::Result<(), &str>) -> Result<()> {
+    pub fn finish(
+        &mut self,
+        instance: &Path,
+        result: std::result::Result<&str, &str>,
+    ) -> Result<()> {
         self.view.stage = if result.is_ok() {
             ModuleOperationStage::Succeeded
         } else {
@@ -53,7 +66,7 @@ impl Record {
         };
         self.view.result = Some(ModuleOperationResult {
             ok: result.is_ok(),
-            message: result.err().unwrap_or("The module is installed").into(),
+            message: result.unwrap_or_else(|message| message).into(),
         });
         self.save(instance)
     }
