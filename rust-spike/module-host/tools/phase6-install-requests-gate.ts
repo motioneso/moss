@@ -13,6 +13,8 @@ function cargo(args: string[], extra: Record<string, string> = {}) {
     env: {
       ...process.env,
       CARGO_BUILD_JOBS: "1",
+      TOKIO_WORKER_THREADS: "1",
+      RAYON_NUM_THREADS: "1",
       CARGO_PROFILE_DEV_DEBUG: "0",
       CARGO_PROFILE_TEST_DEBUG: "0",
       ...extra

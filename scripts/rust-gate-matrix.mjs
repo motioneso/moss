@@ -97,6 +97,7 @@ export const hostGates = [
   "module-bootstrap",
   "phase6-lifecycle-api",
   "phase6-registry-api",
+  "phase6-install-requests",
   "phase6-module-policy",
   "install-endpoints",
   "module-assembly",

@@ -205,7 +205,12 @@ fn phase6_install_requests() {
         .next()
         .unwrap()
         .to_string();
-    let reply = api(Method::POST, "/api/modules/requests", Some(json!({"module":"sample.counter","source":"sample-registry"})), Some(&member_cookie));
+    let reply = api(
+        Method::POST,
+        "/api/modules/requests",
+        Some(json!({"module":"sample.counter","source":"sample-registry"})),
+        Some(&member_cookie),
+    );
     assert_eq!(reply.0, 200, "member request must succeed: {}", reply.1);
     assert_eq!(reply.1["status"], "pending");
 }
