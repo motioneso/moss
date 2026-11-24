@@ -82,6 +82,7 @@
     "test:rust-module-bootstrap": "tsx rust-spike/module-host/tools/bootstrap-server-gate.ts",
     "test:rust-phase6-revocation-runtime": "tsx rust-spike/module-host/tools/phase6-revocation-runtime-gate.ts",
     "test:rust-phase6-update-api": "tsx rust-spike/module-host/tools/phase6-update-api-gate.ts",
+    "test:rust-phase6-lifecycle-api": "tsx rust-spike/module-host/tools/phase6-lifecycle-api-gate.ts",
     "test:rust-phase6-catalog-and-review": "tsx rust-spike/module-host/tools/phase6-catalog-and-review-gate.ts",
     "test:rust-install-endpoints": "tsx rust-spike/module-host/tools/install-endpoints-gate.ts",
     "test:rust-calendar-review-live": "tsx modules/calendar/tools/review-live-gate.ts",
