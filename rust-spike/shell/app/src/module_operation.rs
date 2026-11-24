@@ -17,6 +17,8 @@ pub struct Record {
     pub lifecycle: Option<LifecycleState>,
     pub source_binding: String,
     pub approved: bool,
+    #[serde(default)]
+    pub pin_after_install: bool,
     pub view: ModuleOperation,
 }
 #[derive(Clone, Serialize, Deserialize)]

@@ -39,6 +39,7 @@ struct Args {
 enum Mode {
     Install,
     List,
+    Export,
     Plan,
     Skip,
     Pin,
@@ -58,6 +59,8 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         } else if flag == "--unpin" {
             mode = Mode::Pin;
             version = None;
+        } else if flag == "--export-list" {
+            mode = Mode::Export;
         } else if flag == "--list" {
             mode = Mode::List;
         } else if flag == "--plan" {
@@ -97,7 +100,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         }
     }
     let need = |what: &str| anyhow::anyhow!("missing {what}\n{USAGE}");
-    if modules.is_empty() && mode != Mode::List {
+    if modules.is_empty() && !matches!(mode, Mode::List | Mode::Export) {
         return Err(need("module name"));
     }
     Ok(Args {
@@ -221,7 +224,7 @@ async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
 
 pub fn run(raw: Vec<String>) -> Result<()> {
     use moss_shell_contract::module_management::ModuleOperationStage;
-    let args = parse(raw)?;
+    let mut args = parse(raw)?;
     // Every child, including legacy and read-only calls, shares this instance fence.
     let instance_lock =
         crate::module_operation::lock_file(&args.instance.join("module-install.lock"))?;
@@ -257,8 +260,16 @@ pub fn run(raw: Vec<String>) -> Result<()> {
             && args.modules == [reviewed.module.clone()],
         "The source changed; review again"
     );
+    if record.pin_after_install {
+        args.version = Some(reviewed.version.clone());
+    }
     record.stage(&args.instance, ModuleOperationStage::Checking)?;
     let result = run_selected(&args, Some(&mut record));
+    if result.is_ok() && record.pin_after_install {
+        args.operation = None;
+        args.mode = Mode::Pin;
+        run_selected(&args, None)?;
+    }
     // Never persist database errors or child environment values in browser-readable results.
     if !record.view.stage.terminal() {
         let failure = match record.view.stage {
@@ -330,6 +341,13 @@ fn run_selected(
     settings.admin_user_id = Some(args.actor.unwrap_or(owner));
     let application = modules::application(settings, database.clone())?;
     let access = AccessContext::new(args.actor.unwrap_or(owner), "module-install");
+    if args.mode == Mode::Export {
+        println!(
+            "{}",
+            serde_json::to_string(&application.installer.export_list()?)?
+        );
+        return Ok(());
+    }
     let catalog = application.installer.configure_registry(
         &access,
         &moss_module_host::registry_manager::RegistryConfiguration {
@@ -351,6 +369,7 @@ fn run_selected(
             .export_list()?
             .modules
             .into_iter()
+            .filter(|m| m.registry == args.registry_id)
             .map(|m| m.id)
             .collect();
         let modules: Vec<_> = catalog
@@ -403,7 +422,7 @@ fn run_selected(
             .index
             .modules
             .iter()
-            .filter(|a| &a.id == name)
+            .filter(|a| &a.id == name && args.version.as_ref().is_none_or(|v| a.version.to_string() == *v))
             .max_by(|a, b| a.version.cmp(&b.version))
             .cloned()
             .with_context(|| format!("{name} is not in the registry"))?;
