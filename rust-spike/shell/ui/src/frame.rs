@@ -567,8 +567,6 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                             view! { <crate::modules_page::ModulesPage /> }.into_any()
                         } else if path.get().starts_with("/settings/modules/") {
                             view! { <NotPortedYet /> }.into_any()
-                        } else if path.get().starts_with("/settings/") {
-                            view!{<crate::module_detail::ModuleSettingsPage path=path.get()/>}.into_any()
                         } else if let Some(m) = modules.iter().find(|m| m.path == path.get()) {
                             let mut src = format!(
                                 "/module-frame?module={}&path={}",
@@ -584,7 +582,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                                 <iframe class="module-screen" title=m.label.clone() src=src></iframe>
                             }.into_any()
                         } else {
-                            view! { <NotPortedYet /> }.into_any()
+                            view! { <crate::module_detail::ModuleSettingsPage path=path.get()/> }.into_any()
                         }}
                     </main>
                     <ChatDrawer

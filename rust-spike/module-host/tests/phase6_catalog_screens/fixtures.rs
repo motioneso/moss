@@ -66,11 +66,11 @@ pub fn publish(keys: &common::Keys, folder: &Path, first: bool, media: Option<&P
         manifest.name = name.into();
         manifest.publisher = publisher.into();
         manifest.settings = vec![
-            json!({"id":format!("{id}.settings"),"label":format!("{name} settings"),"description":"Module preferences","path":format!("/settings/{id}"),"scope":"user"}),
+            json!({"id":format!("{id}.settings"),"label":format!("{name} settings"),"description":"Module preferences","path":format!("/{id}-settings"),"scope":"user"}),
         ];
         manifest
             .screens
-            .insert(format!("/settings/{id}"), "ui/settings.html".into());
+            .insert(format!("/{id}-settings"), "ui/settings.html".into());
         manifest
             .screens
             .insert(format!("/{id}"), "ui/overview.html".into());

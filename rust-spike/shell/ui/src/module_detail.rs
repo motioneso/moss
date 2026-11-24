@@ -63,7 +63,7 @@ pub fn ModuleDetail(module: ModuleView, can_manage: bool, reload: Callback<()>) 
         <a class="jds-btn jds-btn--link" href="/settings/modules?view=browse">"Modules"</a>
         <div class="catalog-summary">
             <p>{module.description}</p>
-            <p class="jds-caption">{format!("{} · {} · {}",module.publisher,module.source_name,module.version)}</p>
+            <p class="jds-caption">{format!("{} · {} · {}",module.publisher,module.source_name,module.installed_version.as_deref().unwrap_or(&module.version))}</p>
             <div class="catalog-actions">
                 <Badge>{if is_installed {"Installed"} else {"Available"}}</Badge>
                 {module.update_available.then(|| view!{<Badge tone=BadgeTone::Amber>"Update available"</Badge>})}
@@ -94,7 +94,7 @@ pub fn ModuleDetail(module: ModuleView, can_manage: bool, reload: Callback<()>) 
         </section>
         <section class="jds-brief"><h2>"What’s new"</h2><p>{if module.changelog.is_empty(){"No changelog provided.".into()}else{module.changelog}}</p></section>
         <section class="jds-brief"><h2>"Recently"</h2>
-            {if module.activity.is_empty(){view!{<p>"No recent activity."</p>}.into_any()}else{module.activity.into_iter().map(|a|view!{<div class="catalog-activity"><strong>{a.label}</strong><p class="jds-caption">{format!("{} · {}",a.at,a.source)}</p></div>}).collect_view().into_any()}}
+            {if module.activity.is_empty(){view!{<p>"No recent activity."</p>}.into_any()}else{module.activity.into_iter().map(|a|view!{<div class="catalog-activity"><strong>{a.label}</strong><p class="jds-caption">{format!("{} · {}",activity_date(&a.at),a.source)}</p></div>}).collect_view().into_any()}}
         </section>
     }
 }
@@ -115,4 +115,14 @@ pub fn ModuleSettingsPage(path: String) -> impl IntoView {
         Some(Err(error)) => view!{<p role="alert">{error}</p><a class="jds-btn jds-btn--link" href="/settings/modules">"Modules"</a><Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|{let _ = web_sys::window().unwrap().location().reload();})>"Retry"</Button>}.into_any(),
         Some(Ok(module)) => view!{<iframe class="module-screen" title=format!("{} settings", module.name) src=format!("/module-frame?module={}&path={}",js_sys::encode_uri_component(&module.id),js_sys::encode_uri_component(module.settings_path.as_deref().unwrap_or_default()))></iframe>}.into_any(),
     }}}
+}
+
+fn activity_date(at: &str) -> String {
+    let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(at));
+    if date.to_date_string() == js_sys::Date::new_0().to_date_string() {
+        "Today".into()
+    } else {
+        date.to_locale_date_string("default", &js_sys::Object::new())
+            .into()
+    }
 }

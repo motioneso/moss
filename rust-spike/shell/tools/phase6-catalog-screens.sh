@@ -14,4 +14,5 @@ cp rust-spike/shell/assets/index.html "$CARGO_TARGET_DIR/web/index.html"
 cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
 cargo +1.95.0 build --offline --locked --manifest-path rust-spike/network/Cargo.toml --bin moss-network
 cargo +1.95.0 test --offline --locked --manifest-path rust-spike/module-host/Cargo.toml --test catalog_presentation -- --test-threads=1
+cargo +1.95.0 test --offline --locked --manifest-path rust-spike/module-host/Cargo.toml --test phase6_local_isolation catalog -- --test-threads=1
 pnpm exec tsx rust-spike/shell/tools/phase6-catalog-screens.ts

@@ -43,10 +43,9 @@ async fn read(
     if can_manage {
         let _ = crate::module_refresh::open(&admin, &slot, &access).await;
     }
-    let sources = match module_sources::read(&admin.instance) {
-        Ok(s) => s,
-        Err(_) => return unavailable(),
-    };
+    let source_config = module_sources::read(&admin.instance);
+    let source_error = source_config.is_err();
+    let sources = source_config.unwrap_or_default();
     let failures: Vec<String> = {
         let report = admin
             .refresh_report
@@ -60,6 +59,13 @@ async fn read(
     };
     match tokio::task::spawn_blocking(move || {
         let mut view = project(host, &access, sources, can_manage)?;
+        if source_error {
+            view.sources.push(SourceView {
+                id: String::new(),
+                name: "Registry configuration".into(),
+                error: Some("Registries could not be read. Try again.".into()),
+            });
+        }
         for source in &mut view.sources {
             if failures.contains(&source.id) {
                 source.error = Some("Registry unavailable. Try again.".into());
@@ -122,7 +128,14 @@ fn project(
                             .take(8)
                             .map(|e| RecentActivity {
                                 at: e.at.to_rfc3339(),
-                                label: e.reason.clone(),
+                                label: match e.action {
+                                    moss_module_host::revocation::ActivityAction::Lifted => {
+                                        format!("Notice lifted: {}", e.reason)
+                                    }
+                                    moss_module_host::revocation::ActivityAction::Revoked => {
+                                        format!("Registry notice: {}", e.reason)
+                                    }
+                                },
                                 source: name.clone(),
                             })
                             .collect();
@@ -190,6 +203,8 @@ fn project(
                 .permissions()
                 .into_iter()
                 .map(|p| p.headline)
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
                 .collect(),
             screenshots: vec![],
             activity: vec![],
@@ -279,26 +294,17 @@ fn entry(
         pinned: active.is_some_and(|m| m.pin.is_some()),
         changelog: artifact.changelog.clone(),
         permissions: active
-            .map(|m| {
-                m.manifest
-                    .permissions()
-                    .into_iter()
-                    .map(|p| p.headline)
-                    .collect()
+            .map(|m| m.manifest.capabilities.as_slice())
+            .unwrap_or(&artifact.capabilities)
+            .iter()
+            .map(|c| {
+                moss_module_host::manifest::capability_summary(c)
+                    .1
+                    .to_owned()
             })
-            .unwrap_or_else(|| {
-                artifact
-                    .capabilities
-                    .iter()
-                    .map(|c| {
-                        format!(
-                            "{}: {}",
-                            c.port,
-                            c.operations.iter().cloned().collect::<Vec<_>>().join(", ")
-                        )
-                    })
-                    .collect()
-            }),
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect(),
         screenshots: presentation
             .into_iter()
             .flat_map(|p| p.screenshots.iter())

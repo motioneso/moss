@@ -517,6 +517,19 @@ jobs:
           done
           exit $failed
 
+      - name: Catalog desktop and phone screenshots
+        if: always() && matrix.suite == 'phase6-catalog-screens'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-catalog-screens
+          path: |
+            /tmp/js418/proof/*-installed.png
+            /tmp/js418/proof/*-browse.png
+            /tmp/js418/proof/*-detail.png
+            /tmp/js418/proof/*-error.png
+            /tmp/js418/proof/results.txt
+          if-no-files-found: warn
+
       # wait --follow only prints the final verdict. Retain bounded compile/test timings even
       # for green gates and cancellations, so the next split is based on measured test files.
       - name: Compile and test file timings

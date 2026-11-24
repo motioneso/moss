@@ -57,7 +57,7 @@ pub fn ModulesPage() -> impl IntoView {
                     let management=StoredValue::new(view.management.clone());
                     view! {
                         <header class="catalog-head"><div><p class="jds-eyebrow">"Settings / Modules"</p><h1>{move ||if browse.get(){"Browse"}else{"Modules"}}</h1></div>
-                            {can_manage.then(||view!{<IconButton aria_label="Module management settings" on_click=Callback::new(move |_|preferences.update(|v|*v=!*v))><Icon svg=r#"<path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z"/><circle cx="12" cy="12" r="3"/>"# name="settings"/></IconButton>})}
+                            {(can_manage && !browse.get()).then(||view!{<IconButton aria_label="Module management settings" on_click=Callback::new(move |_|preferences.update(|v|*v=!*v))><Icon svg=r#"<path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z"/><circle cx="12" cy="12" r="3"/>"# name="settings"/></IconButton>})}
                         </header>
                         <nav class="catalog-tabs jds-tabs" aria-label="Modules views">
                             <TabLink active=Signal::derive(move ||!browse.get()) href="/settings/modules">"Installed"</TabLink>
@@ -86,7 +86,7 @@ pub fn ModulesPage() -> impl IntoView {
                             }).collect();
                             if rows.is_empty() {
                                 if browsing {view!{<EmptyState title="No modules match."><Button variant=ButtonVariant::Link on_click=Callback::new(clear)>"Clear filters"</Button></EmptyState>}.into_any()}
-                                else {view!{<EmptyState title="No modules installed."><Button variant=ButtonVariant::Link on_click=Callback::new(move |_|browse.set(true))>"Browse modules"</Button></EmptyState>}.into_any()}
+                                else {view!{<EmptyState title="No modules installed."><a class="jds-btn jds-btn--link" href="/settings/modules?view=browse">"Browse modules"</a></EmptyState>}.into_any()}
                             }else{view!{<div aria-label=if browsing{"Available modules"}else{"Installed modules"}>{rows.into_iter().map(|m|view!{<CatalogRow module=m installed= !browsing reload=reload/>}).collect_view()}</div>}.into_any()}
                         }}
                         <Show when=move ||!browse.get()>
@@ -136,14 +136,14 @@ fn CatalogRow(module: ModuleView, installed: bool, reload: Callback<()>) -> impl
     let switch_module = module.clone();
     view! {
         <article class="catalog-row" data-module=module.id.clone() data-source=module.source.clone()>
-            <div><strong><a href=url.clone()>{module.name.clone()}</a></strong><p class="jds-caption">{meta}</p>{(!installed).then(||view!{<p>{module.description.clone()}</p>})}</div>
+            <div><strong><a href=url.clone()>{module.name.clone()}</a></strong><p class="jds-caption">{meta}</p></div>
             <div class="catalog-actions">
                 {if installed {view!{
                     {show_status.then(||view!{<Badge tone=tone>{status}</Badge>})}
                     {module.update_available.then(||view!{<Badge tone=BadgeTone::Amber>"Update available"</Badge>})}
                     {module.pinned.then(||view!{<Badge>"Pinned"</Badge>})}
-                    <AccountSwitch module=switch_module reload=reload/>
-                }.into_any()}else{view!{<Badge>{if is_installed{"Installed"}else{"Available"}}</Badge><a class="jds-btn jds-btn--secondary" href=url>"View"</a>}.into_any()}}
+                    {(module.status != "Blocked").then(||view!{<AccountSwitch module=switch_module reload=reload/>})}
+                }.into_any()}else{view!{<Badge>{if is_installed{"Installed"}else{"Available"}}</Badge>{(!is_installed).then(||view!{<a class="jds-btn jds-btn--secondary" href=url>"View"</a>})}}.into_any()}}
             </div>
         </article>
     }

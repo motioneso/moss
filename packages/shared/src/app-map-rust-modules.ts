@@ -14,7 +14,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-catalog-view",
     runtime: "rust",
     description:
-      "GET /api/modules/catalog-view is a read-only session-scoped member projection of verified signed catalogs and visible installed records. It includes only the signed-in account’s switch and user-scoped settings. Members receive no management projection, registry configuration, keys or other accounts’ state. Existing administrative endpoints remain protected. Administrators receive a separate management projection. Category and screenshot references are optional signed index metadata checked by the existing signature path. GET /api/modules/catalog-media/{source}/{file} serves only signed referenced image files after digest verification. No new signing or storage scheme is used."
+      "GET /api/modules/catalog-view is a read-only session-scoped member projection of verified signed catalogs and visible installed records. It includes only the signed-in account’s switch and user-scoped settings. Members receive no management projection, registry configuration, keys or other accounts’ state. Existing administrative endpoints remain protected. Administrators receive a separate management projection. Recent activity shows recorded registry notices and lifts, with local dates; install and update history is not recorded by this endpoint. Category and screenshot references are optional signed index metadata checked by the existing signature path. GET /api/modules/catalog-media/{source}/{file} serves only signed referenced image files after digest verification. No new signing or storage scheme is used."
   },
   {
     moduleId: "core",
@@ -74,7 +74,7 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     id: "core.modules.catalog_retry",
     runtime: "rust",
     description:
-      "Use Retry after a catalog read fails. Offline sources retain verified cached records and installed modules. Ask an administrator to check the configured source if Retry keeps failing. A missing module may be private to another builder. Reopen details for unavailable settings or screenshots; a source must publish valid signed image metadata and matching bytes.",
+      "Use Retry after a catalog read fails. Offline sources retain verified cached records and installed modules. Missing or unreadable registry configuration shows a notice while installed modules remain usable. Ask an administrator to check the configured source if Retry keeps failing. A missing module may be private to another builder. Reopen details for unavailable settings or screenshots; a source must publish valid signed image metadata and matching bytes.",
     path: "/settings/modules",
     scope: "user"
   },
