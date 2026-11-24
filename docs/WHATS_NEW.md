@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Browse your modules.** See installed modules, choose which ones are on for you, and browse module details and screenshots. [PR #4487](https://github.com/motioneso/moss/pull/4487)
 - **Independent module controls.** Each account keeps its module choices while administrators control availability and safe updates for the installation. [PR #4482](https://github.com/motioneso/moss/pull/4482)
 
 ### 2026-11-23
