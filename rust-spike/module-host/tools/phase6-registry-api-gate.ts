@@ -20,15 +20,16 @@ function cargo(args: string[], extra: Record<string, string> = {}) {
   });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
-cargo([
-  "build",
-  "--offline",
-  "--locked",
-  "--manifest-path",
-  "rust-spike/shell/Cargo.toml",
-  "-p",
-  "moss-shell"
-]);
+if (!process.env.JS414_SERVER)
+  cargo([
+    "build",
+    "--offline",
+    "--locked",
+    "--manifest-path",
+    "rust-spike/shell/Cargo.toml",
+    "-p",
+    "moss-shell"
+  ]);
 cargo([
   "build",
   "--offline",
@@ -58,7 +59,8 @@ cargo(
     JS43_BOOTSTRAP_URL: urls.bootstrap,
     JS43_MIGRATION_URL: urls.migration,
     JS170_AUTH_URL: urls.auth,
-    JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
+    JS170_SERVER:
+      process.env.JS414_SERVER ?? join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
   }
 );

@@ -83,28 +83,7 @@ async fn preview(
     }
     let actor = access.actor_user_id().to_string();
     let instance = admin.instance.clone();
-    let result = tokio::task::spawn_blocking(move || -> Result<Value> {
-        let list = ModuleList::parse(&serde_json::to_vec(&input)?)?;
-        let installed = export_list(&instance, &actor)?;
-        let mut records = vec![];
-        for item in list.modules {
-            // Lists never change an existing install, its source, pin, or data.
-            if installed.modules.iter().any(|m| m.id == item.id) { continue; }
-            let source = module_sources::select(&instance, Some(&item.registry))?;
-            let mut args = vec!["--plan".into()];
-            if let Some(version) = &item.version { args.extend(["--version".into(), version.to_string()]); }
-            let value = module_admin::run_json(&instance, &source, &args, &[item.id], &actor).map_err(anyhow::Error::msg)?;
-            let review: ModuleReview = serde_json::from_value(value["review"].clone())?;
-            let record = Record { actor:actor.clone(), lifecycle:None, source_binding:source.binding()?, approved:false, pin_after_install:item.version.is_some(),
-                view:ModuleOperation {id:uuid::Uuid::new_v4().to_string(), review:Some(review), lifecycle:None, stage:ModuleOperationStage::Reviewed, result:None} };
-            records.push(record);
-        }
-        let id = uuid::Uuid::new_v4().to_string();
-        for record in &records { record.save(&instance)?; }
-        let saved = Preview {actor, operations:records.iter().map(|r|r.view.id.clone()).collect()};
-        private_write(&path(&instance,&id)?, &serde_json::to_vec(&saved)?).map_err(anyhow::Error::msg)?;
-        Ok(json!({"preview":id,"operations":records.into_iter().map(|r|r.view).collect::<Vec<_>>(),"removals":[]}))
-    }).await;
+    let result = tokio::task::spawn_blocking(move || preview_list(&instance, actor, input)).await;
     match result {
         Ok(Ok(view)) => Json(view).into_response(),
         _ => refused(),
@@ -152,4 +131,52 @@ async fn import(
         accepted.push(id);
     }
     (StatusCode::ACCEPTED, Json(json!({"operations":accepted}))).into_response()
+}
+
+fn preview_list(instance: &FsPath, actor: String, input: Value) -> Result<Value> {
+    let list = ModuleList::parse(&serde_json::to_vec(&input)?)?;
+    let installed = export_list(&instance, &actor)?;
+    let mut records = vec![];
+    for item in list.modules {
+        // Lists never change an existing install, its source, pin, or data.
+        if installed.modules.iter().any(|m| m.id == item.id) {
+            continue;
+        }
+        let source = module_sources::select(&instance, Some(&item.registry))?;
+        let mut args = vec!["--plan".into()];
+        if let Some(version) = &item.version {
+            args.extend(["--version".into(), version.to_string()]);
+        }
+        let value = module_admin::run_json(&instance, &source, &args, &[item.id], &actor)
+            .map_err(anyhow::Error::msg)?;
+        let review: ModuleReview = serde_json::from_value(value["review"].clone())?;
+        let record = Record {
+            actor: actor.clone(),
+            lifecycle: None,
+            source_binding: source.binding()?,
+            approved: false,
+            pin_after_install: item.version.is_some(),
+            view: ModuleOperation {
+                id: uuid::Uuid::new_v4().to_string(),
+                review: Some(review),
+                lifecycle: None,
+                stage: ModuleOperationStage::Reviewed,
+                result: None,
+            },
+        };
+        records.push(record);
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    for record in &records {
+        record.save(&instance)?;
+    }
+    let saved = Preview {
+        actor,
+        operations: records.iter().map(|r| r.view.id.clone()).collect(),
+    };
+    private_write(&path(&instance, &id)?, &serde_json::to_vec(&saved)?)
+        .map_err(anyhow::Error::msg)?;
+    Ok(
+        json!({"preview":id,"operations":records.into_iter().map(|r|r.view).collect::<Vec<_>>(),"removals":[]}),
+    )
 }

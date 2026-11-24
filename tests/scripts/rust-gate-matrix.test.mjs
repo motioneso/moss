@@ -297,3 +297,10 @@ test("shared-host PRs run the installed-module lifecycle API contract", () => {
     { module: "host", suite: "phase6-lifecycle-api", gates: "test:rust-phase6-lifecycle-api" }
   );
 });
+
+test("shared-host PRs run the registry API contract", () => {
+  assert.deepEqual(
+    rustCiEntries([], "pull_request", true).find(({ suite }) => suite === "phase6-registry-api"),
+    { module: "host", suite: "phase6-registry-api", gates: "test:rust-phase6-registry-api" }
+  );
+});

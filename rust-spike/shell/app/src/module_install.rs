@@ -385,9 +385,9 @@ fn run_selected(
                     "source": args.registry_id,
                     "digest": a.digest,
                     "publisher": catalog.trust.publisher(&a.publisher_key, &a.id).map(|p| p.key.clone()).unwrap_or_default(),
-                    "installedDigest": installed_modules.get(&a.id).map(|m| &m.digest),
-                    "pin": installed_modules.get(&a.id).and_then(|m| m.pin.as_ref()).map(ToString::to_string),
-                    "skippedDigest": installed_modules.get(&a.id).and_then(|m| m.skipped_digest.as_ref()),
+                    "installedDigest": installed_modules.get(&a.id).filter(|m| m.registry == args.registry_id).map(|m| &m.digest),
+                    "pin": installed_modules.get(&a.id).filter(|m| m.registry == args.registry_id).and_then(|m| m.pin.as_ref()).map(ToString::to_string),
+                    "skippedDigest": installed_modules.get(&a.id).filter(|m| m.registry == args.registry_id).and_then(|m| m.skipped_digest.as_ref()),
                     "urgent": a.urgent,
                     "capabilities": a.capabilities,
                     "migrations": a.migrations,
@@ -422,7 +422,13 @@ fn run_selected(
             .index
             .modules
             .iter()
-            .filter(|a| &a.id == name && args.version.as_ref().is_none_or(|v| a.version.to_string() == *v))
+            .filter(|a| {
+                &a.id == name
+                    && args
+                        .version
+                        .as_ref()
+                        .is_none_or(|v| a.version.to_string() == *v)
+            })
             .max_by(|a, b| a.version.cmp(&b.version))
             .cloned()
             .with_context(|| format!("{name} is not in the registry"))?;
@@ -447,6 +453,10 @@ fn run_selected(
             continue;
         }
         if args.mode == Mode::Plan {
+            anyhow::ensure!(
+                catalog.index.expires > chrono::Utc::now(),
+                "This registry index has expired; installed modules keep running"
+            );
             let moss = "0.1.0".parse()?;
             let package = catalog
                 .download(&artifact, &moss)
