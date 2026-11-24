@@ -140,6 +140,7 @@ impl Installer {
                     registry: origin.source.clone(),
                     local_owner: origin.local_owner,
                     pin: pin_override.or_else(|| old.as_ref().and_then(|m| m.pin.clone())),
+                    skipped_digest: old.as_ref().and_then(|m| m.skipped_digest.clone()),
                     previous: old.as_ref().map(|m| m.digest.clone()),
                     disabled: old.as_ref().and_then(|m| m.disabled.clone()),
                     revocations: Vec::new(),

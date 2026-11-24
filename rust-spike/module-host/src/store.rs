@@ -38,6 +38,8 @@ pub struct Installed {
     pub publisher_public_key: String,
     pub registry: String,
     pub pin: Option<Version>,
+    #[serde(default)]
+    pub skipped_digest: Option<String>,
     pub previous: Option<String>,
     /// Manual install-wide switch; registry revocations are independent.
     pub disabled: Option<String>,
@@ -540,6 +542,25 @@ impl Installer {
         state.revision += 1;
         self.catalog.commit(revision, &state)
     }
+    /// Persist the exact offer declined by an administrator; later digests remain eligible.
+    pub fn skip_update(&self, access: &AccessContext, id: &str, digest: &str) -> Result<()> {
+        ensure!(trust::valid_digest(digest), "Invalid skipped digest");
+        let _fence = self
+            .fence
+            .write()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _disk = self.disk_lock(true)?;
+        let mut state = self.catalog.load()?;
+        let revision = state.revision;
+        let installed = state
+            .installed
+            .get_mut(id)
+            .context("This module is not installed")?;
+        self.manage(access, installed)?;
+        installed.skipped_digest = Some(digest.into());
+        state.revision += 1;
+        self.catalog.commit(revision, &state)
+    }
     pub fn remove(
         &self,
         access: &AccessContext,
@@ -776,7 +797,9 @@ impl Installer {
             }
             let result = (|| -> Result<Option<Approval>> {
                 let artifact = catalog.select(id, None, &self.moss, &installed, seen)?;
-                if artifact.version <= module.manifest.version {
+                if artifact.version <= module.manifest.version
+                    || module.skipped_digest.as_deref() == Some(&artifact.digest)
+                {
                     return Ok(None);
                 }
                 let package = catalog.download(artifact, &self.moss)?;

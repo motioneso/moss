@@ -29,7 +29,7 @@ fn unavailable() -> Response {
         "The module operation could not be read or saved",
     )
 }
-fn owned(admin: &Admin, access: &AccessContext, id: &str) -> Result<Record, Response> {
+pub(crate) fn owned(admin: &Admin, access: &AccessContext, id: &str) -> Result<Record, Response> {
     let record = Record::read(&admin.instance, id)
         .map_err(|_| module_admin::say(StatusCode::NOT_FOUND, "Module operation not found"))?;
     if record.actor != access.actor_user_id().to_string() {
@@ -97,6 +97,14 @@ async fn review(
     Extension(access): Extension<AccessContext>,
     Json(pick): Json<ReviewModule>,
 ) -> Response {
+    review_selected(admin, access, pick, false).await
+}
+pub(crate) async fn review_selected(
+    admin: Arc<Admin>,
+    access: AccessContext,
+    pick: ReviewModule,
+    updating: bool,
+) -> Response {
     let _gate = admin.gate.lock().await;
     if let Err(response) = module_admin::require_admin(&admin, &access).await {
         return response;
@@ -137,6 +145,10 @@ async fn review(
         )
         .map_err(anyhow::Error::msg)?;
         let review: ModuleReview = serde_json::from_value(value["review"].clone())?;
+        anyhow::ensure!(
+            !updating || review.previous.is_some(),
+            "This module is not installed"
+        );
         let record = Record {
             actor,
             source_binding: source.binding()?,
@@ -170,7 +182,7 @@ async fn operation(
         Err(response) => response,
     }
 }
-async fn execute(
+pub(crate) async fn execute(
     State(admin): State<Arc<Admin>>,
     Extension(access): Extension<AccessContext>,
     Path(id): Path<String>,
