@@ -186,6 +186,8 @@ try {
     await review(page, "desktop", "changed");
     await command("change", "desktop");
     await approve(page, "desktop", "changed");
+    await expect.poll(async () => (await operation(page)).stage).toMatch(/^(failed|succeeded)$/);
+    assert.equal((await operation(page)).stage, "failed", "changed package requires fresh consent");
     await expect(
       page.getByRole("heading", { name: "This package changed. Review it again.", exact: true })
     ).toBeVisible();
