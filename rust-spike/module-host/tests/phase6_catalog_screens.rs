@@ -242,6 +242,17 @@ fn phase6_catalog_screens() {
         assert!(Instant::now() < deadline, "installation deadline");
         std::thread::sleep(Duration::from_millis(100));
     }
+    // The installer journal can finish before the serving host's separate startup retry.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let policy = api(Method::GET, "/api/modules/policy", None, Some(&cookie));
+        if policy.0 == 200 {
+            break;
+        }
+        assert_eq!(policy.0, 503, "waiting for the module host: {policy:?}");
+        assert!(Instant::now() < deadline, "module host startup deadline");
+        std::thread::sleep(Duration::from_millis(100));
+    }
     // Freeze automatic updates so the newer signed offer remains a visible update badge.
     assert_eq!(
         api(

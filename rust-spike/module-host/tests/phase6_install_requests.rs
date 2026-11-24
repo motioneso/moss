@@ -479,6 +479,23 @@ fn phase6_install_requests() {
     };
     let failed = wait_status("failed");
     assert_eq!(failed["operationId"], operation);
+    // The failed install still bootstraps the host. Its first refresh also requests
+    // supervisor credentials, so complete it before pausing credentials for the retry.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let policy = api(Method::GET, "/api/modules/policy", None, Some(&cookie));
+        if policy.0 == 200 {
+            break;
+        }
+        assert_eq!(policy.0, 503, "waiting for the module host: {policy:?}");
+        assert!(Instant::now() < deadline, "module host startup deadline");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let refreshed = api(Method::POST, "/api/modules/refresh", None, Some(&cookie));
+    assert_eq!(
+        refreshed.0, 200,
+        "startup refresh before installer pause: {refreshed:?}"
+    );
     let fresh = api(
         Method::POST,
         "/api/modules/review",
