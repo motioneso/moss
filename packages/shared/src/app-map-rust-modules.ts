@@ -54,9 +54,10 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
   },
   {
     id: "core.modules.lifecycle_result",
+    runtime: "rust",
     description:
       "Read the saved operation result before retrying removal or restore. Type the exact module name for deletion, or confirm the name and loss of newer writes for restore. Choose a current snapshot when one expired or is unavailable. Remove dependent modules first when removal is refused. A running change cannot be cancelled: let it finish and read its result; a restart recovers interrupted data changes before reporting the outcome.",
-    path: "/settings?section=instmods",
+    path: "/sign-in",
     scope: "admin"
   },
 

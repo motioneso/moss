@@ -95,6 +95,7 @@ export const rustModules = [
 
 export const hostGates = [
   "module-bootstrap",
+  "phase6-lifecycle-api",
   "install-endpoints",
   "module-assembly",
   "public-web",

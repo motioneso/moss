@@ -290,3 +290,10 @@ test("all CI entries reference declared scripts, including Notes and Calendar co
     assert.ok(entries.some(({ gates }) => gates.split(" ").includes(gate)));
   }
 });
+
+test("shared-host PRs run the installed-module lifecycle API contract", () => {
+  assert.deepEqual(
+    rustCiEntries([], "pull_request", true).find(({ suite }) => suite === "phase6-lifecycle-api"),
+    { module: "host", suite: "phase6-lifecycle-api", gates: "test:rust-phase6-lifecycle-api" }
+  );
+});

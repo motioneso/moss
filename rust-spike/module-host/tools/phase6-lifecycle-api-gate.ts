@@ -12,7 +12,7 @@ function cargo(args: string[], extra: Record<string, string> = {}) {
     stdio: "inherit",
     env: {
       ...process.env,
-      CARGO_BUILD_JOBS: "2",
+      CARGO_BUILD_JOBS: "1",
       CARGO_PROFILE_DEV_DEBUG: "0",
       CARGO_PROFILE_TEST_DEBUG: "0",
       ...extra
@@ -49,7 +49,8 @@ cargo(
     "phase6_lifecycle_api",
     "--",
     "--ignored",
-    "--nocapture"
+    "--nocapture",
+    "--test-threads=1"
   ],
   {
     JS43_APP_URL: urls.app,
