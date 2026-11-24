@@ -141,6 +141,9 @@ async fn history(admin: &Admin, access: &AccessContext) -> Result<History> {
     })
 }
 fn checked(source: &Registry, history: &History) -> Result<Catalog> {
+    Ok(checked_catalog(source, history)?.0)
+}
+fn checked_catalog(source: &Registry, history: &History) -> Result<(Catalog, SeenRegistry)> {
     let mut seen = history.get(&source.id).cloned().unwrap_or_default();
     let catalog = Catalog::fetch(
         source.source()?,
@@ -152,7 +155,35 @@ fn checked(source: &Registry, history: &History) -> Result<Catalog> {
         catalog.trust.identity.id == source.id,
         "Registry identity differs"
     );
-    Ok(catalog)
+    Ok((catalog, seen))
+}
+
+/// Advisory offer check only: approval still refreshes and validates the authoritative host history.
+/// Reading a signed configured source does not grant the member catalog administration power.
+pub(crate) fn requestable(instance: &FsPath, source: &str, module: &str) -> Result<bool> {
+    if module.starts_with("local.") {
+        return Ok(false);
+    }
+    let source = module_sources::select(instance, Some(source))?;
+    let (catalog, seen) = checked_catalog(&source, &History::new())?;
+    let offer = catalog
+        .index
+        .modules
+        .iter()
+        .filter(|offer| {
+            offer.id == module && offer.channel == moss_module_host::registry::Channel::Stable
+        })
+        .max_by_key(|offer| &offer.version);
+    let Some(offer) = offer else { return Ok(false) };
+    Ok(catalog.index.expires > chrono::Utc::now()
+        && !seen.blocks_package(
+            &offer.digest,
+            &offer.publisher_key,
+            &catalog
+                .trust
+                .publisher(&offer.publisher_key, &offer.id)?
+                .key,
+        ))
 }
 fn stage(instance: &FsPath, source: Registry, history: &History) -> Result<Value> {
     module_sources::decode(&serde_json::to_vec(&json!({"registries":[&source]}))?)?;

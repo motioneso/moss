@@ -13,6 +13,13 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
   },
   {
     moduleId: "core",
+    id: "rust-module-install-requests",
+    runtime: "rust",
+    description:
+      "Signed-in accounts can submit a module and configured source to POST /api/modules/requests and read their own requests through GET /api/modules/requests or GET /api/modules/requests/{id}. The session supplies the account; payload account fields are refused. Repeating the same account, source and module returns the saved request, including after restart. Unavailable, expired, blocked or untrusted offers return a plain reason. Administrators can read request metadata and approve through POST /api/modules/requests/{id}/approve with their own saved install review. Approval reuses the existing digest-bound execution and operation result, and refuses mismatched modules or sources. This configuration authority never grants access to another account's private module data. Automatic admin notices are unsupported: the existing notification service targets only the triggering account. Responses explicitly report that limitation, and no substitute notification channel is added. These APIs support later screens; the request screen is not shipped here."
+  },
+  {
+    moduleId: "core",
     id: "rust-module-update-service",
     runtime: "rust",
     description:
@@ -51,6 +58,22 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 
 // Management failures are HTTP statuses and saved result messages, not emitted error codes.
 export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.install_request_refused",
+    runtime: "rust",
+    description:
+      "Sign in to submit or read your own install requests. A missing request may belong to another account. For an unavailable module, ask an administrator to check the configured source and signed current registry, then retry. A saved request is not an automatic admin notice: ask your administrator to read the requests. If the saved operation status is unavailable, ask the approving administrator to check that operation before retrying.",
+    path: "/sign-in",
+    scope: "user"
+  },
+  {
+    id: "core.modules.install_request_approval_refused",
+    runtime: "rust",
+    description:
+      "Only an instance administrator can approve an install request. Obtain your own fresh review for the request's exact module and source and explicitly approve it. While active or completed, retry with the request's saved operation. After failure, obtain a fresh review for changed bytes or registry configuration before approving again. Request status remains readable during installation.",
+    path: "/sign-in",
+    scope: "admin"
+  },
   {
     id: "core.modules.policy_refused",
     runtime: "rust",

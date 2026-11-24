@@ -38,6 +38,7 @@ mod module_admin;
 mod module_ai;
 mod module_embedding;
 mod module_install;
+mod module_install_requests;
 mod module_lifecycle;
 mod module_lifecycle_service;
 mod module_lists;

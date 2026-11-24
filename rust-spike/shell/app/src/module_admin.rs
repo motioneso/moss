@@ -50,6 +50,7 @@ pub fn routes(admin: Arc<Admin>) -> Router {
         .route("/api/modules/plan", post(plan))
         .route("/api/modules/install", post(install))
         .merge(crate::module_management::routes())
+        .merge(crate::module_install_requests::routes())
         .merge(crate::module_updates::routes())
         .merge(crate::module_policy::routes())
         .merge(crate::module_registries::routes())
