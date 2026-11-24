@@ -38,6 +38,7 @@ impl Registry {
             let bytes = pack(files).unwrap();
             let digest = trust::digest(&bytes);
             let artifact = Artifact {
+                presentation: None,
                 id: manifest.id,
                 version: manifest.version,
                 digest: digest.clone(),

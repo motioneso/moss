@@ -55,6 +55,7 @@ fn publish_packages(folder: &Path, packages: &[(&[u8], &str)]) -> (String, Strin
             assert_eq!(m.id, id);
             std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
             Artifact {
+                presentation: None,
                 id: m.id,
                 version: m.version,
                 digest: digest.clone(),

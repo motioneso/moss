@@ -1,4 +1,9 @@
-import type { AppMapItem, CoreAppRemediationDeclaration } from "./app-map-core.js";
+import type {
+  AppMapItem,
+  CoreAppRemediationDeclaration,
+  CoreAppSurfaceDeclaration,
+  CoreAppErrorDeclaration
+} from "./app-map-core.js";
 
 export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
   readonly id: string;
@@ -6,10 +11,17 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 })[] = [
   {
     moduleId: "core",
+    id: "rust-module-catalog-view",
+    runtime: "rust",
+    description:
+      "GET /api/modules/catalog-view is a read-only session-scoped member projection of verified signed catalogs and visible installed records. It includes only the signed-in account’s switch and user-scoped settings. Members receive no management projection, registry configuration, keys or other accounts’ state. Existing administrative endpoints remain protected. Administrators receive a separate management projection. Category and screenshot references are optional signed index metadata checked by the existing signature path. GET /api/modules/catalog-media/{source}/{file} serves only signed referenced image files after digest verification. No new signing or storage scheme is used."
+  },
+  {
+    moduleId: "core",
     id: "rust-module-management-service",
     runtime: "rust",
     description:
-      "The module management service lists signed sources separately and lets an instance administrator review an exact package before installation. The saved review includes its source, version, digest, capabilities and migrations. Installing checks administrator permission and the reviewed package again. A saved operation reports checking, installing, success or failure and survives a server restart; repeating a completed operation returns its saved result. Source changes or changed package bytes require a fresh review. These are service contracts for future module screens; the existing module screens are unchanged."
+      "The module management service lists signed sources separately and lets an instance administrator review an exact package before installation. The saved review includes its source, version, digest, capabilities and migrations. Installing checks administrator permission and the reviewed package again. A saved operation reports checking, installing, success or failure and survives a server restart; repeating a completed operation returns its saved result. Source changes or changed package bytes require a fresh review. The installed, browse and detail screens use these saved service records."
   },
   {
     moduleId: "core",
@@ -30,7 +42,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-policy-service",
     runtime: "rust",
     description:
-      "The signed-in account reads or changes its own module switch at GET or POST /api/modules/{module}/account-switch with enabled. An instance administrator separately controls POST /api/modules/{module}/server-switch. Server off stops every account; turning it on preserves each account's saved choice. The account projection returns enabled, onForEveryone, blocked and digest, so future screens can show the On for everyone badge independently. GET or POST /api/modules/policy persists the administrator's automatic and quietTime choices. Automatic updates default on, but ordinary updates wait for quiet-time eligibility, which defaults off. Pins, skipped offers, permission growth and new migrations still stop automatic activation, including urgent permission growth. Startup, daily checks, opening the signed-in app shell and opening the module catalog refresh configured sources through the existing signed client; catalog rendering uses saved metadata instead of fetching again. Concurrent refresh requests share an in-flight pass. POST /api/modules/refresh lets an administrator request the same refresh. Payload account fields are refused; the session supplies every request actor. No switch or policy management screens ship in this part."
+      "The signed-in account reads or changes its own module switch at GET or POST /api/modules/{module}/account-switch with enabled. An instance administrator separately controls POST /api/modules/{module}/server-switch. Server off stops every account; turning it on preserves each account's saved choice. The account projection returns enabled, onForEveryone, blocked and digest, so future screens can show the On for everyone badge independently. GET or POST /api/modules/policy persists the administrator's automatic and quietTime choices. Automatic updates default on, but ordinary updates wait for quiet-time eligibility, which defaults off. Pins, skipped offers, permission growth and new migrations still stop automatic activation, including urgent permission growth. Startup, daily checks, opening the signed-in app shell and opening the module catalog refresh configured sources through the existing signed client; catalog rendering uses saved metadata instead of fetching again. Concurrent refresh requests share an in-flight pass. POST /api/modules/refresh lets an administrator request the same refresh. Payload account fields are refused; the session supplies every request actor. Installed rows expose the account switch; administrators separately open Server controls and the management header cog."
   },
   {
     moduleId: "core",
@@ -58,6 +70,14 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 
 // Management failures are HTTP statuses and saved result messages, not emitted error codes.
 export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.catalog_retry",
+    runtime: "rust",
+    description:
+      "Use Retry after a catalog read fails. Offline sources retain verified cached records and installed modules. Ask an administrator to check the configured source if Retry keeps failing. A missing module may be private to another builder. Reopen details for unavailable settings or screenshots; a source must publish valid signed image metadata and matching bytes.",
+    path: "/settings/modules",
+    scope: "user"
+  },
   {
     id: "core.modules.install_request_refused",
     runtime: "rust",
@@ -112,5 +132,76 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
       "Check the saved operation result and registry configuration. An instance administrator must obtain and approve a fresh review before trying a failed installation again.",
     path: "/settings?section=instmods",
     scope: "admin"
+  }
+];
+
+export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
+  {
+    id: "rust-modules-installed",
+    runtime: "rust",
+    label: "Modules",
+    description:
+      "Settings navigation opens installed modules with signed source, version, status, update and pin badges and the signed-in account’s saved switch. Administrators have a separate Server controls disclosure with On for everyone, Export and Import, and a header cog for automatic updates and quiet time.",
+    path: "/settings/modules",
+    scope: "user"
+  },
+  {
+    id: "rust-modules-browse",
+    runtime: "rust",
+    label: "Browse modules",
+    description:
+      "Browse searches verified catalog records and filters by source, category and first-party publisher. Empty results offer Clear filters. Loading and failed catalog reads have visible states and Retry.",
+    path: "/settings/modules?view=browse",
+    scope: "user"
+  },
+  {
+    id: "rust-module-detail",
+    runtime: "rust",
+    label: "Module details",
+    description:
+      "A named module opens source, version, capabilities, changelog, up to four signed digest-checked screenshots with paging and recent configuration activity. The header cog is the only module settings entry and opens the installed module’s declared settings screen. Administrators can pin or unpin the installed version.",
+    path: "/settings/modules?module={module}&source={source}",
+    scope: "user"
+  }
+];
+
+export const RUST_MODULE_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
+  {
+    id: "rust-module-account-switch",
+    runtime: "rust",
+    label: "On for you",
+    description:
+      "The installed row changes only the signed-in account’s own saved module choice. Failed saves leave the previous value with an error.",
+    path: "/settings/modules",
+    scope: "user"
+  },
+  {
+    id: "rust-module-server-controls",
+    runtime: "rust",
+    label: "Server controls",
+    description:
+      "Administrators separately change On for everyone. The module-management header cog opens Automatic updates and Quiet time. The detail page offers Pin or Unpin. These controls change configuration only.",
+    path: "/settings/modules",
+    scope: "admin"
+  },
+  {
+    id: "rust-module-settings-cog",
+    runtime: "rust",
+    label: "Module settings",
+    description:
+      "The detail header cog opens the installed module’s declared settings path in its real module frame. Members see only user-scoped settings. Unavailable settings report an error.",
+    path: "/settings/modules?module={module}&source={source}",
+    scope: "user"
+  }
+];
+
+export const RUST_MODULE_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  {
+    code: "core.modules.catalog_unavailable",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.catalog_retry",
+    description:
+      "Catalog, source, screenshot or declared module settings are unavailable; the screen reports the failure rather than inventing records."
   }
 ];

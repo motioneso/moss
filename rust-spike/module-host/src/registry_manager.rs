@@ -109,6 +109,10 @@ impl Installer {
     }
     pub fn saved_catalog(&self, access: &AccessContext, id: &str) -> Result<Catalog> {
         self.admin(access)?;
+        self.catalog_for(access, id)
+    }
+    /// Read-only signed catalog for the authenticated account. Never exposes source configuration.
+    pub fn catalog_for(&self, _access: &AccessContext, id: &str) -> Result<Catalog> {
         ensure!(crate::manifest::identifier(id), "Invalid registry id");
         let _fence = self
             .fence

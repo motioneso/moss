@@ -380,3 +380,22 @@ fn warned_publisher_can_still_publish() {
     });
     f.verify_index(&f.publish_ok(None));
 }
+
+#[test]
+fn catalog_metadata_uses_the_existing_signed_index() {
+    let f = Fixture::new();
+    let presentation = json!({"name":"Counter","description":"A counter","publisher":"Sample publisher","category":"Productivity","screenshots":[{"file":format!("{}.png",moss_module_host::trust::digest(b"image")),"caption":"Overview"}]});
+    f.files.borrow_mut().insert(
+        "ui/catalog.json".into(),
+        serde_json::to_vec(&presentation).unwrap(),
+    );
+    f.write_package();
+    let envelope = f.publish_ok(None);
+    f.verify_index(&envelope);
+    let index: Value = serde_json::from_str(envelope["index"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        index["modules"].as_array().unwrap().last().unwrap()["presentation"],
+        presentation
+    );
+    f.roundtrip(&envelope);
+}

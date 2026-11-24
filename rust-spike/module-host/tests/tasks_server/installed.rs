@@ -53,6 +53,7 @@ pub fn install(
             let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
             let manifest = &package.manifest;
             let artifact = Artifact {
+                presentation: None,
                 id: manifest.id.clone(),
                 version: manifest.version.clone(),
                 digest: digest.clone(),

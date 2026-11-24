@@ -39,6 +39,7 @@ pub fn publish(
     let bytes = archive::pack(&files).unwrap();
     let digest = trust::digest(&bytes);
     let artifact = Artifact {
+        presentation: None,
         id: "tasks".into(),
         version: manifest.version.clone(),
         digest: digest.clone(),

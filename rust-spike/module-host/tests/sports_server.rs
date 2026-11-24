@@ -229,6 +229,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         assert_eq!(manifest.id, *id);
         fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
         Artifact {
+            presentation: None,
             id: manifest.id.clone(),
             version: manifest.version.clone(),
             digest: digest.clone(),

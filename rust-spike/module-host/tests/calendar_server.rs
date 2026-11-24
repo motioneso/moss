@@ -226,6 +226,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes,
         ).unwrap();
         Artifact {
+            presentation: None,
             id: manifest.id.clone(),
             version: manifest.version.clone(),
             digest: digest.clone(),

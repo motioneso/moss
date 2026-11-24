@@ -75,22 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### JS-418: catalog screens need a backend contract decision — 2026-11-24
-
-The part 11 brief requires category filtering, screenshot paging and member browsing,
-but permits backend changes only for small read endpoints. Checked the task checkout at
-`origin/main` (`ec0a054af`, zero commits behind): the signed registry `Artifact` and
-`CatalogModule` contracts have no category or screenshot fields; `/api/modules/catalog`
-still calls `require_admin`. The current API implementation therefore cannot supply those
-required screens to a member. This is a scope decision, not an environment failure.
-
-Recommendation: authorize a bounded prerequisite in this task: optional signed catalog
-presentation metadata (category and up to four screenshot references), publisher propagation,
-and an account-safe read projection for members. Keep lifecycle/write behavior unchanged.
-Alternative: have a separate backend task land that prerequisite, then resume JS-418.
-No product code has been changed. Task branch was advanced to the already-merged backend
-baseline; no merge, push or shared branch change was made.
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;

@@ -248,3 +248,5 @@ pub mod module_management;
 
 /// Account-owned module install requests.
 pub mod install_requests;
+
+pub mod catalog_view;

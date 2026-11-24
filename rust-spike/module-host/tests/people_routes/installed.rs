@@ -101,6 +101,7 @@ fn publish_with_keys(registry: &Path) -> (Keys, Vec<Artifact>) {
                 );
             }
             let artifact = Artifact {
+                presentation: None,
                 id: manifest.id.clone(),
                 version: manifest.version.clone(),
                 digest: digest.clone(),

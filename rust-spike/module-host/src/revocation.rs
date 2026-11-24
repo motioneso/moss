@@ -145,3 +145,20 @@ impl Installer {
         }
     }
 }
+
+impl Installer {
+    /// Configuration activity for modules visible to this account, never other builders' records.
+    pub fn activity_for(&self, access: &AccessContext) -> Result<Vec<Activity>> {
+        let state = self.catalog.load()?;
+        Ok(state
+            .activity
+            .into_iter()
+            .filter(|entry| {
+                state
+                    .installed
+                    .get(&entry.module)
+                    .is_some_and(|m| m.visible_to(access))
+            })
+            .collect())
+    }
+}
