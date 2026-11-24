@@ -620,6 +620,31 @@ fn phase6_registry_api() {
         "export works with zero registries"
     );
     health();
+    index.serial -= 1;
+    let replay = serde_json::to_vec(&index).unwrap();
+    fs::write(registry.join("index.json"), &replay).unwrap();
+    fs::write(
+        registry.join("index.json.sig"),
+        common::Keys::sign(&keys.index, &replay),
+    )
+    .unwrap();
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/registries",
+            Some(json!({"registry":{"id":"sample-registry","folder":registry,"rootKey":root_key}})),
+            Some(&cookie)
+        )
+        .0,
+        422,
+        "re-add refuses replayed registry history"
+    );
+    fs::write(registry.join("index.json"), &bytes).unwrap();
+    fs::write(
+        registry.join("index.json.sig"),
+        common::Keys::sign(&keys.index, &bytes),
+    )
+    .unwrap();
     assert_eq!(
         api(
             Method::POST,
