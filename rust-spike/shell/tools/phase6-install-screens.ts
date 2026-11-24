@@ -202,6 +202,8 @@ try {
     await success(page, width, "success");
     await fits(page);
     await page.screenshot({ path: join(out, `${width}-result.png`) });
+    await page.getByRole("link", { name: `Open ${width} success`, exact: true }).click();
+    await expect(page).toHaveURL(`${origin}/install-${width}-success`);
     assert.equal(
       (await member.request.get(`${origin}/api/modules/operations/${first.id}`)).status(),
       403,
