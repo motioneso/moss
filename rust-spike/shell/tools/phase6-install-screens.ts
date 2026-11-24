@@ -241,6 +241,7 @@ try {
     await expect(
       page
         .frameLocator("iframe.module-screen")
+        .frameLocator("iframe#frame")
         .getByRole("heading", { name: `${width} success`, exact: true })
     ).toBeVisible();
     assert.equal(
