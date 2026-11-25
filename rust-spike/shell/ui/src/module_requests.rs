@@ -15,6 +15,8 @@ fn status(value: &str) -> &str {
         "declined" => "Declined",
         "succeeded" => "Approved and installed",
         "failed" => "Install failed",
+        "unavailable" => "Status unavailable",
+        "reviewed" => "Awaiting approval",
         _ => "Installing",
     }
 }
@@ -93,7 +95,7 @@ pub fn RequestPage() -> impl IntoView {
                 let name=m.name.clone();
                 view!{<p class="jds-caption">{format!("{} · {} · {}",m.publisher,m.source_name,m.version)}</p><p>{m.description}</p>
                     {move ||match sent.get(){
-                        Some(r)=>view!{<section class="jds-brief"><h2>"Request sent"</h2><p>{name.clone()}</p><Badge tone=BadgeTone::Amber>{status(&r.status).to_owned()}</Badge></section>}.into_any(),
+                        Some(r)=>view!{<section class="jds-brief"><h2>{if r.status=="declined" {"Request declined"}else{"Request sent"}}</h2><p>{name.clone()}</p><Badge tone=BadgeTone::Amber>{status(&r.status).to_owned()}</Badge></section>}.into_any(),
                         None=>{let id=m.id.clone();let source=m.source.clone();view!{<Button disabled=pending on_click=Callback::new(move |_|{
                             if pending.get_untracked(){return;} pending.set(true);error.set(None);let id=id.clone();let source=source.clone();spawn_local(async move{match module_catalog::post("/api/modules/requests",json!({"module":id,"source":source})).await {Ok(r)=>sent.set(Some(r)),Err(_)=>error.set(Some("Request not sent. Try again.".into()))}pending.set(false);});
                         })>"Ask an admin"</Button>}.into_any()}

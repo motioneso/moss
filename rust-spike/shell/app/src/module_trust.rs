@@ -110,12 +110,14 @@ mod local {
             .layer(DefaultBodyLimit::max(96 * 1024 * 1024))
     }
     async fn review(
+        State(admin): State<Arc<Admin>>,
         Extension(access): Extension<AccessContext>,
         Json(input): Json<Input>,
     ) -> Response {
         if input.signature.is_some() || input.approve {
             return module_admin::say(StatusCode::BAD_REQUEST, "Review takes only a built package");
         }
+        let _gate = admin.gate.lock().await;
         match tokio::task::spawn_blocking(move || -> anyhow::Result<LocalReview> {
             let bytes = STANDARD.decode(&input.package)?;
             let local = LocalPackages::host_storage();

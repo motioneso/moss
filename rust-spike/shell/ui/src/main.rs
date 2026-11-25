@@ -11,6 +11,7 @@ mod module_controls;
 mod module_detail;
 mod module_install;
 mod module_lifecycle;
+mod module_package_import;
 mod module_registries;
 mod module_requests;
 mod module_trust;

@@ -109,16 +109,40 @@ pub fn serve(
     let mut index: Index =
         serde_json::from_slice(&fs::read(registry_folder.join("index.json")).unwrap()).unwrap();
     let base = index.modules[0].clone();
-    for width in ["desktop", "phone"] {
-        for kind in ["request", "decline"] {
+    for width in ["control", "desktop", "phone"] {
+        for kind in ["request", "decline", "import"] {
             index.modules.push(offer(
                 keys,
                 registry_folder,
                 &base,
                 &format!("{kind}-{width}"),
-                &format!("{kind} {width}"),
+                &if kind == "import" {
+                    format!("{kind} {width}")
+                } else {
+                    format!("{kind}-{width}")
+                },
             ));
         }
+        let imported = index
+            .modules
+            .iter()
+            .find(|a| a.id == format!("import-{width}"))
+            .unwrap();
+        fs::copy(
+            registry_folder.join(format!("packages/{}.mosspkg", imported.digest)),
+            hold.join(format!("import-{width}.mosspkg")),
+        )
+        .unwrap();
+        fs::write(
+            hold.join(format!("import-{width}.sig")),
+            &imported.signature,
+        )
+        .unwrap();
+        fs::write(
+            hold.join(format!("wrong-{width}.sig")),
+            common::Keys::sign(&extra_keys.publisher, imported.digest.as_bytes()),
+        )
+        .unwrap();
         for kind in ["folder", "file", "wrong"] {
             let id = format!("{kind}-{width}");
             let folder = root.join(&id);
@@ -177,6 +201,17 @@ pub fn serve(
                         });
                     }
                     sign(keys, registry_folder, &mut index);
+                }
+                "storage" => {
+                    let row = rt
+                        .block_on(db.query_one(
+                            "SELECT state::text FROM moss_modules.catalog WHERE id=true",
+                            &[],
+                        ))
+                        .unwrap();
+                    let state: String = row.get(0);
+                    fs::write(hold.join("catalog-digest"), trust::digest(state.as_bytes()))
+                        .unwrap();
                 }
                 "offline" => fs::rename(registry_folder, root.join("offline-registry")).unwrap(),
                 "online" => fs::rename(root.join("offline-registry"), registry_folder).unwrap(),

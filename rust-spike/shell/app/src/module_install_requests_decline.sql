@@ -1,7 +1,7 @@
 -- Separate upgrade: existing request migrations are immutable.
 BEGIN;
 ALTER TABLE moss_modules.install_requests
-    ADD COLUMN declined_by uuid REFERENCES app.users(id),
+    ADD COLUMN declined_by uuid,
     ADD COLUMN declined_at timestamptz,
     ADD CONSTRAINT install_requests_decline_pair CHECK ((declined_by IS NULL) = (declined_at IS NULL)),
     ADD CONSTRAINT install_requests_decline_unapproved CHECK (declined_by IS NULL OR operation_id IS NULL);

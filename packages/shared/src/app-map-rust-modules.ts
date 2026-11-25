@@ -14,7 +14,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-trust-screens",
     runtime: "rust",
     description:
-      "Registry settings show signed health and require an explicit Trust and add confirmation of the staged root fingerprint. Address or folder imports use the existing registry API; signed registry JSON envelopes import files and packages. POST /api/modules/local/review signs and validates the built package through the existing backend and returns exact digest, public fingerprint and permissions. POST /api/modules/local/install accepts only those signed bytes and explicit approval, using the session owner and existing builder-only install_local backend. Package manifests must declare a local.<signed-in account>.* ID, routes and owner-only capabilities. Another account, including an admin, cannot review or install that package. GET /api/modules/trust/{id} returns only an installed package visible to the session owner, with local provenance or saved block/warn details. Local signing secrets are not returned. Local packages stay out of portable lists and other accounts' screens."
+      "Registry settings show signed health and require an explicit Trust and add confirmation of the staged root fingerprint. Address or folder imports use the existing registry API; POST /api/modules/packages/import is administrator-only: it reviews a package and detached signature against a saved trusted registry, then calls the existing import_file backend only with explicit approval. Wrong signatures and non-admin requests store no package. POST /api/modules/local/review signs and validates the built package through the existing backend and returns exact digest, public fingerprint and permissions. POST /api/modules/local/install accepts only those signed bytes and explicit approval, using the session owner and existing builder-only install_local backend. Package manifests must declare a local.<signed-in account>.* ID, routes and owner-only capabilities. Another account, including an admin, cannot review or install that package. GET /api/modules/trust/{id} returns only an installed package visible to the session owner, with local provenance or saved block/warn details. Local signing secrets are not returned. Local packages stay out of portable lists and other accounts' screens."
   },
   {
     moduleId: "core",
@@ -188,7 +188,7 @@ export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Registries",
     description:
-      "Administrators open the Registries tab to see signed health, check an address or folder and explicitly confirm its root fingerprint before trust is saved. Signed registry files can be imported for review; unavailable or expired sources show their health.",
+      "Administrators open the Registries tab to see signed health, check an address or folder and explicitly confirm its root fingerprint before trust is saved. Packages and detached signatures can be imported for review against a trusted source; unavailable or expired sources show their health.",
     path: "/settings/modules/registries",
     scope: "admin"
   },

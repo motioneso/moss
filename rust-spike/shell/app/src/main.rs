@@ -46,6 +46,7 @@ mod module_lists;
 mod module_local;
 mod module_management;
 mod module_operation;
+mod module_package_import;
 mod module_policy;
 mod module_refresh;
 mod module_registries;

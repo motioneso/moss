@@ -44,3 +44,16 @@ pub struct RegistryView {
 pub struct Registries {
     pub registries: Vec<RegistryView>,
 }
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageReview {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub source: String,
+    pub digest: String,
+    pub fingerprint: String,
+    pub permissions: Vec<String>,
+    pub installed: bool,
+}

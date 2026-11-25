@@ -7,6 +7,8 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
+  statSync,
   renameSync,
   rmSync,
   writeFileSync
@@ -131,11 +133,94 @@ try {
       assert(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth), "no modal overflow");
     }
   }
+  assert.equal(
+    (await admin.request.get(`${origin}/api/modules/catalog-view`)).status(),
+    200,
+    "refresh signed fixture offers"
+  );
+  // Independent real refusal probes also make guard-removal controls observable in one run.
+  const controlErrors: string[] = [];
+  async function control(name: string, check: () => Promise<void>) {
+    try {
+      await check();
+      console.log(`PASS guard probe: ${name}`);
+    } catch (error) {
+      controlErrors.push(`${name}: ${String(error)}`);
+      console.error(`FAIL guard probe: ${name}: ${String(error)}`);
+    }
+  }
+  const controlPackage = readFileSync(join(hold, "import-control.mosspkg")).toString("base64");
+  await control("package administrator check", async () => {
+    const r = await member.request.post(`${origin}/api/modules/packages/import`, {
+      headers: { origin },
+      data: {
+        source: "moss-fixture",
+        package: controlPackage,
+        signature: readFileSync(join(hold, "import-control.sig"), "utf8")
+      }
+    });
+    assert.equal(r.status(), 403);
+  });
+  await control("trusted package signature", async () => {
+    const r = await admin.request.post(`${origin}/api/modules/packages/import`, {
+      headers: { origin },
+      data: {
+        source: "moss-fixture",
+        package: controlPackage,
+        signature: readFileSync(join(hold, "wrong-control.sig"), "utf8")
+      }
+    });
+    assert.equal(r.status(), 422);
+  });
+  const requestControl = await member.request.post(`${origin}/api/modules/requests`, {
+    headers: { origin },
+    data: { source: "moss-fixture", module: "decline-control" }
+  });
+  assert.equal(requestControl.status(), 200);
+  const controlRequest = await requestControl.json();
+  await control("decline administrator check", async () => {
+    const r = await member.request.post(
+      `${origin}/api/modules/requests/${controlRequest.id}/decline`,
+      { headers: { origin }, data: {} }
+    );
+    assert.equal(r.status(), 403);
+  });
+  await post(`/api/modules/requests/${controlRequest.id}/decline`, {});
+  const privateBytes = readFileSync(join(hold, "local-control.mosspkg")).toString("base64");
+  await control("local builder owner check", async () => {
+    const r = await other.request.post(`${origin}/api/modules/local/review`, {
+      headers: { origin },
+      data: { package: privateBytes }
+    });
+    assert.equal(r.status(), 422);
+  });
+  const signedControl = await member.request.post(`${origin}/api/modules/local/review`, {
+    headers: { origin },
+    data: { package: privateBytes }
+  });
+  assert.equal(signedControl.status(), 200);
+  const signatureControl = (await signedControl.json()).signature;
+  const installControl = await member.request.post(`${origin}/api/modules/local/install`, {
+    headers: { origin },
+    data: { package: privateBytes, signature: signatureControl, approve: true }
+  });
+  assert.equal(installControl.status(), 200, "real control local installation");
+  await control("local provenance visibility", async () => {
+    for (const actor of [other, admin]) {
+      const r = await actor.request.get(
+        `${origin}/api/modules/trust/local.${memberId}.trust-control`
+      );
+      assert.equal(r.status(), 404);
+    }
+  });
+  assert.deepEqual(controlErrors, [], "all real access and trust guards");
   const fingerprint = createHash("sha256").update(Buffer.from(extraKey, "base64")).digest("hex");
-  for (const [width, pixels] of [
-    ["desktop", 1440],
-    ["phone", 390]
-  ] as const) {
+  for (const [width, pixels] of process.env.TRUST_GUARDS_ONLY === "1"
+    ? []
+    : ([
+        ["desktop", 1440],
+        ["phone", 390]
+      ] as const)) {
     const page = await admin.newPage();
     const memberPage = await member.newPage();
     await page.setViewportSize({ width: pixels, height: 1000 });
@@ -155,7 +240,7 @@ try {
     let dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(fingerprint);
-    let sources = await (await admin.request.get(`${origin}/api/modules/registries`)).json();
+    const sources = await (await admin.request.get(`${origin}/api/modules/registries`)).json();
     assert.equal(
       sources.registries.find((r: { id: string }) => r.id === `folder-${width}`).confirmed,
       false,
@@ -177,29 +262,68 @@ try {
     await expect(dialog).toHaveCount(0);
     await expect(page.locator(`[data-registry="folder-${width}"]`)).toContainText("Root confirmed");
 
+    const importBytes = readFileSync(join(hold, `import-${width}.mosspkg`)).toString("base64");
+    const importSignature = readFileSync(join(hold, `import-${width}.sig`), "utf8");
+    async function packageStorage() {
+      const files: Record<string, string> = {};
+      function walk(path: string) {
+        if (!existsSync(path)) return;
+        for (const name of readdirSync(path)) {
+          const file = join(path, name);
+          if (statSync(file).isDirectory()) walk(file);
+          else files[file] = createHash("sha256").update(readFileSync(file)).digest("hex");
+        }
+      }
+      for (const dir of ["blobs", "installed", "staging"]) walk(join(instance, "modules", dir));
+      await command("storage", width);
+      return { files, catalog: readFileSync(join(hold, "catalog-digest"), "utf8") };
+    }
+    const untouched = await packageStorage();
+    for (const actor of [member, other]) {
+      const denied = await actor.request.post(`${origin}/api/modules/packages/import`, {
+        headers: { origin },
+        data: {
+          source: "moss-fixture",
+          package: importBytes,
+          signature: importSignature,
+          approve: true
+        }
+      });
+      assert.equal(denied.status(), 403, "non-admin package import refused");
+      assert.deepEqual(await packageStorage(), untouched, "non-admin wrote no package bytes");
+    }
+    const wrong = await admin.request.post(`${origin}/api/modules/packages/import`, {
+      headers: { origin },
+      data: {
+        source: "moss-fixture",
+        package: importBytes,
+        signature: readFileSync(join(hold, `wrong-${width}.sig`), "utf8"),
+        approve: true
+      }
+    });
+    assert.equal(wrong.status(), 422, "wrong package signature refused");
+    assert.deepEqual(await packageStorage(), untouched, "wrong signature wrote no package bytes");
+    await page.getByLabel("Source", { exact: true }).selectOption("moss-fixture");
     await page
-      .getByLabel("Signed registry file", { exact: true })
-      .setInputFiles(join(hold, `wrong-${width}.json`));
+      .getByLabel("Package and signature", { exact: true })
+      .setInputFiles([join(hold, `import-${width}.mosspkg`), join(hold, `wrong-${width}.sig`)]);
     await page.getByRole("button", { name: "Review package", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("Registry refused");
-    sources = await (await admin.request.get(`${origin}/api/modules/registries`)).json();
-    assert(
-      !sources.registries.some((r: { id: string }) => r.id === `wrong-${width}`),
-      "wrong signature never staged"
-    );
+    await expect(page.getByRole("alert")).toContainText("Package refused");
     await page
-      .getByLabel("Signed registry file", { exact: true })
-      .setInputFiles(join(hold, `file-${width}.json`));
+      .getByLabel("Package and signature", { exact: true })
+      .setInputFiles([join(hold, `import-${width}.mosspkg`), join(hold, `import-${width}.sig`)]);
     await page.getByRole("button", { name: "Review package", exact: true }).click();
     dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText(fingerprint);
-    await dialog.getByRole("button", { name: "Trust and add", exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(page.locator(`[data-registry="file-${width}"]`)).toContainText("Healthy");
+    await expect(dialog).toContainText(`Install import ${width}`);
+    await fits(page);
+    assert.deepEqual(await packageStorage(), untouched, "review stores no package bytes");
+    await page.screenshot({ path: join(out, `${width}-file-review.png`) });
+    await dialog.getByRole("button", { name: "Install package", exact: true }).click();
+    await expect(page.getByText("Package installed.", { exact: true })).toBeVisible();
     await fits(page);
     await page.screenshot({ path: join(out, `${width}-registries.png`) });
     console.log(
-      `PASS ${width}: folder and signed file import, wrong signature refused, root checked before trust saved`
+      `PASS ${width}: folder and package file import, wrong signature and non-admin refused without writes, root confirmed before trust saved`
     );
 
     const module = `request-${width}`;
