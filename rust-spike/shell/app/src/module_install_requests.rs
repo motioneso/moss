@@ -20,15 +20,17 @@ use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
+pub(crate) const DECLINE_MIGRATION: &str = include_str!("module_install_requests_decline.sql");
 pub(crate) const MIGRATION: &str = include_str!("module_install_requests.sql");
 const COLUMNS: &str =
-    "id::text, owner_account_id::text, source, module, created_at::text, operation_id::text";
+    "id::text, owner_account_id::text, source, module, created_at::text, operation_id::text, declined_by::text, declined_at::text";
 
 pub fn routes() -> Router<Arc<Admin>> {
     Router::new()
         .route("/api/modules/requests", get(list).post(submit))
         .route("/api/modules/requests/{id}", get(status))
         .route("/api/modules/requests/{id}/approve", post(approve))
+        .route("/api/modules/requests/{id}/decline", post(decline))
 }
 
 fn unavailable() -> Response {
@@ -53,7 +55,7 @@ async fn context(admin: &Admin, access: &AccessContext) -> anyhow::Result<DataCo
     let present: bool = cx
         .db()
         .query_one(
-            "SELECT to_regclass('moss_modules.install_requests') IS NOT NULL",
+            "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='moss_modules' AND table_name='install_requests' AND column_name='declined_at')",
             &[],
         )
         .await?
@@ -79,21 +81,26 @@ async fn context(admin: &Admin, access: &AccessContext) -> anyhow::Result<DataCo
 
 fn view(admin: &Admin, row: &tokio_postgres::Row) -> InstallRequest {
     let operation_id: Option<String> = row.get(5);
-    let status = match operation_id.as_deref() {
-        None => "pending",
-        Some(id) => match Record::read(&admin.instance, id).map(|r| r.view.stage) {
-            Ok(ModuleOperationStage::Reviewed) => "reviewed",
-            Ok(ModuleOperationStage::Queued) => "queued",
-            Ok(ModuleOperationStage::Checking) => "checking",
-            Ok(ModuleOperationStage::Downloading) => "downloading",
-            Ok(ModuleOperationStage::Verifying) => "verifying",
-            Ok(ModuleOperationStage::SettingUpData) => "setting_up_data",
-            Ok(ModuleOperationStage::Activating) => "activating",
-            Ok(ModuleOperationStage::Installing) => "installing",
-            Ok(ModuleOperationStage::Succeeded) => "succeeded",
-            Ok(ModuleOperationStage::Failed) => "failed",
-            Err(_) => "unavailable",
-        },
+    let declined_by: Option<String> = row.get(6);
+    let status = if declined_by.is_some() {
+        "declined"
+    } else {
+        match operation_id.as_deref() {
+            None => "pending",
+            Some(id) => match Record::read(&admin.instance, id).map(|r| r.view.stage) {
+                Ok(ModuleOperationStage::Reviewed) => "reviewed",
+                Ok(ModuleOperationStage::Queued) => "queued",
+                Ok(ModuleOperationStage::Checking) => "checking",
+                Ok(ModuleOperationStage::Downloading) => "downloading",
+                Ok(ModuleOperationStage::Verifying) => "verifying",
+                Ok(ModuleOperationStage::SettingUpData) => "setting_up_data",
+                Ok(ModuleOperationStage::Activating) => "activating",
+                Ok(ModuleOperationStage::Installing) => "installing",
+                Ok(ModuleOperationStage::Succeeded) => "succeeded",
+                Ok(ModuleOperationStage::Failed) => "failed",
+                Err(_) => "unavailable",
+            },
+        }
     };
     InstallRequest {
         id: row.get(0),
@@ -103,11 +110,14 @@ fn view(admin: &Admin, row: &tokio_postgres::Row) -> InstallRequest {
         created_at: row.get(4),
         operation_id,
         status: status.into(),
+        declined_by,
+        declined_at: row.get(7),
         // Neither the guest notify port nor the existing repository can select admins.
         // Do not impersonate another recipient or pretend a notice was delivered.
-        notice: "unsupported",
+        notice: "unsupported".into(),
         notice_reason:
-            "Automatic admin notices are unavailable; an administrator can read install requests",
+            "Automatic admin notices are unavailable; an administrator can read install requests"
+                .into(),
     }
 }
 
@@ -267,6 +277,9 @@ async fn approve(
             Err(_) => return unavailable(),
         };
         let saved = view(&admin, &row);
+        if saved.status == "declined" {
+            return module_admin::say(StatusCode::CONFLICT, "This request was declined");
+        }
         if review.module != saved.module
             || review.source != saved.source
             || record.lifecycle.is_some()
@@ -296,4 +309,44 @@ async fn approve(
         Json(ExecuteModule { approve: true }),
     )
     .await
+}
+
+// Same configuration-only admin check and actor-scoped data context as approval.
+async fn decline(
+    State(admin): State<Arc<Admin>>,
+    Extension(access): Extension<AccessContext>,
+    Path(id): Path<String>,
+) -> Response {
+    if let Err(response) = module_admin::require_admin(&admin, &access).await {
+        return response;
+    }
+    let Ok(id) = Uuid::parse_str(&id) else {
+        return missing();
+    };
+    let _gate = admin.gate.lock().await;
+    let result = async {
+        let cx = context(&admin, &access).await?;
+        let row = cx.db().query_opt(
+            &format!("SELECT {COLUMNS} FROM moss_modules.install_requests WHERE id=$1 FOR UPDATE"), &[&id]
+        ).await?;
+        let Some(row) = row else { return Ok::<_, anyhow::Error>(None); };
+        let saved = view(&admin, &row);
+        if saved.operation_id.is_some() { return Ok(Some(Err(()))); }
+        if saved.declined_at.is_none() {
+            cx.db().execute("UPDATE moss_modules.install_requests SET declined_by=$2,declined_at=now() WHERE id=$1", &[&id, &access.actor_user_id()]).await?;
+        }
+        let row = cx.db().query_one(&format!("SELECT {COLUMNS} FROM moss_modules.install_requests WHERE id=$1"), &[&id]).await?;
+        let saved = view(&admin, &row);
+        cx.commit().await.map_err(|_| anyhow::anyhow!("Cannot save decline"))?;
+        Ok(Some(Ok(saved)))
+    }.await;
+    match result {
+        Ok(Some(Ok(saved))) => reply(saved),
+        Ok(Some(Err(()))) => module_admin::say(
+            StatusCode::CONFLICT,
+            "This request already has an install operation",
+        ),
+        Ok(None) => missing(),
+        Err(_) => unavailable(),
+    }
 }

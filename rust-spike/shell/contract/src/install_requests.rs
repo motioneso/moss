@@ -15,7 +15,7 @@ pub struct ApproveInstallRequest {
     pub approve: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallRequest {
     pub id: String,
@@ -25,6 +25,8 @@ pub struct InstallRequest {
     pub created_at: String,
     pub operation_id: Option<String>,
     pub status: String,
-    pub notice: &'static str,
-    pub notice_reason: &'static str,
+    pub declined_by: Option<String>,
+    pub declined_at: Option<String>,
+    pub notice: String,
+    pub notice_reason: String,
 }

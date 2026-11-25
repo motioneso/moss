@@ -565,6 +565,10 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                             view! { <iframe id="scratchpad-settings-frame" class="module-screen" title="Scratchpad settings" src="/module-frame?module=scratchpad&path=%2Fscratchpad-settings"></iframe> }.into_any()
                         } else if path.get() == "/modules" || path.get() == "/settings/modules" {
                             view! { <crate::modules_page::ModulesPage /> }.into_any()
+                        } else if path.get() == "/settings/modules/registries" {
+                            view! { <crate::module_registries::RegistriesPage/> }.into_any()
+                        } else if path.get() == "/settings/modules/local" {
+                            view! { <crate::module_trust::LocalPackagePage/> }.into_any()
                         } else if path.get().starts_with("/settings/modules/") {
                             view! { <NotPortedYet /> }.into_any()
                         } else if let Some(m) = modules.iter().find(|m| m.path == path.get()) {

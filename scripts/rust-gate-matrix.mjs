@@ -102,6 +102,7 @@ export const hostGates = [
   "phase6-catalog-screens",
   "phase6-install-screens",
   "phase6-lifecycle-screens",
+  "phase6-trust-screens",
   "install-endpoints",
   "module-assembly",
   "public-web",
