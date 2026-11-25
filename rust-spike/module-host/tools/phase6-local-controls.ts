@@ -104,15 +104,23 @@ const controls: Control[] = [
     weaken: (s) =>
       replace(
         s,
-        '.starts_with(&format!("local.{}.", access.actor_user_id()))',
-        '.starts_with("local.")'
+        's.module\n                        .starts_with(&format!("local.{}.", access.actor_user_id()))',
+        's.module.starts_with("local.")'
       )
+  },
+  {
+    file: "recovery.rs",
+    test: "snapshot_resolution_is_owner_only",
+    marker: "PRIVATE-SNAPSHOT-MARKER",
+    weaken: (s) => guard(s, unavailable)
   },
   {
     file: "recovery.rs",
     test: "snapshot_listing_and_restore_are_owner_only",
     marker: "PRIVATE-SNAPSHOT-MARKER",
-    weaken: (s) => replace(s, "self.manage(access, &module)?;", "")
+    // Resolution now checks the owner before restore's existing management check.
+    // Remove both layers to prove the restore assertion reaches the protected action.
+    weaken: (s) => replace(guard(s, unavailable), "self.manage(access, &module)?;", "")
   },
   {
     file: "services.rs",

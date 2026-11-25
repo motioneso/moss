@@ -17,6 +17,7 @@ fn offer(
     base: &Artifact,
     width: &str,
     version: &str,
+    healthy_update: bool,
 ) -> Artifact {
     let id = format!("lifecycle-{width}");
     let name = format!("Finance {width}");
@@ -37,11 +38,20 @@ fn offer(
     if version != "1.0.0" {
         files.insert(
             "sql/002_amounts.sql".into(),
-            format!("UPDATE {table} SET amount=0;").into_bytes(),
+            if healthy_update {
+                format!("ALTER TABLE {table} ADD COLUMN reviewed boolean NOT NULL DEFAULT false;")
+            } else {
+                format!("UPDATE {table} SET amount=0;")
+            }
+            .into_bytes(),
         );
         files.insert(
             "code/module.wasm".into(),
-            wat::parse_str(common::unhealthy_source()).unwrap(),
+            if healthy_update {
+                common::wasm()
+            } else {
+                wat::parse_str(common::unhealthy_source()).unwrap()
+            },
         );
     }
     let bytes = archive::pack(&files).unwrap();
@@ -81,10 +91,11 @@ pub fn serve(
     let mut index: Index =
         serde_json::from_slice(&fs::read(registry.join("index.json")).unwrap()).unwrap();
     let base = index.modules[0].clone();
+    let healthy_update = std::env::var_os("EXIT_JOURNEY").is_some();
     for width in ["desktop", "phone"] {
         index
             .modules
-            .push(offer(keys, registry, &base, width, "1.0.0"));
+            .push(offer(keys, registry, &base, width, "1.0.0", healthy_update));
     }
     sign(keys, registry, &mut index);
     fs::create_dir_all(hold).unwrap();
@@ -127,9 +138,14 @@ pub fn serve(
                         .unwrap();
                 }
                 "grow" => {
-                    index
-                        .modules
-                        .push(offer(keys, registry, &base, width, "1.1.0"));
+                    index.modules.push(offer(
+                        keys,
+                        registry,
+                        &base,
+                        width,
+                        "1.1.0",
+                        healthy_update,
+                    ));
                     sign(keys, registry, &mut index);
                 }
                 "base" => {

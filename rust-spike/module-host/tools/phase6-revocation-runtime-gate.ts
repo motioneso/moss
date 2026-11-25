@@ -26,7 +26,7 @@ const result = spawnSync(
     stdio: "inherit",
     env: {
       ...process.env,
-      CARGO_BUILD_JOBS: "2",
+      CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? "2",
       CARGO_PROFILE_DEV_DEBUG: "0",
       CARGO_PROFILE_TEST_DEBUG: "0",
       JS43_APP_URL: urls.app,
