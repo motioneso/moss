@@ -77,11 +77,16 @@ pub fn serve_catalog() {
     } else {
         "0.0.0.0"
     };
+    let local_origin = format!("https://localhost:{}", port.0);
+    let mut origins = vec![origin.clone()];
+    if host != "localhost" {
+        origins.push(local_origin.clone());
+    }
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
-        .arg(&origin)
+        .args(&origins)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -101,7 +106,7 @@ pub fn serve_catalog() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("{listen_host}:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{listen_host}:{}",port.0),"origins":origins,"sharing":host != "localhost","certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     // What the app writes at setup. There is no owner account and there are no module tables yet.
     private(
@@ -172,8 +177,8 @@ pub fn serve_catalog() {
         std::thread::sleep(Duration::from_millis(100));
     }
     let signup = client
-        .post(format!("{origin}/api/auth/sign-up/email"))
-        .header("origin", &origin)
+        .post(format!("{local_origin}/api/auth/sign-up/email"))
+        .header("origin", &local_origin)
         .json(&json!({"name":"Bootstrap owner","email":"bootstrap-owner@example.test","password":"temporary-bootstrap-password-179-not-a-real-secret"}))
         .send()
         .unwrap();
