@@ -252,18 +252,14 @@ try {
     dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Update", exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: `${name} is ready`, exact: true })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Updated", exact: true })).toBeVisible();
     const updated = await saved(page);
     assert.equal(updated.stage, "succeeded");
     assert(updated.stages.includes("setting_up_data"));
     assert.equal(updated.review.version, "1.1.0");
     assert.deepEqual(await rows(width), original, "approved update preserves both owners' rows");
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: `${name} is ready`, exact: true })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Updated", exact: true })).toBeVisible();
     await fits(page);
     await page.screenshot({ path: join(out, `${width}-updated.png`) });
     console.log(
