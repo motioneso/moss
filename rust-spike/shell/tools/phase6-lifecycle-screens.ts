@@ -234,6 +234,7 @@ try {
     await expect(page.getByText(`${name} 1.0.0 was restored.`, { exact: true })).toBeVisible();
     await fits(page);
     await page.screenshot({ path: join(out, `${width}-update-rollback.png`) });
+    if (process.env.LIFECYCLE_CONTROL === "rollback") break;
     await command("base", width);
     await post("/api/modules/refresh", {});
     console.log(
@@ -276,6 +277,12 @@ try {
     await dialog.getByRole("button", { name: "Remove and delete data", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Module removed", exact: true })).toBeVisible();
     assert.equal((await saved(page)).stage, "succeeded");
+    await command("empty", width);
+    assert.equal(
+      JSON.parse(readFileSync(join(hold, "deleted.json"), "utf8")).rows,
+      0,
+      "deletion actually removed ledger rows"
+    );
     await page.goto(detail);
     await page.getByRole("link", { name: "Restore", exact: true }).click();
     dialog = page.getByRole("dialog", { name: `Restore ${name}`, exact: true });

@@ -110,6 +110,22 @@ pub fn serve(
                     let rows=rt.block_on(db.query(&format!("SELECT id::text,owner_user_id::text,amount,title FROM {table} ORDER BY id"),&[])).unwrap().iter().map(|r|json!({"id":r.get::<_,String>(0),"owner":r.get::<_,String>(1),"amount":r.get::<_,i32>(2),"title":r.get::<_,String>(3)})).collect::<Vec<_>>();
                     fs::write(hold.join("rows.json"), serde_json::to_vec(&rows).unwrap()).unwrap();
                 }
+                "empty" => {
+                    let exists = rt
+                        .block_on(db.query_one("SELECT to_regclass($1)::text", &[&table]))
+                        .unwrap()
+                        .get::<_, Option<String>>(0)
+                        .is_some();
+                    let count = if exists {
+                        rt.block_on(db.query_one(&format!("SELECT count(*) FROM {table}"), &[]))
+                            .unwrap()
+                            .get::<_, i64>(0)
+                    } else {
+                        0
+                    };
+                    fs::write(hold.join("deleted.json"), json!({"rows":count}).to_string())
+                        .unwrap();
+                }
                 "grow" => {
                     index
                         .modules
