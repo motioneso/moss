@@ -5,6 +5,8 @@ mod common;
 mod fixtures;
 #[path = "phase6_install_screens/fixtures.rs"]
 mod install_fixtures;
+#[path = "phase6_lifecycle_screens/fixtures.rs"]
+mod lifecycle_fixtures;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -272,6 +274,10 @@ pub fn serve_catalog() {
         200
     );
     let hold = std::path::PathBuf::from(std::env::var("CATALOG_HOLD").expect("browser handshake"));
+    if std::env::var_os("LIFECYCLE_SCREENS").is_some() {
+        lifecycle_fixtures::serve(root, &registry, &keys, &hold, &origin, &db, &rt);
+        return;
+    }
     if std::env::var_os("INSTALL_SCREENS").is_some() {
         install_fixtures::serve(root, &registry, &keys, &hold, &origin, &db, &rt);
         return;
