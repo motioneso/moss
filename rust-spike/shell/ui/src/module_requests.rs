@@ -42,7 +42,7 @@ pub fn RequestsPanel(admin: bool) -> impl IntoView {
                 list.requests.sort_by_key(|r|r.status!="pending");
                 let count=list.requests.iter().filter(|r|r.status=="pending").count();
                 view!{
-                    {admin.then(||view!{<p role="status">{format!("{count} pending requests")}</p>})}
+                    {admin.then(||view!{<p role="status">{format!("{count} pending request{}",if count==1 {""}else{"s"})}</p>})}
                     {list.requests.into_iter().map(|r|{
                         let id=r.id.clone();let label=status(&r.status).to_owned();
                         let review=format!("{}&screen=install&request={}",module_catalog::detail_url(&r.module,&r.source),r.id);
@@ -66,14 +66,18 @@ pub fn RequestPage() -> impl IntoView {
     let pending = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
     let read = Callback::new(move |()| {
+        if pending.get_untracked() {
+            return;
+        }
+        pending.set(true);
         spawn_local(async move {
             let id = module_catalog::query("module").unwrap_or_default();
             let source = module_catalog::query("source").unwrap_or_default();
-            module.set(Some(module_catalog::read().await.map(|v| {
+            let loaded = module_catalog::read().await.map(|v| {
                 v.modules
                     .into_iter()
                     .find(|m| m.id == id && m.source == source)
-            })));
+            });
             match api::get_json::<Requests>("/api/modules/requests").await {
                 Ok(list) => sent.set(
                     list.requests
@@ -82,6 +86,8 @@ pub fn RequestPage() -> impl IntoView {
                 ),
                 Err(_) => error.set(Some("Request status unavailable. Check again.".into())),
             }
+            module.set(Some(loaded));
+            pending.set(false);
         })
     });
     read.run(());
@@ -103,6 +109,6 @@ pub fn RequestPage() -> impl IntoView {
                 }.into_any()
             }
         }}
-        <div class="catalog-actions"><Button variant=ButtonVariant::Secondary disabled=pending on_click=Callback::new(move |_|read.run(()))>"Check status"</Button><a class="jds-btn jds-btn--quiet" href="/settings/modules?view=browse">"Cancel"</a></div>
+        <div class="catalog-actions"><Button variant=ButtonVariant::Secondary disabled=pending on_click=Callback::new(move |_|read.run(()))>"Check status"</Button><a class="jds-btn jds-btn--quiet" href="/settings/modules?view=browse">{move ||if sent.get().is_some(){"Browse"}else{"Cancel"}}</a></div>
     </div>}
 }

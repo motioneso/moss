@@ -46,6 +46,7 @@ mod module_lists;
 mod module_local;
 mod module_management;
 mod module_operation;
+mod module_package_apply;
 mod module_package_import;
 mod module_policy;
 mod module_refresh;
@@ -289,6 +290,13 @@ fn main() {
             eprintln!(
                 "moss-shell: The module lifecycle service stopped; read the operation result"
             );
+            std::process::exit(1);
+        }
+        return;
+    }
+    if std::env::args().nth(1).as_deref() == Some("apply-module-package") {
+        if module_package_apply::run(std::env::args().skip(2).collect()).is_err() {
+            eprintln!("Package activation failed");
             std::process::exit(1);
         }
         return;

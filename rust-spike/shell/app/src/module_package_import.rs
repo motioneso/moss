@@ -43,6 +43,7 @@ async fn import(
         return refused();
     };
     let _gate = admin.gate.lock().await;
+    let instance = admin.instance.clone();
     match tokio::task::spawn_blocking(move || -> anyhow::Result<PackageReview> {
         let bytes = STANDARD.decode(&input.package)?;
         let catalog = host.installer.saved_catalog(&access, &input.source)?;
@@ -62,13 +63,14 @@ async fn import(
         )?;
         // import_file rechecks current trust, revocations and compatibility before staging bytes.
         if input.approve {
-            host.installer.import_file(
+            crate::module_package_apply::apply(
+                &instance,
                 &access,
-                &catalog,
-                &bytes,
-                input.signature.trim(),
-                &offer.publisher_key,
-                true,
+                crate::module_package_apply::Input {
+                    package: input.package,
+                    signature: serde_json::json!(input.signature.trim()),
+                    source: Some(input.source),
+                },
             )?;
         }
         Ok(PackageReview {

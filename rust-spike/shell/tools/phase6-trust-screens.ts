@@ -339,7 +339,7 @@ try {
     await expect(memberPage.getByText("Waiting for an admin", { exact: true })).toBeVisible();
     await page.goto(`${origin}/settings/modules`);
     const row = page.locator(`[data-request="${requested.id}"]`);
-    await expect(page.getByText("1 pending requests", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 pending request", { exact: true })).toBeVisible();
     await expect(row).toContainText(module);
     await row.getByRole("link", { name: "Review", exact: true }).click();
     dialog = page.getByRole("dialog");
@@ -456,9 +456,7 @@ try {
       const hidden = await actor.newPage();
       await hidden.setViewportSize({ width: pixels, height: 1000 });
       await hidden.goto(`${origin}/settings/modules?module=${localId}&screen=trust`);
-      await expect(
-        hidden.getByRole("heading", { name: "Package details unavailable.", exact: true })
-      ).toBeVisible();
+      await expect(hidden.getByText("Package details unavailable.", { exact: true })).toBeVisible();
       assert(!(await hidden.locator("main").innerText()).includes(`Private ${width}`));
       await hidden.close();
     }

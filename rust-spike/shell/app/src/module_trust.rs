@@ -158,18 +158,23 @@ mod local {
                 "Review and approve this local package first",
             );
         }
-        let Some(host) = modules::host(&slot) else {
+        let Some(_host) = modules::host(&slot) else {
             return unavailable();
         };
         let _gate = admin.gate.lock().await;
+        let instance = admin.instance.clone();
         match tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
             let bytes = STANDARD.decode(&input.package)?;
-            host.installer.install_local(
+            let signature = input.signature.unwrap();
+            LocalPackages::host_storage().verify(&access, &bytes, &signature)?;
+            crate::module_package_apply::apply(
+                &instance,
                 &access,
-                &LocalPackages::host_storage(),
-                &bytes,
-                &input.signature.unwrap(),
-                true,
+                crate::module_package_apply::Input {
+                    package: input.package,
+                    signature: serde_json::to_value(signature)?,
+                    source: None,
+                },
             )
         })
         .await
