@@ -166,6 +166,11 @@ try {
       "no horizontal overflow"
     );
   }
+  async function expectRequest(page: Page, name: string) {
+    // Assert the loaded S11 screen, whose title names the requested module.
+    await expect(page.getByRole("heading", { name: `Request ${name}`, exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask an admin", exact: true })).toBeVisible();
+  }
   // Narrow runs let the same real boundary assertions prove their negative controls.
   const control = process.env.INSTALL_CONTROL;
   if (control === "member") {
@@ -356,22 +361,16 @@ try {
       `${origin}/settings/modules?module=community.garden&source=community-fixture`
     );
     await request.getByRole("link", { name: "Request to install", exact: true }).click();
-    await expect(
-      request.getByRole("heading", { name: "Request to install", exact: true })
-    ).toBeVisible();
+    await expectRequest(request, "Garden planner");
     assert.equal(new URL(request.url()).searchParams.get("screen"), "request");
     await request.goto(
       `${origin}/settings/modules?module=community.garden&source=community-fixture&screen=install`
     );
-    await expect(
-      request.getByRole("heading", { name: "Request to install", exact: true })
-    ).toBeVisible();
+    await expectRequest(request, "Garden planner");
     await request.goto(
       `${origin}/settings/modules?module=install-${width}-success&source=moss-fixture&screen=install&operation=${first.id}`
     );
-    await expect(
-      request.getByRole("heading", { name: "Request to install", exact: true })
-    ).toBeVisible();
+    await expectRequest(request, `${width} success`);
     await fits(request);
     await request.screenshot({ path: join(out, `${width}-member-request.png`) });
     await request.close();
