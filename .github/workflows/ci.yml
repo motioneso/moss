@@ -371,7 +371,7 @@ jobs:
   rust-modules:
     name: Rust gate (${{ matrix.module }} / ${{ matrix.suite }})
     # Playwright currently supports Ubuntu 24.04, not the newer ubuntu-latest image.
-    runs-on: ${{ ((matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens'))) && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    runs-on: ${{ ((matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens' || matrix.suite == 'phase6-lifecycle-screens'))) && 'ubuntu-24.04' || 'ubuntu-latest' }}
     timeout-minutes: ${{ needs.changes.outputs.rust_tier == 'pull_request' && 60 || 120 }}
     needs: changes
     if: needs.changes.outputs.rust_entries != '[]'
@@ -413,7 +413,7 @@ jobs:
         run: echo "$GITHUB_WORKSPACE/.github/ci-bin" >> "$GITHUB_PATH"
 
       - name: Install browser gate Chromium
-        if: (matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens'))
+        if: (matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens' || matrix.suite == 'phase6-lifecycle-screens'))
         run: |
           # Try the runner's default apt mirror first, then the standard Ubuntu archive.
           status=0
@@ -516,6 +516,14 @@ jobs:
             fi
           done
           exit $failed
+
+      - name: Lifecycle desktop and phone screenshots
+        if: always() && matrix.suite == 'phase6-lifecycle-screens'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-lifecycle-screens
+          path: /tmp/js420/proof/*.png
+          if-no-files-found: warn
 
       - name: Install desktop and phone screenshots
         if: always() && matrix.suite == 'phase6-install-screens'

@@ -19,6 +19,18 @@ pub fn ModulesPage() -> impl IntoView {
     if module_catalog::query("screen").as_deref() == Some("request") {
         return view! {<crate::module_install::InstallRequestRoute/>}.into_any();
     }
+    match module_catalog::query("screen").as_deref() {
+        Some("update") => return view! {<crate::module_update::ModuleUpdate/>}.into_any(),
+        Some("remove") => {
+            return view! {<crate::module_lifecycle::ModuleLifecycleScreen restore=false/>}
+                .into_any()
+        }
+        Some("restore") => {
+            return view! {<crate::module_lifecycle::ModuleLifecycleScreen restore=true/>}
+                .into_any()
+        }
+        _ => {}
+    }
     let catalog = RwSignal::new(None::<Result<CatalogView, String>>);
     let reload = Callback::new(move |()| {
         catalog.set(None);

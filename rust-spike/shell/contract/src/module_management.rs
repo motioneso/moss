@@ -31,6 +31,12 @@ pub struct ModuleReview {
     pub version: String,
     pub digest: String,
     pub previous: Option<String>,
+    #[serde(default)]
+    pub previous_version: Option<String>,
+    #[serde(default)]
+    pub changelog: String,
+    #[serde(default)]
+    pub new_migrations: Vec<String>,
     pub capabilities: Vec<ModuleCapability>,
     pub migrations: Vec<String>,
     pub permissions: Vec<ModulePermission>,
@@ -59,6 +65,8 @@ impl ModuleOperationStage {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ModuleOperationResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restored_version: Option<String>,
     pub ok: bool,
     pub message: String,
 }
@@ -172,6 +180,10 @@ pub struct RestoreModule {
 /// Metadata only: never serialize the private snapshot's previous activation or contents.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModuleSnapshot {
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub name: String,
     pub module: String,
     pub id: String,
     pub created: String,

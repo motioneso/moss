@@ -210,9 +210,19 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         let metadata = with_application(&instance, actor, |application, access| {
             Ok(application
                 .installer
-                .snapshots(access)?
+                .snapshot_history(access)?
                 .into_iter()
                 .map(|s| ModuleSnapshot {
+                    version: s
+                        .previous
+                        .as_ref()
+                        .map(|m| m.manifest.version.to_string())
+                        .unwrap_or_default(),
+                    name: s
+                        .previous
+                        .as_ref()
+                        .map(|m| m.manifest.name.clone())
+                        .unwrap_or_default(),
                     module: s.module,
                     id: s.id,
                     created: s.created.to_rfc3339(),

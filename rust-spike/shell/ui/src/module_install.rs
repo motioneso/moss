@@ -6,7 +6,7 @@ use moss_shell_contract::module_management::{ModuleOperation, ModuleOperationSta
 use serde_json::json;
 use std::time::Duration;
 
-fn go(path: &str) {
+pub(crate) fn go(path: &str) {
     if let Some(w) = web_sys::window() {
         let _ = w.location().set_href(path);
     }
@@ -17,7 +17,7 @@ fn selection() -> (String, String) {
         module_catalog::query("source").unwrap_or_default(),
     )
 }
-fn remember(id: &str) {
+pub(crate) fn remember(id: &str) {
     let (module, source) = selection();
     if let Some(w) = web_sys::window() {
         if let Ok(history) = w.history() {
@@ -25,8 +25,9 @@ fn remember(id: &str) {
                 &wasm_bindgen::JsValue::NULL,
                 "",
                 Some(&format!(
-                    "{}&screen=install&operation={id}",
-                    module_catalog::detail_url(&module, &source)
+                    "{}&screen={}&operation={id}",
+                    module_catalog::detail_url(&module, &source),
+                    module_catalog::query("screen").unwrap_or_else(|| "install".into())
                 )),
             );
         }
@@ -37,7 +38,7 @@ async fn read_operation(id: &str) -> Result<Option<ModuleOperation>, ()> {
         .send()
         .await
         .map_err(|_| ())?;
-    if response.status() == 403 {
+    if response.status() == 403 && module_catalog::query("screen").as_deref() == Some("install") {
         let (m, s) = selection();
         go(&format!(
             "{}&screen=request",
@@ -55,7 +56,7 @@ async fn read_operation(id: &str) -> Result<Option<ModuleOperation>, ()> {
     response.json().await.map(Some).map_err(|_| ())
 }
 
-fn poll(
+pub(crate) fn poll(
     id: String,
     operation: RwSignal<Option<ModuleOperation>>,
     error: RwSignal<Option<String>>,

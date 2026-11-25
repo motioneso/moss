@@ -18,6 +18,20 @@ describe("app-map integrity and truthfulness", () => {
     "core.modules.install_review_changed": "This package changed. Review it again.",
     "core.modules.install_status_unavailable": "Status unavailable. Check again."
   };
+  const lifecycleErrorStates = {
+    "core.modules.lifecycle_unavailable": {
+      file: "module_lifecycle.rs",
+      evidence: ["Change failed", "Snapshot unavailable."],
+      remediationRef: "core.modules.lifecycle_result",
+      screenId: "rust-module-restore"
+    },
+    "core.modules.update_failed": {
+      file: "module_update.rs",
+      evidence: ["Update failed", "This update is no longer available."],
+      remediationRef: "core.modules.update_choice_refused",
+      screenId: "rust-sign-in"
+    }
+  };
   const rustRoutes = new Set(
     [
       ...["../../rust-spike/network/src/web.rs", "../../rust-spike/shell/app/src/main.rs"].flatMap(
@@ -74,6 +88,9 @@ describe("app-map integrity and truthfulness", () => {
       narrative: ""
     });
     expect(rustMap.screens.map((entry) => entry.id)).toEqual([
+      "rust-module-update-review",
+      "rust-module-remove",
+      "rust-module-restore",
       "rust-module-install-review",
       "rust-module-install-progress",
       "rust-module-request-route",
@@ -92,7 +109,7 @@ describe("app-map integrity and truthfulness", () => {
       "rust-network-sharing"
     ]);
     for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
-      // Catalog and install screens are query views of the declared shell route.
+      // Catalog, install and lifecycle screens are query views of the declared shell route.
       expect(
         rustRoutes.has((entry.path ?? "").split("?")[0] ?? ""),
         `Rust surface "${entry.id}" has no declared route: ${entry.path}`
@@ -104,10 +121,33 @@ describe("app-map integrity and truthfulness", () => {
       // Verify that state separately below; keep checking every wire error in Rust.
       if (entry.code === "core.modules.catalog_unavailable") continue;
       if (entry.code && entry.code in installErrorStates) continue;
+      if (entry.code && entry.code in lifecycleErrorStates) continue;
       expect(
         rustErrorCodes.has(entry.code ?? ""),
         `Rust error "${entry.code}" is not in Rust`
       ).toBe(true);
+    }
+  });
+
+  it("documents lifecycle UI failure states and their declared remedy screens", () => {
+    for (const [code, state] of Object.entries(lifecycleErrorStates)) {
+      const screen = readFileSync(
+        new URL(`../../rust-spike/shell/ui/src/${state.file}`, import.meta.url),
+        "utf8"
+      );
+      for (const evidence of state.evidence) expect(screen).toContain(evidence);
+      expect(CORE_APP_ERRORS).toContainEqual(
+        expect.objectContaining({ code, runtime: "rust", remediationRef: state.remediationRef })
+      );
+      const destination = RUST_APP_SCREENS.find((entry) => entry.id === state.screenId);
+      expect(destination).toBeDefined();
+      expect(CORE_APP_REMEDIATIONS).toContainEqual(
+        expect.objectContaining({
+          id: state.remediationRef,
+          runtime: "rust",
+          path: destination?.path
+        })
+      );
     }
   });
 
