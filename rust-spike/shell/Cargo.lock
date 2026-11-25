@@ -3752,6 +3752,7 @@ dependencies = [
 name = "moss-shell-ui"
 version = "0.0.0"
 dependencies = [
+ "base64 0.22.1",
  "gloo-net",
  "js-sys",
  "leptos",
@@ -3760,6 +3761,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

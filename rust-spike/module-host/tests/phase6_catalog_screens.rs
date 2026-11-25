@@ -7,6 +7,8 @@ mod fixtures;
 mod install_fixtures;
 #[path = "phase6_lifecycle_screens/fixtures.rs"]
 mod lifecycle_fixtures;
+#[path = "phase6_trust_screens/fixtures.rs"]
+mod trust_fixtures;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -133,6 +135,12 @@ pub fn serve_catalog() {
         .arg(root)
         .arg("--web")
         .arg(&web);
+    if std::env::var_os("TRUST_SCREENS").is_some() {
+        trust_fixtures::key_storage(root);
+        command
+            .env("XDG_CONFIG_HOME", root.join("key-config"))
+            .env("XDG_DATA_HOME", root.join("key-data"));
+    }
     let mut server = Server(
         command
             .stdin(Stdio::null())
@@ -274,6 +282,20 @@ pub fn serve_catalog() {
         200
     );
     let hold = std::path::PathBuf::from(std::env::var("CATALOG_HOLD").expect("browser handshake"));
+    if std::env::var_os("TRUST_SCREENS").is_some() {
+        trust_fixtures::serve(
+            root,
+            &registry,
+            &keys,
+            &other_keys,
+            &hold,
+            &origin,
+            &db,
+            &rt,
+            member,
+        );
+        return;
+    }
     if std::env::var_os("LIFECYCLE_SCREENS").is_some() {
         lifecycle_fixtures::serve(root, &registry, &keys, &hold, &origin, &db, &rt);
         return;

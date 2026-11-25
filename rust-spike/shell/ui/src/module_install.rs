@@ -25,9 +25,12 @@ pub(crate) fn remember(id: &str) {
                 &wasm_bindgen::JsValue::NULL,
                 "",
                 Some(&format!(
-                    "{}&screen={}&operation={id}",
+                    "{}&screen={}&operation={id}{}",
                     module_catalog::detail_url(&module, &source),
-                    module_catalog::query("screen").unwrap_or_else(|| "install".into())
+                    module_catalog::query("screen").unwrap_or_else(|| "install".into()),
+                    module_catalog::query("request")
+                        .map(|r| format!("&request={}", js_sys::encode_uri_component(&r)))
+                        .unwrap_or_default()
                 )),
             );
         }
@@ -157,11 +160,17 @@ pub fn ModuleInstall() -> impl IntoView {
         pending.set(true);
         error.set(None);
         spawn_local(async move {
-            let result = module_catalog::post::<ModuleOperation>(
-                &format!("/api/modules/operations/{}/execute", saved.id),
-                json!({"approve":true}),
-            )
-            .await;
+            let request = module_catalog::query("request");
+            let path = request
+                .as_ref()
+                .map(|id| format!("/api/modules/requests/{id}/approve"))
+                .unwrap_or_else(|| format!("/api/modules/operations/{}/execute", saved.id));
+            let body = if request.is_some() {
+                json!({"approve":true,"operation":saved.id})
+            } else {
+                json!({"approve":true})
+            };
+            let result = module_catalog::post::<ModuleOperation>(&path, body).await;
             if alive.try_get_untracked() != Some(true) {
                 return;
             }
@@ -251,12 +260,6 @@ fn stages(operation: &ModuleOperation) -> Vec<(&'static str, bool)> {
         })
         .collect()
 }
-/// Part 14 owns the request form; this is the plain S11 destination only.
-#[component]
-pub fn InstallRequestRoute() -> impl IntoView {
-    view! {<div class="catalog-page"><header class="catalog-head"><div><p class="jds-eyebrow">"Settings / Modules"</p><h1>"Request to install"</h1></div><a class="jds-btn jds-btn--quiet" href="/settings/modules?view=browse">"Modules"</a></header></div>}
-}
-
 #[component]
 fn OpenInstalled(module: String, name: String) -> impl IntoView {
     let path = RwSignal::new(None::<String>);

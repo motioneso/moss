@@ -222,6 +222,11 @@ pub(crate) async fn prepare_host_schema(migrations_url: &str) -> Result<tokio_po
         db.batch_execute(moss_module_host::local_packages::LIFECYCLE_MIGRATION)
             .await?;
     }
+    let decline_upgrade: bool = db.query_one("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='moss_modules' AND table_name='install_requests' AND column_name='declined_at')", &[]).await?.get(0);
+    if !decline_upgrade {
+        db.batch_execute(crate::module_install_requests::DECLINE_MIGRATION)
+            .await?;
+    }
     // The server opens the host as the migration owner, so it must own what the steps made.
     db.batch_execute(HAND_OVER).await?;
     Ok(db)
