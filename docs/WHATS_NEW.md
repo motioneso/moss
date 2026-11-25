@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Trusted modules and install requests.** Check module sources, add private packages, and ask an administrator to install a module. [PR #4494](https://github.com/motioneso/moss/pull/4494)
 - **Module updates and recovery.** Review new permissions before updating modules, remove them while keeping data, and restore deleted data from a saved snapshot. [PR #4492](https://github.com/motioneso/moss/pull/4492)
 - **Review and follow module installs.** Review a module’s permissions before installing, follow its progress after reloading, and retry when an install fails. [PR #4490](https://github.com/motioneso/moss/pull/4490)
 - **Browse your modules.** See installed modules, choose which ones are on for you, and browse module details and screenshots. [PR #4487](https://github.com/motioneso/moss/pull/4487)
