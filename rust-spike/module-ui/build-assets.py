@@ -26,6 +26,7 @@ def build(out: Path) -> None:
         ROOT / "apps/web/src/styles/components-forms.css",
         ROOT / "apps/web/src/styles/settings.css",
         ROOT / "rust-spike/module-ui/web/base.css",
+        ROOT / "rust-spike/module-ui/web/dialog.css",
         ROOT / "rust-spike/module-ui/web/document.css",
     ])
     css = css.replace('url("/fonts/', 'url("/module-shared/fonts/')

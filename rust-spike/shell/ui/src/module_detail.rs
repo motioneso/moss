@@ -65,6 +65,7 @@ pub fn ModuleDetail(module: ModuleView, can_manage: bool, reload: Callback<()>) 
             <p>{module.description}</p>
             <p class="jds-caption">{format!("{} · {} · {}",module.publisher,module.source_name,module.installed_version.as_deref().unwrap_or(&module.version))}</p>
             <div class="catalog-actions">
+                {(!is_installed).then(||view!{<a class="jds-btn jds-btn--primary" href=format!("{}&screen={}",module_catalog::detail_url(&m.get_value().id,&m.get_value().source),if can_manage{"install"}else{"request"})>{if can_manage{format!("Install {}",name)}else{"Request to install".into()}}</a>})}
                 <Badge>{if is_installed {"Installed"} else {"Available"}}</Badge>
                 {module.update_available.then(|| view!{<Badge tone=BadgeTone::Amber>"Update available"</Badge>})}
                 {module.pinned.then(||view!{<Badge>"Pinned"</Badge>})}

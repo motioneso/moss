@@ -5,7 +5,7 @@ pub mod calendar;
 mod controls;
 mod report;
 pub use controls::{DisclosureToggle, IconButton, Segmented};
-pub use report::{PlanNote, ReportDialog, SectionHead};
+pub use report::{Dialog, PlanNote, ReportDialog, SectionHead};
 #[derive(Clone, Copy, Default)]
 pub enum ButtonVariant {
     #[default]

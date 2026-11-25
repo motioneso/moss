@@ -55,3 +55,13 @@ rust-spike/module-publisher/Cargo.toml`. Its artifact gate is `pnpm test:rust-ph
 - Finance import previews return the ledger revision as `view.revision`.
 - Browser proof on this box runs `herdr-browser` with
   `AGENT_BROWSER_ARGS='--no-sandbox,--force-prefers-reduced-motion'`.
+- Catalog metadata checks read through the signed-in `DataContext`.
+- Bundle bootstrap cipher keys must match the host keyring.
+- Signed registry fixture files need an `NNN_` numeric prefix.
+- On a memory-limited box run cargo with `-j 1` and `--test-threads=1`. An earlyoom SIGTERM
+  shows up as cargo exit 101, not as a kill message.
+- Each real-server fixture needs a fresh gate database. Backtrack installed tests share one, so
+  each test world resets its module jobs and schedules first.
+- The phase6-install-requests gate needs a task-owned `CARGO_HOME`, `RUSTUP_HOME` and
+  `CARGO_TARGET_DIR`. Copy the registry cache into that `CARGO_HOME` for offline runs.
+- Format only the files you changed. A tree-wide format rewrites other lanes' files.

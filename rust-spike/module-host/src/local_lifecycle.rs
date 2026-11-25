@@ -63,6 +63,7 @@ impl Installer {
                 approved,
                 pin_override: None,
             },
+            &|_| Ok(()),
         )
     }
 }

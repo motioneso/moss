@@ -21,6 +21,10 @@ pub struct ModulePermission {
 #[serde(rename_all = "camelCase")]
 pub struct ModuleReview {
     pub source: String,
+    #[serde(default)]
+    pub source_name: String,
+    #[serde(default)]
+    pub publisher: String,
     pub module: String,
     pub name: String,
     pub description: String,
@@ -39,6 +43,10 @@ pub enum ModuleOperationStage {
     Reviewed,
     Queued,
     Checking,
+    Downloading,
+    Verifying,
+    SettingUpData,
+    Activating,
     Installing,
     Succeeded,
     Failed,
@@ -63,6 +71,8 @@ pub struct ModuleOperation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<ModuleLifecycle>,
     pub stage: ModuleOperationStage,
+    #[serde(default)]
+    pub stages: Vec<ModuleOperationStage>,
     pub result: Option<ModuleOperationResult>,
 }
 

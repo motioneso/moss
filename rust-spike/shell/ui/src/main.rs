@@ -9,6 +9,7 @@ mod icons;
 mod module_catalog;
 mod module_controls;
 mod module_detail;
+mod module_install;
 mod modules_page;
 mod scratchpad;
 mod today;

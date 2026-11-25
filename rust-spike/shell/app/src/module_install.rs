@@ -293,10 +293,7 @@ pub fn run(raw: Vec<String>) -> Result<()> {
     }
     // Never persist database errors or child environment values in browser-readable results.
     if !record.view.stage.terminal() {
-        let failure = match record.view.stage {
-            ModuleOperationStage::Checking => "The signed registry or reviewed package could not be checked; review this module again",
-            _ => "Module installation failed; check the installed version and review this module again",
-        };
+        let failure = public_install_failure(result.as_ref().err(), record.view.stage);
         record.finish(
             &args.instance,
             result
@@ -307,6 +304,18 @@ pub fn run(raw: Vec<String>) -> Result<()> {
     }
     println!("{}", serde_json::to_string(&record.view)?);
     Ok(())
+}
+
+fn public_install_failure(
+    error: Option<&anyhow::Error>,
+    stage: moss_shell_contract::module_management::ModuleOperationStage,
+) -> &'static str {
+    use moss_shell_contract::module_management::ModuleOperationStage;
+    error.and_then(|error| error.downcast_ref::<moss_module_host::install_progress::InstallFailure>())
+        .map(|failure| failure.message()).unwrap_or(match stage {
+            ModuleOperationStage::Checking => "The signed registry or reviewed package could not be checked; review this module again",
+            _ => "Module installation failed; check the installed version and review this module again",
+        })
 }
 
 fn run_selected(
@@ -530,6 +539,8 @@ fn run_selected(
                     "migrations": approval.new_migrations.len(),
                     "review": {
                         "source": args.registry_id,
+                        "sourceName": catalog.trust.identity.name,
+                        "publisher": package.manifest.publisher,
                         "module": package.manifest.id,
                         "name": package.manifest.name,
                         "description": package.manifest.description,
@@ -564,13 +575,26 @@ fn run_selected(
                 digest: reviewed.digest.clone(),
                 previous: reviewed.previous.clone(),
             };
-            record.stage(
-                &args.instance,
-                moss_shell_contract::module_management::ModuleOperationStage::Installing,
+            let record = std::cell::RefCell::new(record);
+            application.installer.install_reviewed_progress(
+                &access,
+                &catalog,
+                &artifact,
+                &consent,
+                &|stage| {
+                    use moss_module_host::install_progress::InstallStage;
+                    use moss_shell_contract::module_management::ModuleOperationStage as Stage;
+                    record.borrow_mut().stage(
+                        &args.instance,
+                        match stage {
+                            InstallStage::Downloading => Stage::Downloading,
+                            InstallStage::Verifying => Stage::Verifying,
+                            InstallStage::SettingUpData => Stage::SettingUpData,
+                            InstallStage::Activating => Stage::Activating,
+                        },
+                    )
+                },
             )?;
-            application
-                .installer
-                .install_reviewed(&access, &catalog, &artifact, &consent)?;
             continue;
         }
         if let Some(reviewed) = &args.version {
@@ -595,6 +619,37 @@ mod tests {
 
     fn words(text: &str) -> Vec<String> {
         text.split(' ').map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn public_install_failures_exclude_private_error_causes() {
+        use moss_module_host::install_progress::InstallFailure;
+        use moss_shell_contract::module_management::ModuleOperationStage as Stage;
+        for (category, expected) in [
+            (
+                InstallFailure::Download,
+                "The package could not be downloaded.",
+            ),
+            (
+                InstallFailure::Verification,
+                "The package signature or contents could not be verified.",
+            ),
+            (InstallFailure::Sql, "The module data could not be set up."),
+        ] {
+            let error = anyhow::anyhow!(
+                "private content; /private/file; SELECT password; postgres://secret"
+            )
+            .context(category);
+            assert_eq!(
+                public_install_failure(Some(&error), Stage::SettingUpData),
+                expected
+            );
+        }
+        let unknown = anyhow::anyhow!("postgres://secret /private/file SELECT password");
+        assert_eq!(
+            public_install_failure(Some(&unknown), Stage::Activating),
+            "Module installation failed; check the installed version and review this module again"
+        );
     }
 
     #[test]
