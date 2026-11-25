@@ -35,7 +35,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-update-service",
     runtime: "rust",
     description:
-      "An instance administrator can review an installed registry module through POST /api/modules/update-review, then approve its saved operation through POST /api/modules/{module}/update. Even urgent offers wait for capability and migration approval. Execution refuses changed package bytes or a changed installed digest and leaves the previous module usable when activation fails. POST /api/modules/{module}/skip records the exact offered digest; later digests remain eligible. POST /api/modules/{module}/pin pins the installed version or lifts its pin with a null version. Pins prevent updates until lifted. Both choices survive restart and appear as pin and skippedDigest in the catalog alongside the urgent marker. The session supplies the actor; these configuration powers grant no access to another account's private data. These APIs add no screens."
+      "An instance administrator can review an installed registry module through POST /api/modules/update-review, then approve its saved operation through POST /api/modules/{module}/update. Even urgent offers wait for capability and migration approval. Execution refuses changed package bytes or a changed installed digest and leaves the previous module usable when activation fails. POST /api/modules/{module}/skip records the exact offered digest; later digests remain eligible. POST /api/modules/{module}/pin pins the installed version or lifts its pin with a null version. Pins prevent updates until lifted. Both choices survive restart and appear as pin and skippedDigest in the catalog alongside the urgent marker. The session supplies the actor; these configuration powers grant no access to another account's private data. The update review screen shows only added permissions, urgent and data-update markers, changelog and versions. Update explicitly approves the saved review; Skip saves the offered digest. A SQL update failure reports that the previous version was restored only after the host completes snapshot recovery."
   },
   {
     moduleId: "core",
@@ -49,7 +49,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-lifecycle-service",
     runtime: "rust",
     description:
-      "The authenticated Rust management API accepts remove and typed remove-and-delete-data at POST /api/modules/remove, lists snapshot metadata at GET /api/modules/snapshots and restores at POST /api/modules/restore. Remove keeps every account's rows, key-value data, files and credentials for reinstallation. Deleting data first takes a snapshot of every account's module data, kept for 30 days; a wrong typed module name refuses before changing that data. Restore requires the module name and acknowledgement that newer writes will be lost. Expired snapshots refuse with a plain reason, including after restart. GET /api/modules/operations/{id} returns the signed-in administrator's saved result and recovers interrupted changes through the migration service. POST /api/modules/operations/{id}/cancel cancels queued lifecycle work; an operation already changing data refuses cancellation and completes or recovers safely. Administrator power manages configuration and never grants access to other accounts' private rows or another builder's private local module. These endpoints support later screens; no lifecycle screens are shipped here."
+      "The authenticated Rust management API accepts remove and typed remove-and-delete-data at POST /api/modules/remove, lists snapshot metadata at GET /api/modules/snapshots and restores at POST /api/modules/restore. Remove keeps every account's rows, key-value data, files and credentials for reinstallation. Deleting data first takes a snapshot of every account's module data, kept for 30 days; a wrong typed module name refuses before changing that data. Restore requires the module name and acknowledgement that newer writes will be lost. Expired snapshots refuse with a plain reason, including after restart. GET /api/modules/operations/{id} returns the signed-in administrator's saved result and recovers interrupted changes through the migration service. POST /api/modules/operations/{id}/cancel cancels queued lifecycle work; an operation already changing data refuses cancellation and completes or recovers safely. Administrator power manages configuration and never grants access to other accounts' private rows or another builder's private local module. The Remove screen offers removal with data kept or typed-name deletion with an all-account, 30-day warning. The Restore screen lists snapshot dates, previous versions and availability; Restore snapshot confirms replacement of current module data for every account. Expired or empty snapshots cannot be restored. Both screens show the saved host result and read the same operation after reload."
   },
 
   {
@@ -123,7 +123,7 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     runtime: "rust",
     description:
       "Read the saved operation result before retrying removal or restore. Type the exact module name for deletion, or confirm the name and loss of newer writes for restore. Choose a current snapshot when one expired or is unavailable. Remove dependent modules first when removal is refused. A running change cannot be cancelled: let it finish and read its result; a restart recovers interrupted data changes before reporting the outcome.",
-    path: "/sign-in",
+    path: "/settings/modules?module={module}&source={source}&screen=restore",
     scope: "admin"
   },
 
@@ -144,6 +144,33 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
 ];
 
 export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
+  {
+    id: "rust-module-update-review",
+    runtime: "rust",
+    label: "Update review",
+    description:
+      "Administrators open Review update from installed module details. The shared dialog shows signed source, old and new version, changelog, only added permissions, and urgent and new migration markers. Update approves the saved digest-bound operation. Skip persists the offered digest. Pin and Unpin remain on details. Reload reads the same review or result. Failed data setup reports completed snapshot restoration; Retry gets a fresh review.",
+    path: "/settings/modules?module={module}&source={source}&screen=update",
+    scope: "admin"
+  },
+  {
+    id: "rust-module-remove",
+    runtime: "rust",
+    label: "Remove and delete module data",
+    description:
+      "Administrators open Remove from installed module details. Remove keeps data for reinstall. Remove and delete data requires the exact module name and warns about all accounts and 30-day snapshot retention. A mismatch disables deletion and is independently refused by the host. The saved result survives reload; refused changes offer Retry.",
+    path: "/settings/modules?module={module}&source={source}&screen=remove",
+    scope: "admin"
+  },
+  {
+    id: "rust-module-restore",
+    runtime: "rust",
+    label: "Restore module snapshot",
+    description:
+      "Administrators open Restore from module details, including after removal or deletion. A selector shows snapshot date, reason and version. The dialog shows expiry, the module restored for every account, and replacement of current data. Expired snapshots are unavailable and disable Restore snapshot. The saved host result survives reload; failed reads and changes offer Retry.",
+    path: "/settings/modules?module={module}&source={source}&screen=restore",
+    scope: "admin"
+  },
   {
     id: "rust-module-install-review",
     runtime: "rust",
@@ -194,7 +221,7 @@ export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Module details",
     description:
-      "A named module opens source, version, capabilities, changelog, up to four signed digest-checked screenshots with paging and recent configuration activity. The header cog is the only module settings entry and opens the installed module’s declared settings screen. Administrators can pin or unpin the installed version. For a module that is not installed, administrators open install review and members open Request to install.",
+      "A named module opens source, version, capabilities, changelog, up to four signed digest-checked screenshots with paging and recent configuration activity. The header cog is the only module settings entry and opens the installed module’s declared settings screen. Administrators can review updates, remove, delete or restore data, and pin or unpin the installed version. For a module that is not installed, administrators open install review and members open Request to install.",
     path: "/settings/modules?module={module}&source={source}",
     scope: "user"
   }
@@ -231,6 +258,22 @@ export const RUST_MODULE_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 ];
 
 export const RUST_MODULE_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  {
+    code: "core.modules.lifecycle_unavailable",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.lifecycle_result",
+    description:
+      "Module or snapshot reads failed, deletion confirmation mismatched, a snapshot expired, or a saved lifecycle change was refused. Retry reads saved status before offering a fresh change; expired snapshots stay unavailable."
+  },
+  {
+    code: "core.modules.update_failed",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.update_choice_refused",
+    description:
+      "An update is unavailable, its review changed, or execution failed. The saved result distinguishes completed SQL snapshot recovery from other failures; Retry requests a fresh review before another approval."
+  },
   {
     code: "core.modules.install_failed",
     runtime: "rust",

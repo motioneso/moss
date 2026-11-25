@@ -10,6 +10,8 @@ mod module_catalog;
 mod module_controls;
 mod module_detail;
 mod module_install;
+mod module_lifecycle;
+mod module_update;
 mod modules_page;
 mod scratchpad;
 mod today;

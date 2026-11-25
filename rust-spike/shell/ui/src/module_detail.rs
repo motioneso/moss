@@ -66,10 +66,13 @@ pub fn ModuleDetail(module: ModuleView, can_manage: bool, reload: Callback<()>) 
             <p class="jds-caption">{format!("{} · {} · {}",module.publisher,module.source_name,module.installed_version.as_deref().unwrap_or(&module.version))}</p>
             <div class="catalog-actions">
                 {(!is_installed).then(||view!{<a class="jds-btn jds-btn--primary" href=format!("{}&screen={}",module_catalog::detail_url(&m.get_value().id,&m.get_value().source),if can_manage{"install"}else{"request"})>{if can_manage{format!("Install {}",name)}else{"Request to install".into()}}</a>})}
+                {can_manage.then(||view!{<a class="jds-btn jds-btn--secondary" href=format!("{}&screen=restore",module_catalog::detail_url(&m.get_value().id,&m.get_value().source))>"Restore"</a>})}
                 <Badge>{if is_installed {"Installed"} else {"Available"}}</Badge>
                 {module.update_available.then(|| view!{<Badge tone=BadgeTone::Amber>"Update available"</Badge>})}
                 {module.pinned.then(||view!{<Badge>"Pinned"</Badge>})}
                 {(can_manage && is_installed).then(||view! {
+                    {module.update_available.then(||view!{<a class="jds-btn jds-btn--primary" href=format!("{}&screen=update",module_catalog::detail_url(&m.get_value().id,&m.get_value().source))>"Review update"</a>})}
+                    <a class="jds-btn jds-btn--secondary" href=format!("{}&screen=remove",module_catalog::detail_url(&m.get_value().id,&m.get_value().source))>"Remove"</a>
                     <Button variant=ButtonVariant::Quiet disabled=pending on_click=Callback::new(pin)>{pin_label}</Button>
                 })}
             </div>
