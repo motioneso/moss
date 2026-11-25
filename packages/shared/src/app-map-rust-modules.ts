@@ -21,14 +21,14 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-management-service",
     runtime: "rust",
     description:
-      "The module management service lists signed sources separately and lets an instance administrator review an exact package before installation. The saved review includes its source, version, digest, capabilities and migrations. Installing checks administrator permission and the reviewed package again. A saved operation reports checking, installing, success or failure and survives a server restart; repeating a completed operation returns its saved result. Source changes or changed package bytes require a fresh review. The installed, browse and detail screens use these saved service records."
+      "The module management service lists signed sources separately and lets an instance administrator review an exact package before installation. The saved review includes its source, version, digest, capabilities and migrations. Installing checks administrator permission and the reviewed package again. A saved operation reports queued, checking, downloading, verifying, setting up data, activating, success or failure and survives a server restart; repeating a completed operation returns its saved result. Source changes or changed package bytes require a fresh review. The install review and result screens use the saved journal. A reload reads the same operation. Fixed failure messages distinguish download, package verification and data setup without exposing internal error details. Retry obtains a fresh review and requires explicit approval again."
   },
   {
     moduleId: "core",
     id: "rust-module-install-requests",
     runtime: "rust",
     description:
-      "Signed-in accounts can submit a module and configured source to POST /api/modules/requests and read their own requests through GET /api/modules/requests or GET /api/modules/requests/{id}. The session supplies the account; payload account fields are refused. Repeating the same account, source and module returns the saved request, including after restart. Unavailable, expired, blocked or untrusted offers return a plain reason. Administrators can read request metadata and approve through POST /api/modules/requests/{id}/approve with their own saved install review. Approval reuses the existing digest-bound execution and operation result, and refuses mismatched modules or sources. This configuration authority never grants access to another account's private module data. Automatic admin notices are unsupported: the existing notification service targets only the triggering account. Responses explicitly report that limitation, and no substitute notification channel is added. These APIs support later screens; the request screen is not shipped here."
+      "Signed-in accounts can submit a module and configured source to POST /api/modules/requests and read their own requests through GET /api/modules/requests or GET /api/modules/requests/{id}. The session supplies the account; payload account fields are refused. Repeating the same account, source and module returns the saved request, including after restart. Unavailable, expired, blocked or untrusted offers return a plain reason. Administrators can read request metadata and approve through POST /api/modules/requests/{id}/approve with their own saved install review. Approval reuses the existing digest-bound execution and operation result, and refuses mismatched modules or sources. This configuration authority never grants access to another account's private module data. Automatic admin notices are unsupported: the existing notification service targets only the triggering account. Responses explicitly report that limitation, and no substitute notification channel is added. Members selecting Install are routed to the plain Request to install destination; its request form is deferred to part 14."
   },
   {
     moduleId: "core",
@@ -70,6 +70,14 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 
 // Management failures are HTTP statuses and saved result messages, not emitted error codes.
 export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.install_retry",
+    runtime: "rust",
+    scope: "admin",
+    description:
+      "Read the saved reason. Restore registry connectivity for a download failure or ask the administrator to repair module data setup, then Retry to review and approve the current package. Changed packages require a new review. For unavailable status, Retry reads the same journal instead of starting new work.",
+    path: "/settings/modules?module={module}&source={source}&screen=install&operation={operation}"
+  },
   {
     id: "core.modules.catalog_retry",
     runtime: "rust",
@@ -137,6 +145,33 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
 
 export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
+    id: "rust-module-install-review",
+    runtime: "rust",
+    label: "Install review",
+    description:
+      "An administrator opens Install from module details. A shared modal shows the saved package’s publisher, source, version and exact permission headlines and details before explicit approval. Cancel or Escape returns to details. Package changes require a fresh review and approval.",
+    path: "/settings/modules?module={module}&source={source}&screen=install",
+    scope: "admin"
+  },
+  {
+    id: "rust-module-install-progress",
+    runtime: "rust",
+    label: "Install progress and result",
+    description:
+      "The operation URL reads the administrator’s persisted journal, including after reload. Progress advances only when the host reaches real installer boundaries. The result offers Open for modules declaring navigation, otherwise Modules. Download, verification and data setup failures show fixed safe reasons and Retry obtains a fresh review. Status failures offer Retry without starting another install.",
+    path: "/settings/modules?module={module}&source={source}&screen=install&operation={operation}",
+    scope: "admin"
+  },
+  {
+    id: "rust-module-request-route",
+    runtime: "rust",
+    label: "Request to install",
+    description:
+      "The member’s detail action and direct install URL lead to the plain S11 destination with a Modules return link. The request form and status screen are deferred to part 14.",
+    path: "/settings/modules?module={module}&source={source}&screen=request",
+    scope: "user"
+  },
+  {
     id: "rust-modules-installed",
     runtime: "rust",
     label: "Modules",
@@ -159,7 +194,7 @@ export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Module details",
     description:
-      "A named module opens source, version, capabilities, changelog, up to four signed digest-checked screenshots with paging and recent configuration activity. The header cog is the only module settings entry and opens the installed module’s declared settings screen. Administrators can pin or unpin the installed version.",
+      "A named module opens source, version, capabilities, changelog, up to four signed digest-checked screenshots with paging and recent configuration activity. The header cog is the only module settings entry and opens the installed module’s declared settings screen. Administrators can pin or unpin the installed version. For a module that is not installed, administrators open install review and members open Request to install.",
     path: "/settings/modules?module={module}&source={source}",
     scope: "user"
   }
@@ -196,6 +231,30 @@ export const RUST_MODULE_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 ];
 
 export const RUST_MODULE_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  {
+    code: "core.modules.install_failed",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.install_retry",
+    description:
+      "The package could not be downloaded, verified or its data set up. The saved operation returns fixed safe messages; private error causes are not rendered."
+  },
+  {
+    code: "core.modules.install_review_changed",
+    runtime: "rust",
+    class: "validation",
+    remediationRef: "core.modules.install_retry",
+    description:
+      "This package changed. Review it again. Retry creates a new digest-bound review and does not reuse the previous approval."
+  },
+  {
+    code: "core.modules.install_status_unavailable",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.install_retry",
+    description:
+      "Status unavailable. Check again. Retry reads the saved operation, and cannot create a duplicate installation."
+  },
   {
     code: "core.modules.catalog_unavailable",
     runtime: "rust",

@@ -181,6 +181,7 @@ pub(crate) async fn review_selected(
                 review: Some(review),
                 lifecycle: None,
                 stage: ModuleOperationStage::Reviewed,
+                stages: vec![ModuleOperationStage::Reviewed],
                 result: None,
             },
         };

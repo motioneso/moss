@@ -32,3 +32,22 @@ pub fn SectionHead(#[prop(into)] title: String) -> impl IntoView {
 pub fn PlanNote(children: Children) -> impl IntoView {
     view! {<div class="jds-note jds-note--plan tl-note">{children()}</div>}
 }
+
+/// Native modal lifecycle with the shared Park Press dialog surface.
+#[component]
+pub fn Dialog(
+    #[prop(into)] title: String,
+    on_close: Callback<()>,
+    children: Children,
+) -> impl IntoView {
+    let dialog = NodeRef::<leptos::html::Dialog>::new();
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        if let Some(element) = dialog.get() {
+            let _ = element.show_modal();
+            let _ = element.focus();
+            on_cleanup(move || element.close());
+        }
+    });
+    view! {<dialog node_ref=dialog class="jds-dialog module-native-dialog" tabindex="-1" aria-label=title on:close=move |_|on_close.run(())>{children()}</dialog>}
+}

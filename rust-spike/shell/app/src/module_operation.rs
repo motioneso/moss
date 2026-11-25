@@ -54,6 +54,9 @@ impl Record {
     }
     pub fn stage(&mut self, instance: &Path, stage: ModuleOperationStage) -> Result<()> {
         self.view.stage = stage;
+        if self.view.stages.last() != Some(&stage) {
+            self.view.stages.push(stage);
+        }
         self.save(instance)
     }
     pub fn finish(
@@ -66,6 +69,7 @@ impl Record {
         } else {
             ModuleOperationStage::Failed
         };
+        self.view.stages.push(self.view.stage);
         self.view.result = Some(ModuleOperationResult {
             ok: result.is_ok(),
             message: result.unwrap_or_else(|message| message).into(),

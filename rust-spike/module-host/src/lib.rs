@@ -1,6 +1,7 @@
 //! Downloaded code enters through verified packages and the component linker only.
 pub mod archive;
 pub mod bundle;
+pub mod install_progress;
 pub mod manifest;
 pub mod registry;
 pub mod registry_review;

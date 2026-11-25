@@ -1,0 +1,15 @@
+/* Native modal geometry; its surface and typography use the shared dialog classes. */
+.module-native-dialog {
+  margin: auto;
+  padding: 0;
+  max-width: min(46rem, calc(100vw - var(--space-7)));
+  max-height: calc(100dvh - var(--space-7));
+  overflow: auto;
+}
+.module-native-dialog::backdrop {
+  background: var(--scrim);
+}
+
+body:has(.module-native-dialog[open]) {
+  overflow: hidden;
+}

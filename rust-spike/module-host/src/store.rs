@@ -2,6 +2,7 @@
 //! fence across lifecycle changes; callers use read fences across complete invocations.
 use crate::{
     archive::Package,
+    install_progress::{InstallFailure, InstallStage, Progress},
     manifest::{Manifest, Permission},
     registry::{Artifact, Catalog, ModuleList, ModulePin, SeenRegistry},
     runtime::{Host, Ports},
@@ -264,7 +265,7 @@ impl Installer {
         artifact: &Artifact,
         approved: bool,
     ) -> Result<()> {
-        self.install_selected(access, catalog, artifact, approved, None, None)
+        self.install_selected(access, catalog, artifact, approved, None, None, &|_| Ok(()))
     }
     /// Execute one reviewed package without changing its pin. A replay after crash recovery
     /// reports an already active digest instead of activating it twice.
@@ -274,6 +275,16 @@ impl Installer {
         catalog: &Catalog,
         artifact: &Artifact,
         consent: &Consent,
+    ) -> Result<()> {
+        self.install_reviewed_progress(access, catalog, artifact, consent, &|_| Ok(()))
+    }
+    pub fn install_reviewed_progress(
+        &self,
+        access: &AccessContext,
+        catalog: &Catalog,
+        artifact: &Artifact,
+        consent: &Consent,
+        progress: Progress<'_>,
     ) -> Result<()> {
         self.admin(access)?;
         ensure!(
@@ -296,7 +307,15 @@ impl Installer {
                 return Ok(());
             }
         }
-        self.install_selected(access, catalog, artifact, true, None, Some(consent))
+        self.install_selected(
+            access,
+            catalog,
+            artifact,
+            true,
+            None,
+            Some(consent),
+            progress,
+        )
     }
     fn install_selected(
         &self,
@@ -306,6 +325,7 @@ impl Installer {
         approved: bool,
         pin_override: Option<Version>,
         consent: Option<&Consent>,
+        progress: Progress<'_>,
     ) -> Result<()> {
         self.admin(access)?;
         self.check_selection(
@@ -315,10 +335,15 @@ impl Installer {
             pin_override.as_ref(),
             consent,
         )?;
-        let bytes = catalog.source.fetch(
-            &format!("packages/{}.mosspkg", artifact.digest),
-            artifact.size,
-        )?;
+        progress(InstallStage::Downloading)?;
+        let bytes = catalog
+            .source
+            .fetch(
+                &format!("packages/{}.mosspkg", artifact.digest),
+                artifact.size,
+            )
+            .context(InstallFailure::Download)?;
+        progress(InstallStage::Verifying)?;
         let package = catalog.read_download(artifact, &bytes, &self.moss)?;
         let _fence = self
             .fence
@@ -342,6 +367,7 @@ impl Installer {
                 approved,
                 pin_override,
             },
+            progress,
         )
     }
     /// Recheck selection after downloading: pins, dependencies, consent and registry trust
@@ -445,6 +471,7 @@ impl Installer {
                 approved,
                 pin_override: None,
             },
+            &|_| Ok(()),
         )
     }
     pub(crate) fn stage(&self, package: &Package, bytes: &[u8]) -> Result<()> {
@@ -761,6 +788,7 @@ impl Installer {
                     true,
                     item.version.clone(),
                     Some(&expected),
+                    &|_| Ok(()),
                 )?;
             }
             if let Some(version) = &item.version {

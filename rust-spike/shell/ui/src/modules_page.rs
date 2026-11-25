@@ -13,6 +13,12 @@ use moss_shell_contract::catalog_view::{CatalogView, ModuleView};
 
 #[component]
 pub fn ModulesPage() -> impl IntoView {
+    if module_catalog::query("screen").as_deref() == Some("install") {
+        return view! {<crate::module_install::ModuleInstall/>}.into_any();
+    }
+    if module_catalog::query("screen").as_deref() == Some("request") {
+        return view! {<crate::module_install::InstallRequestRoute/>}.into_any();
+    }
     let catalog = RwSignal::new(None::<Result<CatalogView, String>>);
     let reload = Callback::new(move |()| {
         catalog.set(None);
@@ -101,7 +107,7 @@ pub fn ModulesPage() -> impl IntoView {
                 }
             }}
         </div>
-    }
+    }.into_any()
 }
 #[component]
 fn CatalogRow(module: ModuleView, installed: bool, reload: Callback<()>) -> impl IntoView {

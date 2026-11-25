@@ -1,7 +1,10 @@
 //! Real HTTPS server and signed registry fixtures for the Phase 6 management boundary.
+#[path = "common/mod.rs"]
 mod common;
 #[path = "phase6_catalog_screens/fixtures.rs"]
 mod fixtures;
+#[path = "phase6_install_screens/fixtures.rs"]
+mod install_fixtures;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -36,6 +39,10 @@ fn private(path: &Path, value: &Value) {
 #[test]
 #[ignore = "Only through verify-gate and the module bootstrap gate"]
 fn phase6_catalog_screens() {
+    serve_catalog();
+}
+
+pub fn serve_catalog() {
     assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
     let scratch = tempfile::tempdir().unwrap();
     let root = scratch.path();
@@ -265,6 +272,10 @@ fn phase6_catalog_screens() {
         200
     );
     let hold = std::path::PathBuf::from(std::env::var("CATALOG_HOLD").expect("browser handshake"));
+    if std::env::var_os("INSTALL_SCREENS").is_some() {
+        install_fixtures::serve(root, &registry, &keys, &hold, &origin, &db, &rt);
+        return;
+    }
     fs::create_dir_all(&hold).unwrap();
     fs::write(
         hold.join("ready.json"),

@@ -25,6 +25,7 @@ ENTRIES = [
         "kit-evening-planning",
     ]),
 ]
+ENTRIES.append(ROOT / "rust-spike/module-ui/web/dialog.css")
 ALIASES = {"@moss/ui/styles.css": ROOT / "packages/ui/src/styles.css"}
 IMPORT = re.compile(r'@import\s+"([^"]+)";')
 
