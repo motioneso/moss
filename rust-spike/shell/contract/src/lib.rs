@@ -250,3 +250,5 @@ pub mod module_management;
 pub mod install_requests;
 
 pub mod catalog_view;
+
+pub mod module_trust;

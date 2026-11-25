@@ -11,6 +11,13 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 })[] = [
   {
     moduleId: "core",
+    id: "rust-module-trust-screens",
+    runtime: "rust",
+    description:
+      "Registry settings show signed health and require an explicit Trust and add confirmation of the staged root fingerprint. Address or folder imports use the existing registry API; signed registry JSON envelopes import files and packages. POST /api/modules/local/review signs and validates the built package through the existing backend and returns exact digest, public fingerprint and permissions. POST /api/modules/local/install accepts only those signed bytes and explicit approval, using the session owner and existing builder-only install_local backend. Package manifests must declare a local.<signed-in account>.* ID, routes and owner-only capabilities. Another account, including an admin, cannot review or install that package. GET /api/modules/trust/{id} returns only an installed package visible to the session owner, with local provenance or saved block/warn details. Local signing secrets are not returned. Local packages stay out of portable lists and other accounts' screens."
+  },
+  {
+    moduleId: "core",
     id: "rust-module-catalog-view",
     runtime: "rust",
     description:
@@ -28,7 +35,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-install-requests",
     runtime: "rust",
     description:
-      "Signed-in accounts can submit a module and configured source to POST /api/modules/requests and read their own requests through GET /api/modules/requests or GET /api/modules/requests/{id}. The session supplies the account; payload account fields are refused. Repeating the same account, source and module returns the saved request, including after restart. Unavailable, expired, blocked or untrusted offers return a plain reason. Administrators can read request metadata and approve through POST /api/modules/requests/{id}/approve with their own saved install review. Approval reuses the existing digest-bound execution and operation result, and refuses mismatched modules or sources. This configuration authority never grants access to another account's private module data. Automatic admin notices are unsupported: the existing notification service targets only the triggering account. Responses explicitly report that limitation, and no substitute notification channel is added. Members selecting Install are routed to the plain Request to install destination; its request form is deferred to part 14."
+      "Signed-in accounts can submit a module and configured source to POST /api/modules/requests and read their own requests through GET /api/modules/requests or GET /api/modules/requests/{id}. The session supplies the account; payload account fields are refused. Repeating the same account, source and module returns the saved request, including after restart. Unavailable, expired, blocked or untrusted offers return a plain reason. Administrators can read request metadata and approve through POST /api/modules/requests/{id}/approve with their own saved install review. Approval reuses the existing digest-bound execution and operation result, and refuses mismatched modules or sources. This configuration authority never grants access to another account's private module data. Automatic admin notices are unsupported: the existing notification service targets only the triggering account. Responses explicitly report that limitation, and no substitute notification channel is added. Members selecting Install open Ask an admin, with saved status and Check status. The Installed screen displays pending requests clearly to administrators. Review opens exact package approval. POST /api/modules/requests/{id}/decline is administrator-only and records declinedBy and declinedAt; members see Declined. Approval refuses declined requests; decline refuses requests with an install operation."
   },
   {
     moduleId: "core",
@@ -57,7 +64,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-runtime-revocation",
     runtime: "rust",
     description:
-      "The Rust module host remembers registry warnings and blocks with their source, target and reason. A block stops the affected package for every account, including routes, chat tools, queued work and module frames; a warning keeps it running. Cached blocks apply before the host serves after an offline restart. Omitting a revocation or changing a block to a warning cannot lift it. A registry root may lift its revocation, but cannot turn a module back on after an administrator switched it off. The host keeps a policy activity journal containing metadata only. These are host service behaviors for future module screens."
+      "The Rust module host remembers registry warnings and blocks with their source, target and reason. A block stops the affected package for every account, including routes, chat tools, queued work and module frames; a warning keeps it running. Cached blocks apply before the host serves after an offline restart. Omitting a revocation or changing a block to a warning cannot lift it. A registry root may lift its revocation, but cannot turn a module back on after an administrator switched it off. The host keeps a policy activity journal containing metadata only. Registry notice details show the saved reason, source, version, data kept and block or still-running status."
   },
   {
     moduleId: "core",
@@ -70,6 +77,38 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 
 // Management failures are HTTP statuses and saved result messages, not emitted error codes.
 export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.registry_retry",
+    runtime: "rust",
+    scope: "admin",
+    description:
+      "Retry the registry read. For refused imports, check signed files, host first-party trust and root public key. Check the displayed fingerprint before Trust and add. An expired registry needs a fresh signed index; installed packages and cached blocks remain in effect.",
+    path: "/settings/modules/registries"
+  },
+  {
+    id: "core.modules.local_retry",
+    runtime: "rust",
+    scope: "user",
+    description:
+      "Use the builder's signed-in account and a package with its declared local account prefix. Check the package and unlock host key storage, then sign and review again. Another account, including an administrator, cannot access this package.",
+    path: "/settings/modules/local"
+  },
+  {
+    id: "core.modules.trust_retry",
+    runtime: "rust",
+    scope: "user",
+    description:
+      "Retry saved trust details as the package owner. A saved block remains effective offline; an administrator can check for a trusted replacement in module details. A warning keeps the module running. Missing private packages stay unavailable to other accounts.",
+    path: "/settings/modules?module={module}&source={source}&screen=trust"
+  },
+  {
+    id: "core.modules.request_retry",
+    runtime: "rust",
+    scope: "user",
+    description:
+      "Check status before retrying a request or decline. Only administrators can decline pending requests. Review and approve the exact module and source to install; a declined request cannot be approved.",
+    path: "/settings/modules?module={module}&source={source}&screen=request"
+  },
   {
     id: "core.modules.install_retry",
     runtime: "rust",
@@ -145,6 +184,33 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
 
 export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
+    id: "rust-module-registries",
+    runtime: "rust",
+    label: "Registries",
+    description:
+      "Administrators open the Registries tab to see signed health, check an address or folder and explicitly confirm its root fingerprint before trust is saved. Signed registry files can be imported for review; unavailable or expired sources show their health.",
+    path: "/settings/modules/registries",
+    scope: "admin"
+  },
+  {
+    id: "rust-module-local-package",
+    runtime: "rust",
+    label: "Local package",
+    description:
+      "The signed-in builder selects a built package, signs and reviews its digest, install fingerprint and permissions, then explicitly installs through the builder-only backend. Other accounts, including administrators, are refused.",
+    path: "/settings/modules/local",
+    scope: "user"
+  },
+  {
+    id: "rust-module-trust-details",
+    runtime: "rust",
+    label: "Registry notice and local provenance",
+    description:
+      "Module details open saved blocked or warning reasons and sources, version, kept data and next step. Locally installed packages show Private to you, Signed on this server, Not registry-reviewed, digest and install key fingerprint, only to their builder.",
+    path: "/settings/modules?module={module}&source={source}&screen=trust",
+    scope: "user"
+  },
+  {
     id: "rust-module-update-review",
     runtime: "rust",
     label: "Update review",
@@ -194,7 +260,7 @@ export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Request to install",
     description:
-      "The member’s detail action and direct install URL lead to the plain S11 destination with a Modules return link. The request form and status screen are deferred to part 14.",
+      "The member’s detail action and direct install URL open Ask an admin. Saved requests show Waiting for an admin, Declined, Installing, Install failed or Approved and installed. Check status reads the host. The Installed screen shows the administrator pending count, Review and Decline actions; review uses the existing digest-bound install dialog.",
     path: "/settings/modules?module={module}&source={source}&screen=request",
     scope: "user"
   },
@@ -258,6 +324,38 @@ export const RUST_MODULE_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 ];
 
 export const RUST_MODULE_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  {
+    code: "core.modules.registry_unavailable",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.registry_retry",
+    description:
+      "The registry read, signature validation, fingerprint confirmation or import was refused. The screen reports the error and keeps trust pending until confirmed."
+  },
+  {
+    code: "core.modules.local_refused",
+    runtime: "rust",
+    class: "permission",
+    remediationRef: "core.modules.local_retry",
+    description:
+      "The local package review or install was refused for this session, package or host key storage. A new review is required; admin status never bypasses ownership."
+  },
+  {
+    code: "core.modules.trust_unavailable",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.trust_retry",
+    description:
+      "Saved package details are unavailable or belong to another account. No private provenance is returned."
+  },
+  {
+    code: "core.modules.request_unavailable",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "core.modules.request_retry",
+    description:
+      "Request status, submission or decline could not be saved. Check the persisted status before retrying."
+  },
   {
     code: "core.modules.lifecycle_unavailable",
     runtime: "rust",

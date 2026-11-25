@@ -136,3 +136,15 @@
   margin: 0;
   padding-left: var(--space-5);
 }
+
+.catalog-trust-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-4);
+}
+.catalog-fingerprint {
+  overflow-wrap: anywhere;
+}
+.catalog-install input[type="file"] {
+  max-width: 100%;
+}

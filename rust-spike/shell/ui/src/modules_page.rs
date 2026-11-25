@@ -17,9 +17,10 @@ pub fn ModulesPage() -> impl IntoView {
         return view! {<crate::module_install::ModuleInstall/>}.into_any();
     }
     if module_catalog::query("screen").as_deref() == Some("request") {
-        return view! {<crate::module_install::InstallRequestRoute/>}.into_any();
+        return view! {<crate::module_requests::RequestPage/>}.into_any();
     }
     match module_catalog::query("screen").as_deref() {
+        Some("trust") => return view! {<crate::module_trust::TrustPage/>}.into_any(),
         Some("update") => return view! {<crate::module_update::ModuleUpdate/>}.into_any(),
         Some("remove") => {
             return view! {<crate::module_lifecycle::ModuleLifecycleScreen restore=false/>}
@@ -83,6 +84,8 @@ pub fn ModulesPage() -> impl IntoView {
                             {can_manage.then(||view!{<TabLink href="/settings/modules/registries">"Registries"</TabLink>})}
                         </nav>
                         {move ||preferences.get().then(||view!{<Preferences on_close=Callback::new(move |_|preferences.set(false))/>})}
+                        <crate::module_requests::RequestsPanel admin=can_manage/>
+                        <a class="jds-btn jds-btn--link" href="/settings/modules/local">"Local package"</a>
                         {view.sources.iter().filter(|s|s.error.is_some()).map(|s|view!{<div class="catalog-notice" role="alert"><span>{format!("{} is offline.",s.name)}</span><Button variant=ButtonVariant::Secondary on_click=Callback::new(move |_|reload.run(()))>"Retry"</Button></div>}).collect_view()}
                         <Show when=move ||browse.get()>
                             <div class="catalog-filters">

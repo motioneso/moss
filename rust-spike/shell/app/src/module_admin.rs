@@ -58,6 +58,7 @@ pub fn routes(admin: Arc<Admin>) -> Router {
         .merge(crate::module_lists::routes())
         .merge(crate::module_lifecycle::routes())
         .merge(crate::module_local::routes())
+        .merge(crate::module_trust::routes())
         .with_state(admin)
 }
 

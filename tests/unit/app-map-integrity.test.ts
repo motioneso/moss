@@ -32,6 +32,32 @@ describe("app-map integrity and truthfulness", () => {
       screenId: "rust-sign-in"
     }
   };
+  const trustErrorStates = {
+    "core.modules.registry_unavailable": {
+      file: "module_registries.rs",
+      evidence: ["Registries unavailable.", "Trust and add"],
+      remediationRef: "core.modules.registry_retry",
+      screenId: "rust-module-registries"
+    },
+    "core.modules.local_refused": {
+      file: "module_trust.rs",
+      evidence: ["Local install refused.", "Local package refused."],
+      remediationRef: "core.modules.local_retry",
+      screenId: "rust-module-local-package"
+    },
+    "core.modules.trust_unavailable": {
+      file: "module_trust.rs",
+      evidence: ["Package details unavailable."],
+      remediationRef: "core.modules.trust_retry",
+      screenId: "rust-module-trust-details"
+    },
+    "core.modules.request_unavailable": {
+      file: "module_requests.rs",
+      evidence: ["Request not sent.", "Request could not be declined."],
+      remediationRef: "core.modules.request_retry",
+      screenId: "rust-module-request-route"
+    }
+  };
   const rustRoutes = new Set(
     [
       ...["../../rust-spike/network/src/web.rs", "../../rust-spike/shell/app/src/main.rs"].flatMap(
@@ -88,6 +114,9 @@ describe("app-map integrity and truthfulness", () => {
       narrative: ""
     });
     expect(rustMap.screens.map((entry) => entry.id)).toEqual([
+      "rust-module-registries",
+      "rust-module-local-package",
+      "rust-module-trust-details",
       "rust-module-update-review",
       "rust-module-remove",
       "rust-module-restore",
@@ -122,6 +151,7 @@ describe("app-map integrity and truthfulness", () => {
       if (entry.code === "core.modules.catalog_unavailable") continue;
       if (entry.code && entry.code in installErrorStates) continue;
       if (entry.code && entry.code in lifecycleErrorStates) continue;
+      if (entry.code && entry.code in trustErrorStates) continue;
       expect(
         rustErrorCodes.has(entry.code ?? ""),
         `Rust error "${entry.code}" is not in Rust`
@@ -130,7 +160,7 @@ describe("app-map integrity and truthfulness", () => {
   });
 
   it("documents lifecycle UI failure states and their declared remedy screens", () => {
-    for (const [code, state] of Object.entries(lifecycleErrorStates)) {
+    for (const [code, state] of Object.entries({ ...lifecycleErrorStates, ...trustErrorStates })) {
       const screen = readFileSync(
         new URL(`../../rust-spike/shell/ui/src/${state.file}`, import.meta.url),
         "utf8"
