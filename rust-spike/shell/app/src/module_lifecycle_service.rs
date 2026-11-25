@@ -210,7 +210,7 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         let metadata = with_application(&instance, actor, |application, access| {
             Ok(application
                 .installer
-                .snapshots(access)?
+                .snapshot_history(access)?
                 .into_iter()
                 .map(|s| ModuleSnapshot {
                     version: s

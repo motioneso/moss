@@ -244,6 +244,55 @@ impl Installer {
             })
             .collect())
     }
+    /// Read-only result projection after an attempted data change. A pending recovery
+    /// journal must never be presented as a completed restore.
+    pub fn completed_recovery_version(
+        &self,
+        access: &AccessContext,
+        id: &str,
+        digest: &str,
+    ) -> Result<Option<String>> {
+        match self.root.read("operation.json") {
+            Err(vault::VaultError::NotFound(_)) => {}
+            Ok(_) => return Ok(None),
+            Err(error) => return Err(error.into()),
+        }
+        let (_, installed, current) = self.lifecycle_status(access, id)?;
+        Ok(current
+            .filter(|m| installed && m.digest == digest)
+            .map(|m| m.manifest.version.to_string()))
+    }
+    /// Management history includes metadata-only expiry tombstones so the selector can
+    /// explain a saved snapshot link after its retained data has been discarded.
+    pub fn snapshot_history(&self, access: &AccessContext) -> Result<Vec<Snapshot>> {
+        let mut snapshots = self.snapshots(access)?;
+        let admin = self.lifecycle.is_admin(access)?;
+        let root = match self.root.subdir("expired-snapshots") {
+            Ok(root) => root,
+            Err(vault::VaultError::NotFound(_)) => return Ok(snapshots),
+            Err(error) => return Err(error.into()),
+        };
+        for entry in root.list("")? {
+            let snapshot: Snapshot = serde_json::from_slice(&root.read(&entry.name)?)?;
+            ensure!(
+                entry.name == format!("{}.json", snapshot.id)
+                    && uuid::Uuid::parse_str(&snapshot.id).is_ok()
+                    && crate::manifest::package_identifier(&snapshot.module),
+                "Invalid expired snapshot identity"
+            );
+            let visible = if snapshot.module.starts_with("local.") {
+                snapshot
+                    .module
+                    .starts_with(&format!("local.{}.", access.actor_user_id()))
+            } else {
+                admin
+            };
+            if visible && !snapshots.iter().any(|s| s.id == snapshot.id) {
+                snapshots.push(snapshot);
+            }
+        }
+        Ok(snapshots)
+    }
     fn snapshots_internal(&self) -> Result<Vec<Snapshot>> {
         let mut snapshots = Vec::new();
         let root = self.root.subdir("snapshots")?;

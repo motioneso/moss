@@ -132,7 +132,7 @@ pub fn ModuleLifecycleScreen(restore: bool) -> impl IntoView {
         });
     });
     view! {<div class="catalog-page catalog-install">
-        <header class="catalog-head"><div><p class="jds-eyebrow">"Settings / Modules"</p><h1>{if restore{"Restore"}else{"Remove"}}</h1></div><a class="jds-btn jds-btn--quiet" href="/settings/modules">"Modules"</a></header>
+        <header class="catalog-head"><div><p class="jds-eyebrow">"Settings / Modules"</p></div><a class="jds-btn jds-btn--quiet" href="/settings/modules">"Modules"</a></header>
         {move ||error.get().map(|message|view!{<div role="alert" class="catalog-install"><p>{message}</p><Button variant=ButtonVariant::Secondary disabled=pending on_click=Callback::new(move |_|{
             if let Some(saved)=operation.get_untracked(){poll(saved.id,operation,error,alive);}else if let Some(id)=module_catalog::query("operation"){poll(id,operation,error,alive);}else{load.run(());}
         })>"Retry"</Button></div>})}
@@ -163,14 +163,16 @@ pub fn ModuleLifecycleScreen(restore: bool) -> impl IntoView {
                         {snapshots.get_untracked().is_empty().then(||view!{<p role="status">"No snapshots available."</p>})}
                     }.into_any()}else{view!{
                         <section class="jds-brief catalog-install"><h3>"Keep the data"</h3><div class="catalog-actions"><Button variant=ButtonVariant::Secondary disabled=pending on_click=Callback::new(move |_|submit.run(false))>{format!("Remove {}",name)}</Button><Button variant=ButtonVariant::Quiet disabled=pending on_click=Callback::new(move |_|cancel.run(()))>"Cancel"</Button></div></section>
-                        <section class="jds-brief catalog-install"><h3>"Delete the data too"</h3><p>"All accounts. A snapshot stays for 30 days."</p><Field><FormLabel control_id="delete-name">{format!("Type {}",name)}</FormLabel><input id="delete-name" class="jds-input" autocomplete="off" disabled=pending prop:value=move ||typed.get() on:input=move |e|typed.set(event_target_value(&e))/></Field></section>
+                        <section class="jds-brief catalog-install"><h3>"Delete the data too"</h3><p>"All accounts. A snapshot stays for 30 days."</p><Field><FormLabel control_id="delete-name">{format!("Type {}",name)}</FormLabel><input id="delete-name" class="jds-input" autocomplete="off" disabled=pending prop:value=move ||typed.get() on:input=move |e|typed.set(event_target_value(&e))/></Field>
+                        <div class="catalog-actions"><Button variant=ButtonVariant::Danger disabled=Signal::derive({let expected=m.name.clone();move ||pending.get() || typed.get()!=expected}) on_click=Callback::new(move |_|submit.run(true))>"Remove and delete data"</Button><Button variant=ButtonVariant::Quiet disabled=pending on_click=Callback::new(move |_|cancel.run(()))>"Cancel"</Button></div>
+                        </section>
                     }.into_any()}}
                     {move ||error.get().map(|message|view!{<p role="alert">{message}</p>})}
                 </div>
-                <div class="jds-dialog__foot catalog-actions">
-                    {if restore {view!{<Button disabled=Signal::derive(move ||pending.get() || !snapshots.get().iter().any(|s|s.id==selected.get() && available(s))) on_click=Callback::new(move |_|submit.run(false))>"Restore snapshot"</Button>}.into_any()}else{let expected=m.name.clone();view!{<Button variant=ButtonVariant::Danger disabled=Signal::derive(move ||pending.get() || typed.get()!=expected) on_click=Callback::new(move |_|submit.run(true))>"Remove and delete data"</Button>}.into_any()}}
+                {restore.then(||view!{<div class="jds-dialog__foot catalog-actions">
+                    <Button disabled=Signal::derive(move ||pending.get() || !snapshots.get().iter().any(|s|s.id==selected.get() && available(s))) on_click=Callback::new(move |_|submit.run(false))>"Restore snapshot"</Button>
                     <Button variant=ButtonVariant::Secondary disabled=pending on_click=Callback::new(move |_|cancel.run(()))>"Cancel"</Button>
-                </div>
+                </div>})}
             </Dialog>}.into_any()
         }}
     </div>}

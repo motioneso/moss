@@ -35,7 +35,7 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
     id: "rust-module-update-service",
     runtime: "rust",
     description:
-      "An instance administrator can review an installed registry module through POST /api/modules/update-review, then approve its saved operation through POST /api/modules/{module}/update. Even urgent offers wait for capability and migration approval. Execution refuses changed package bytes or a changed installed digest and leaves the previous module usable when activation fails. POST /api/modules/{module}/skip records the exact offered digest; later digests remain eligible. POST /api/modules/{module}/pin pins the installed version or lifts its pin with a null version. Pins prevent updates until lifted. Both choices survive restart and appear as pin and skippedDigest in the catalog alongside the urgent marker. The session supplies the actor; these configuration powers grant no access to another account's private data. The update review screen shows only added permissions, urgent and data-update markers, changelog and versions. Update explicitly approves the saved review; Skip saves the offered digest. A SQL update failure reports that the previous version was restored only after the host completes snapshot recovery."
+      "An instance administrator can review an installed registry module through POST /api/modules/update-review, then approve its saved operation through POST /api/modules/{module}/update. Even urgent offers wait for capability and migration approval. Execution refuses changed package bytes or a changed installed digest and leaves the previous module usable when activation fails. POST /api/modules/{module}/skip records the exact offered digest; later digests remain eligible. POST /api/modules/{module}/pin pins the installed version or lifts its pin with a null version. Pins prevent updates until lifted. Both choices survive restart and appear as pin and skippedDigest in the catalog alongside the urgent marker. The session supplies the actor; these configuration powers grant no access to another account's private data. The update review screen shows only added permissions, urgent and data-update markers, changelog and versions. Update explicitly approves the saved review; Skip saves the offered digest. An update failure after data setup reports the restored version only when the host confirms the old activation and no pending recovery journal."
   },
   {
     moduleId: "core",
@@ -149,7 +149,7 @@ export const RUST_MODULE_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Update review",
     description:
-      "Administrators open Review update from installed module details. The shared dialog shows signed source, old and new version, changelog, only added permissions, and urgent and new migration markers. Update approves the saved digest-bound operation. Skip persists the offered digest. Pin and Unpin remain on details. Reload reads the same review or result. Failed data setup reports completed snapshot restoration; Retry gets a fresh review.",
+      "Administrators open Review update from installed module details. The shared dialog shows signed source, old and new version, changelog, only added permissions, and urgent and new migration markers. Update approves the saved digest-bound operation. Skip persists the offered digest. Pin and Unpin remain on details. Reload reads the same review or result. Failed updates report confirmed snapshot restoration; Retry gets a fresh review.",
     path: "/settings/modules?module={module}&source={source}&screen=update",
     scope: "admin"
   },
@@ -272,7 +272,7 @@ export const RUST_MODULE_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "transient",
     remediationRef: "core.modules.update_choice_refused",
     description:
-      "An update is unavailable, its review changed, or execution failed. The saved result distinguishes completed SQL snapshot recovery from other failures; Retry requests a fresh review before another approval."
+      "An update is unavailable, its review changed, or execution failed. The saved result distinguishes confirmed snapshot recovery from other failures; Retry requests a fresh review before another approval."
   },
   {
     code: "core.modules.install_failed",

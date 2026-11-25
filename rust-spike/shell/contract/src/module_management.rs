@@ -65,6 +65,8 @@ impl ModuleOperationStage {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ModuleOperationResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restored_version: Option<String>,
     pub ok: bool,
     pub message: String,
 }

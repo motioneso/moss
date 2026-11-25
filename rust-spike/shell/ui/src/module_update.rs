@@ -114,7 +114,7 @@ pub fn ModuleUpdate() -> impl IntoView {
         });
     });
     view! {<div class="catalog-page catalog-install">
-        <header class="catalog-head"><div><p class="jds-eyebrow">"Settings / Modules"</p><h1>"Update"</h1></div><a class="jds-btn jds-btn--quiet" href="/settings/modules">"Modules"</a></header>
+        <header class="catalog-head"><div><p class="jds-eyebrow">"Settings / Modules"</p></div><a class="jds-btn jds-btn--quiet" href="/settings/modules">"Modules"</a></header>
         {move || error.get().map(|message|view!{<div role="alert" class="catalog-install"><p>{message}</p><Button variant=ButtonVariant::Secondary disabled=pending on_click=Callback::new(move |_|{
             if let Some(saved)=operation.get_untracked(){poll(saved.id,operation,error,alive);}else if let Some(id)=module_catalog::query("operation"){poll(id,operation,error,alive);}else{review.run(());}
         })>"Retry"</Button></div>})}
@@ -137,14 +137,12 @@ pub fn ModuleUpdate() -> impl IntoView {
                     </Dialog>}.into_any();
                 }
                 let failed=saved.stage==Stage::Failed;
-                // The typed SQL failure is returned only after complete_change restores the
-                // snapshot and resumes runtime. Recovery failures have a different public reason.
-                let restored=failed && package.previous.is_some() && saved.result.as_ref().is_some_and(|r|r.message=="The module data could not be set up.");
+                let restored=saved.result.as_ref().and_then(|r|r.restored_version.clone());
                 let message=saved.result.map(|r|r.message).unwrap_or_else(||"Updating…".into());
                 view!{<h2>{if failed{"Update failed"}else if saved.stage==Stage::Succeeded{"Updated"}else{"Updating…"}}</h2><p class="jds-caption">{meta}</p>
                     <div role=if failed{"alert"}else{"status"} class="catalog-install">
                         <p>{message}</p>
-                        {restored.then(||view!{<p>{format!("{} {} was restored.",package.name,package.previous_version.unwrap_or_default())}</p>})}
+                        {restored.map(|version|view!{<p>{format!("{} {} was restored.",package.name,version)}</p>})}
                     </div>
                     <div class="catalog-actions">{failed.then(||view!{<Button disabled=pending on_click=Callback::new(move |_|review.run(()))>"Retry"</Button>})}<a class="jds-btn jds-btn--secondary" href="/settings/modules">"Modules"</a></div>
                 }.into_any()

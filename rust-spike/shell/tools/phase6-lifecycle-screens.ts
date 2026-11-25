@@ -75,9 +75,11 @@ async function waitFor(path: string, timeout = 900_000) {
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
   await waitFor(join(hold, "ready.json"));
-  const { origin, instance, registry } = JSON.parse(
-    readFileSync(join(hold, "ready.json"), "utf8")
-  ) as { origin: string; instance: string; registry: string };
+  const { origin, instance } = JSON.parse(readFileSync(join(hold, "ready.json"), "utf8")) as {
+    origin: string;
+    instance: string;
+    registry: string;
+  };
   browser = await chromium.launch({
     headless: true,
     args: ["--no-sandbox", "--force-prefers-reduced-motion"]
@@ -224,7 +226,8 @@ try {
     const failure = await saved(page);
     assert.equal(failure.stage, "failed");
     assert(failure.stages.includes("setting_up_data"));
-    assert.equal(failure.result.message, "The module data could not be set up.");
+    assert.equal(failure.result.restored_version, "1.0.0");
+    assert(failure.stages.includes("activating"), "SQL committed before health failed");
     assert.deepEqual(await rows(width), original, "failed update restores identical ledger rows");
     assert(!existsSync(join(instance, "modules/modules/operation.json")), "recovery completed");
     await page.reload();
@@ -234,7 +237,7 @@ try {
     await command("base", width);
     await post("/api/modules/refresh", {});
     console.log(
-      `PASS ${width}: real duplicate-table SQL failure restores snapshot and exact ledger rows, result survives reload`
+      `PASS ${width}: real committed ledger migration followed by health failure restores snapshot and exact ledger rows, result survives reload`
     );
 
     await page.goto(detail);

@@ -579,7 +579,7 @@ fn run_selected(
                 previous: reviewed.previous.clone(),
             };
             let record = std::cell::RefCell::new(record);
-            application.installer.install_reviewed_progress(
+            let result = application.installer.install_reviewed_progress(
                 &access,
                 &catalog,
                 &artifact,
@@ -597,7 +597,29 @@ fn run_selected(
                         },
                     )
                 },
-            )?;
+            );
+            if let Err(error) = &result {
+                let mut saved = record.borrow_mut();
+                let changed_data = matches!(
+                    saved.view.stage,
+                    moss_shell_contract::module_management::ModuleOperationStage::SettingUpData
+                        | moss_shell_contract::module_management::ModuleOperationStage::Activating
+                );
+                let restored = if changed_data {
+                    consent.previous.as_deref().and_then(|previous| {
+                        application
+                            .installer
+                            .completed_recovery_version(&access, name, previous)
+                            .ok()
+                            .flatten()
+                    })
+                } else {
+                    None
+                };
+                let message = public_install_failure(Some(error), saved.view.stage);
+                saved.finish_with_recovery(&args.instance, Err(message), restored)?;
+            }
+            result?;
             continue;
         }
         if let Some(reviewed) = &args.version {

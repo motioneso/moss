@@ -29,13 +29,20 @@ fn offer(
     m.database.migrations = vec!["sql/001_ledger.sql".into()];
     if version != "1.0.0" {
         m.capabilities[0].resources.insert("reminders".into());
-        m.database.migrations.push("sql/002_conflict.sql".into());
+        m.database.migrations.push("sql/002_amounts.sql".into());
     }
     let mut files = common::files(&m);
     let sql=format!("CREATE TABLE {table} (id uuid PRIMARY KEY, owner_user_id uuid NOT NULL REFERENCES app.users(id), amount integer NOT NULL, title text NOT NULL);");
     files.insert("sql/001_ledger.sql".into(), sql.as_bytes().to_vec());
     if version != "1.0.0" {
-        files.insert("sql/002_conflict.sql".into(), sql.as_bytes().to_vec());
+        files.insert(
+            "sql/002_amounts.sql".into(),
+            format!("UPDATE {table} SET amount=0;").into_bytes(),
+        );
+        files.insert(
+            "code/module.wasm".into(),
+            wat::parse_str(common::unhealthy_source()).unwrap(),
+        );
     }
     let bytes = archive::pack(&files).unwrap();
     let mut a = base.clone();

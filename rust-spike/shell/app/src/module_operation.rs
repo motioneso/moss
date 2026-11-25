@@ -64,6 +64,14 @@ impl Record {
         instance: &Path,
         result: std::result::Result<&str, &str>,
     ) -> Result<()> {
+        self.finish_with_recovery(instance, result, None)
+    }
+    pub fn finish_with_recovery(
+        &mut self,
+        instance: &Path,
+        result: std::result::Result<&str, &str>,
+        restored_version: Option<String>,
+    ) -> Result<()> {
         self.view.stage = if result.is_ok() {
             ModuleOperationStage::Succeeded
         } else {
@@ -71,6 +79,7 @@ impl Record {
         };
         self.view.stages.push(self.view.stage);
         self.view.result = Some(ModuleOperationResult {
+            restored_version,
             ok: result.is_ok(),
             message: result.unwrap_or_else(|message| message).into(),
         });
