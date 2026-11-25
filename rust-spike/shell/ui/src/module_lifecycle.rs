@@ -47,7 +47,12 @@ pub fn ModuleLifecycleScreen(restore: bool) -> impl IntoView {
                             && Some(m.source.clone()) == module_catalog::query("source")
                     }));
                     if restore {
-                        match api::get_json::<Vec<ModuleSnapshot>>("/api/modules/snapshots").await {
+                        let history =
+                            api::get_json::<Vec<ModuleSnapshot>>("/api/modules/snapshots").await;
+                        if alive.try_get_untracked() != Some(true) {
+                            return;
+                        }
+                        match history {
                             Ok(mut rows) => {
                                 rows.retain(|s| s.module == module_id.get_value());
                                 rows.sort_by(|a, b| b.created.cmp(&a.created));

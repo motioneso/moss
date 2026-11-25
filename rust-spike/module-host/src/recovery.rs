@@ -252,6 +252,11 @@ impl Installer {
         id: &str,
         digest: &str,
     ) -> Result<Option<String>> {
+        let _fence = self
+            .fence
+            .read()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _disk = self.disk_lock(false)?;
         match self.root.read("operation.json") {
             Err(vault::VaultError::NotFound(_)) => {}
             Ok(_) => return Ok(None),
