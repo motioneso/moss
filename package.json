@@ -86,6 +86,7 @@
     "test:rust-phase6-install-requests": "tsx rust-spike/module-host/tools/phase6-install-requests-gate.ts",
     "test:rust-phase6-registry-api": "tsx rust-spike/module-host/tools/phase6-registry-api-gate.ts",
     "test:rust-phase6-lifecycle-api": "tsx rust-spike/module-host/tools/phase6-lifecycle-api-gate.ts",
+    "test:rust-phase6-exit-journey": "bash rust-spike/shell/tools/phase6-exit-journey.sh",
     "test:rust-phase6-trust-screens": "bash rust-spike/shell/tools/phase6-trust-screens.sh",
     "test:rust-phase6-lifecycle-screens": "bash rust-spike/shell/tools/phase6-lifecycle-screens.sh",
     "test:rust-phase6-install-screens": "bash rust-spike/shell/tools/phase6-install-screens.sh",
