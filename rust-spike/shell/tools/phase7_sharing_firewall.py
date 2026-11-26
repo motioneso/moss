@@ -128,6 +128,7 @@ class World:
         self.rule_name = f'Moss-{folder.name}'
         self.namespace = None
         self.address = None
+        self.planted_other = False
 
     def set_up_client(self):
         if SYSTEM == 'Linux':
@@ -189,6 +190,7 @@ class World:
     # Rules planted by someone else. Moss must leave every one of them alone.
     def plant_other(self):
         """A rule with another name (Windows) or another port or program."""
+        self.planted_other = True
         if SYSTEM == 'Windows':
             run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Moss-other-instance', 'dir=in',
                  'action=allow', 'protocol=TCP', f'localport={self.port}', f'program={self.binary}', 'enable=yes'])
@@ -205,6 +207,8 @@ class World:
         return '/usr/bin/true' in sudo([SOCKET_FILTER, '--listapps'], check=False).stdout
 
     def remove_other(self):
+        if not self.planted_other:
+            return
         if SYSTEM == 'Windows':
             run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', 'name=Moss-other-instance'], check=False)
         elif SYSTEM == 'Linux':

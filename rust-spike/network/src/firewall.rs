@@ -52,6 +52,22 @@ pub struct Rule {
     pub name: String,
     pub port: u16,
     pub program: PathBuf,
+    /// The firewalld zone the rule was opened in, so removal targets the same zone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zone: Option<String>,
+}
+
+/// A firewalld port command. `op` is `add`, `remove` or `query`.
+fn firewalld(rule: &Rule, permanent: bool, op: &str) -> Vec<String> {
+    let mut args = vec!["firewall-cmd".to_owned()];
+    if permanent {
+        args.push("--permanent".into());
+    }
+    if let Some(zone) = &rule.zone {
+        args.push(format!("--zone={zone}"));
+    }
+    args.push(format!("--{op}-port={}/tcp", rule.port));
+    args
 }
 
 impl Rule {
@@ -63,6 +79,11 @@ impl Rule {
         }
         if self.name.is_empty() || self.name.len() > 64 || !self.name.chars().all(plain) {
             return Err("The rule name must be short and plain");
+        }
+        if let Some(zone) = &self.zone {
+            if zone.is_empty() || zone.len() > 64 || !zone.chars().all(plain) {
+                return Err("The firewall zone must be short and plain");
+            }
         }
         if self.port == 0 {
             return Err("The rule needs a port");
@@ -149,21 +170,12 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
             Action::Remove => vec![cmd(&[SOCKET_FILTER, "--remove", &program])],
         },
         Os::Linux => match (linux, action) {
-            (Linux::Firewalld, Action::Add) => vec![
-                cmd(&[
-                    "firewall-cmd",
-                    "--permanent",
-                    &format!("--add-port={port}/tcp"),
-                ]),
-                cmd(&["firewall-cmd", &format!("--add-port={port}/tcp")]),
-            ],
+            (Linux::Firewalld, Action::Add) => {
+                vec![firewalld(rule, true, "add"), firewalld(rule, false, "add")]
+            }
             (Linux::Firewalld, Action::Remove) => vec![
-                cmd(&[
-                    "firewall-cmd",
-                    "--permanent",
-                    &format!("--remove-port={port}/tcp"),
-                ]),
-                cmd(&["firewall-cmd", &format!("--remove-port={port}/tcp")]),
+                firewalld(rule, true, "remove"),
+                firewalld(rule, false, "remove"),
             ],
             (Linux::Ufw, Action::Add) => vec![cmd(&[
                 "ufw", "allow", "in", "proto", "tcp", "to", "any", "port", &port, "comment",
@@ -197,14 +209,7 @@ fn present_query(os: Os, linux: Linux, rule: &Rule) -> Option<(Vec<String>, Opti
             Some(rule.program.display().to_string()),
         )),
         Os::Linux => match linux {
-            Linux::Firewalld => Some((
-                cmd(&[
-                    "firewall-cmd",
-                    "--permanent",
-                    &format!("--query-port={port}/tcp"),
-                ]),
-                None,
-            )),
+            Linux::Firewalld => Some((firewalld(rule, true, "query"), None)),
             Linux::Ufw => Some((
                 cmd(&["ufw", "show", "added"]),
                 Some(format!("allow {port}/tcp")),
@@ -214,16 +219,21 @@ fn present_query(os: Os, linux: Linux, rule: &Rule) -> Option<(Vec<String>, Opti
     }
 }
 
-fn output(args: &[String]) -> Option<(bool, String)> {
+/// Runs a command and returns its exit code and output. `None` when it did not run or was killed.
+fn run_code(args: &[String]) -> Option<(i32, String)> {
     let out = Command::new(&args[0])
         .args(&args[1..])
         .stdin(Stdio::null())
         .output()
         .ok()?;
     Some((
-        out.status.success(),
+        out.status.code()?,
         String::from_utf8_lossy(&out.stdout).into_owned(),
     ))
+}
+
+fn output(args: &[String]) -> Option<(bool, String)> {
+    run_code(args).map(|(code, text)| (code == 0, text))
 }
 
 fn detect_linux() -> Linux {
@@ -243,19 +253,23 @@ fn detect_linux() -> Linux {
 fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
     let (query, needle) = present_query(os, linux, rule)?;
     let read = |query: &[String]| {
-        let (ok, text) = output(query)?;
+        let (code, text) = run_code(query)?;
         match &needle {
             // A listing that failed to run says nothing about the rule.
-            Some(needle) => ok.then(|| text.contains(needle)),
-            None => Some(ok),
+            Some(needle) => (code == 0).then(|| text.contains(needle)),
+            // netsh reports no match with a non-zero code.
+            None if os == Os::Windows => Some(code == 0),
+            // Firewalld answers 0 for yes and 1 for no. Any other code means it could not say.
+            None => match code {
+                0 => Some(true),
+                1 => Some(false),
+                _ => None,
+            },
         }
     };
     let saved = read(&query)?;
     if linux == Linux::Firewalld && os == Os::Linux {
-        let live = read(&cmd(&[
-            "firewall-cmd",
-            &format!("--query-port={}/tcp", rule.port),
-        ]))?;
+        let live = read(&firewalld(rule, false, "query"))?;
         return Some(saved || live);
     }
     Some(saved)
@@ -276,13 +290,10 @@ pub fn apply(action: Action, rule: &Rule) -> Result<bool, &'static str> {
 
 /// Saved and live firewalld state for the port. Either one keeps it open.
 fn firewalld_halves(rule: &Rule) -> Option<(bool, bool)> {
-    let query = |permanent: bool| {
-        let mut args = vec!["firewall-cmd".to_owned()];
-        if permanent {
-            args.push("--permanent".into());
-        }
-        args.push(format!("--query-port={}/tcp", rule.port));
-        output(&args).map(|(ok, _)| ok)
+    let query = |permanent: bool| match run_code(&firewalld(rule, permanent, "query"))?.0 {
+        0 => Some(true),
+        1 => Some(false),
+        _ => None,
     };
     Some((query(true)?, query(false)?))
 }
@@ -408,6 +419,9 @@ struct Record {
     /// The rule was open before Moss added it, so removal leaves it alone.
     #[serde(default)]
     preexisting: bool,
+    /// The add ran and may have left a rule, so removal is allowed even when unconfirmed.
+    #[serde(default)]
+    added: bool,
 }
 
 #[derive(Clone)]
@@ -471,15 +485,29 @@ impl Firewall {
 
     /// Opens the rule for `port`, asking the owner once. Nothing stays open if it fails.
     pub async fn open(&self, port: u16) -> Result<(), Refusal> {
+        let mut zone = None;
+        if this_os() == Os::Linux {
+            match detect_linux() {
+                // No manager means no way to verify a rule, so fail before asking the owner.
+                Linux::Nothing if self.stand_in.is_none() => return Err(Refusal::NoManager),
+                Linux::Firewalld => {
+                    let (ok, text) = output(&cmd(&["firewall-cmd", "--get-default-zone"]))
+                        .ok_or(Refusal::Failed)?;
+                    if !ok {
+                        return Err(Refusal::Failed);
+                    }
+                    zone = Some(text.trim().to_owned());
+                }
+                _ => {}
+            }
+        }
         let rule = Rule {
             name: self.name.clone(),
             port,
             program: self.program.clone(),
+            zone,
         };
-        // No manager means no way to verify a rule, so fail before asking the owner anything.
-        if self.stand_in.is_none() && this_os() == Os::Linux && detect_linux() == Linux::Nothing {
-            return Err(Refusal::NoManager);
-        }
+        rule.check().map_err(|_| Refusal::Failed)?;
         match self.recorded()? {
             Some(open) if open.confirmed && open.rule == rule => return Ok(()),
             // A different rule, or one that was never confirmed, goes before a new one opens.
@@ -491,14 +519,25 @@ impl Firewall {
             rule: rule.clone(),
             confirmed: false,
             preexisting: false,
+            added: false,
         })?;
         match self.run(Action::Add, rule.clone()).await {
             Ok(preexisting) => self.write_record(&Record {
                 rule,
                 confirmed: true,
                 preexisting,
+                added: !preexisting,
             }),
-            Err(Refusal::Stuck) => Err(Refusal::Stuck),
+            // The rule may be open, so the record now allows its removal.
+            Err(Refusal::Stuck) => {
+                let _ = self.write_record(&Record {
+                    rule,
+                    confirmed: false,
+                    preexisting: false,
+                    added: true,
+                });
+                Err(Refusal::Stuck)
+            }
             Err(other) => {
                 let _ = std::fs::remove_file(self.record_path());
                 Err(other)
@@ -511,7 +550,9 @@ impl Firewall {
         let Some(record) = self.recorded()? else {
             return Ok(());
         };
-        if !record.preexisting {
+        // A rule is only removed when Moss added it. A record written before the owner's answer
+        // proves nothing, because the rule under that name may belong to someone else.
+        if !record.preexisting && (record.confirmed || record.added) {
             self.run(Action::Remove, record.rule).await?;
         }
         std::fs::remove_file(self.record_path()).map_err(|_| Refusal::Failed)
@@ -526,7 +567,7 @@ impl Firewall {
 }
 
 fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
-    vec![
+    let mut args = vec![
         "firewall-rule".into(),
         action.word().into(),
         "--name".into(),
@@ -535,7 +576,12 @@ fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
         rule.port.to_string(),
         "--program".into(),
         rule.program.display().to_string(),
-    ]
+    ];
+    if let Some(zone) = &rule.zone {
+        args.push("--zone".into());
+        args.push(zone.clone());
+    }
+    args
 }
 
 fn quote_windows(value: &str) -> String {
@@ -649,6 +695,7 @@ mod tests {
             name: "Moss-default".into(),
             port: 5198,
             program: std::env::current_exe().unwrap(),
+            zone: None,
         }
     }
 
@@ -733,9 +780,27 @@ mod tests {
             rule: rule(),
             confirmed: false,
             preexisting: false,
+            added: false,
         };
         firewall.write_record(&record).unwrap();
         assert_eq!(firewall.state(), State::NotAsked);
+    }
+
+    #[tokio::test]
+    async fn a_record_before_the_owner_answered_never_deletes_a_rule() {
+        let folder = scratch();
+        let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
+        firewall
+            .write_record(&Record {
+                rule: rule(),
+                confirmed: false,
+                preexisting: false,
+                added: false,
+            })
+            .unwrap();
+        // Running a removal would start the operating system prompt and fail here.
+        assert!(firewall.close().await.is_ok());
+        assert!(!folder.path().join(RECORD_FILE).exists());
     }
 
     #[test]
@@ -799,7 +864,7 @@ pub fn command(args: &[String]) -> i32 {
         Some("remove") => Action::Remove,
         _ => return 2,
     };
-    let (mut name, mut port, mut program) = (None, None, None);
+    let (mut name, mut port, mut program, mut zone) = (None, None, None, None);
     let mut rest = args.iter().skip(2);
     while let Some(flag) = rest.next() {
         let Some(value) = rest.next() else { return 2 };
@@ -807,6 +872,7 @@ pub fn command(args: &[String]) -> i32 {
             "--name" => name = Some(value.clone()),
             "--port" => port = value.parse::<u16>().ok(),
             "--program" => program = Some(PathBuf::from(value)),
+            "--zone" => zone = Some(value.clone()),
             _ => return 2,
         }
     }
@@ -823,6 +889,7 @@ pub fn command(args: &[String]) -> i32 {
             name,
             port,
             program,
+            zone,
         },
     ) {
         Ok(true) => EXIT_ALREADY,

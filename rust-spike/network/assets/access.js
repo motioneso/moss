@@ -128,9 +128,10 @@ if (sharing) {
     } catch (error) {
       say(error.message);
       retry.hidden = false;
-      paint(
-        await call("/api/network").catch(() => ({ sharing: false, origins: [], fingerprint: "" }))
-      );
+      // A failed read leaves the screen as it was, since it cannot say what is true now.
+      await call("/api/network")
+        .then(paint)
+        .catch(() => say("Moss could not read the current state. Reload this page."));
     }
   };
   call("/api/network")

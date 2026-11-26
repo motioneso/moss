@@ -35,6 +35,11 @@ impl Control {
         save: impl Fn(bool) -> Result<(), ()>,
     ) -> Result<(), Failure> {
         if on {
+            if !previous {
+                // A record left by a removal that was refused is cleared first, so a rule that
+                // replaced Moss's is met by the add's own ownership check.
+                self.firewall.close().await.map_err(Failure::Firewall)?;
+            }
             self.firewall
                 .open(self.port)
                 .await
