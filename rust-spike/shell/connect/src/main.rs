@@ -143,14 +143,20 @@ fn custody_setup(
     folder: &std::path::Path,
     instance: &str,
 ) -> Result<Option<(Vec<String>, Vec<usize>)>, Value> {
-    use keystore::custody::{set_up_instance, setup_route, SetupRoute};
+    use keystore::custody::{prepare_instance, setup_route, SetupRoute};
     if folder.join(keystore::custody::BUNDLE_FILE).exists()
         && !folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
     {
+        // Custody is done. Only make sure the server settings name the bundle.
+        let network_file = folder.join(moss_network::instance::NETWORK_FILE);
+        if let Ok(mut config) = moss_network::config::Config::read(&network_file) {
+            if config.credentials != folder.join(keystore::custody::BUNDLE_FILE) {
+                config.credentials = folder.join(keystore::custody::BUNDLE_FILE);
+                let _ = config.write(&network_file);
+            }
+        }
         return Ok(None);
     }
-    let credentials =
-        std::fs::read(folder.join(keystore::custody::LEGACY_CREDENTIALS)).unwrap_or_default();
     let mut store = keystore::platform::platform_store();
     match setup_route(true, store.probe()) {
         SetupRoute::OsStore => {}
@@ -168,26 +174,30 @@ fn custody_setup(
         }
     }
     let service = keystore::platform::service_name(instance);
-    match set_up_instance(folder, &credentials, store.as_mut(), &service) {
-        Ok(migration) => {
-            // Point the server config at the wrapped bundle from now on.
-            let network_file = folder.join(moss_network::instance::NETWORK_FILE);
-            let saved = moss_network::config::Config::read(&network_file).and_then(|mut config| {
-                config.credentials = migration.bundle_path.clone();
-                config.write(&network_file)
-            });
-            if let Err(detail) = saved {
-                let error = keystore::custody::CustodyError::Unavailable(detail);
-                return Err(json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}));
-            }
-            let words: Vec<String> = migration
-                .recovery
-                .words()
-                .iter()
-                .map(|w| w.to_string())
-                .collect();
-            Ok(Some((words, vec![4, 11, 19])))
+    let prepared = match prepare_instance(folder, store.as_mut(), &service) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            return Err(
+                json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
+            );
         }
+    };
+    // Point the server settings at the bundle before the old file is deleted.
+    let network_file = folder.join(moss_network::instance::NETWORK_FILE);
+    let saved = moss_network::config::Config::read(&network_file).and_then(|mut config| {
+        config.credentials = prepared.bundle_path().to_path_buf();
+        config.write(&network_file)
+    });
+    if let Err(detail) = saved {
+        // The old file still stands, so a retry loses nothing.
+        let error = keystore::custody::CustodyError::Unavailable(detail);
+        return Err(
+            json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
+        );
+    }
+    let words: Vec<String> = prepared.words().iter().map(|w| w.to_string()).collect();
+    match prepared.commit() {
+        Ok(_) => Ok(Some((words, vec![4, 11, 19]))),
         Err(error) => Err(
             json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
         ),

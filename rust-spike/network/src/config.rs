@@ -109,7 +109,11 @@ impl Config {
                 .and_then(|f| f.file_name())
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "default".into());
-            let root = self.credentials.parent().map(|f| f.to_path_buf()).unwrap_or_default();
+            let root = self
+                .credentials
+                .parent()
+                .map(|f| f.to_path_buf())
+                .unwrap_or_default();
             // Only a key file the owner recorded at setup counts. An environment
             // setting on its own never unlocks a desktop server from a plain file.
             let recorded = keystore::custody::recorded_key_file(&root);
@@ -120,7 +124,12 @@ impl Config {
                 _ => None,
             };
             let store = keystore::platform::platform_store();
-            open_bundle_credentials(&raw, store.as_ref(), &keystore::platform::service_name(&instance), key_file.as_deref())?
+            open_bundle_credentials(
+                &raw,
+                store.as_ref(),
+                &keystore::platform::service_name(&instance),
+                key_file.as_deref(),
+            )?
         } else {
             raw
         };
@@ -228,7 +237,10 @@ pub fn is_bundle(raw: &[u8]) -> bool {
         return false;
     };
     serde_json::from_str::<serde_json::Value>(header)
-        .map(|header| header.get("kind").and_then(serde_json::Value::as_str) == Some("moss-key-custody-bundle"))
+        .map(|header| {
+            header.get("kind").and_then(serde_json::Value::as_str)
+                == Some("moss-key-custody-bundle")
+        })
         .unwrap_or(false)
 }
 
@@ -248,11 +260,16 @@ pub fn open_bundle_credentials(
 }
 
 impl Config {
-    /// The connector key from the credentials, opening a wrapped bundle if present.
-    pub fn connector_key(&self) -> Result<String, String> {
+    /// The module secrets from the credentials, opening a wrapped bundle if
+    /// present: connector key, module AI key if any, and the app address that
+    /// the module settings used to repeat as their producer address.
+    pub fn module_secrets(&self) -> Result<(String, Option<String>, String), String> {
         #[derive(Deserialize)]
-        struct OnlyKey {
+        struct OnlyKeys {
             connector_key: String,
+            #[serde(default)]
+            module_ai_key: Option<String>,
+            app_url: String,
         }
         let raw = private_read(&self.credentials)?;
         let plain = if is_bundle(&raw) {
@@ -262,23 +279,37 @@ impl Config {
                 .and_then(|f| f.file_name())
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "default".into());
-            let root = self.credentials.parent().map(|f| f.to_path_buf()).unwrap_or_default();
+            let root = self
+                .credentials
+                .parent()
+                .map(|f| f.to_path_buf())
+                .unwrap_or_default();
             let key_file = keystore::custody::recorded_key_file(&root);
             let store = keystore::platform::platform_store();
-            open_bundle_credentials(&raw, store.as_ref(), &keystore::platform::service_name(&instance), key_file.as_deref())?
+            open_bundle_credentials(
+                &raw,
+                store.as_ref(),
+                &keystore::platform::service_name(&instance),
+                key_file.as_deref(),
+            )?
         } else {
             raw
         };
-        let parsed: OnlyKey =
+        let parsed: OnlyKeys =
             serde_json::from_slice(&plain).map_err(|_| "Invalid credential file")?;
-        Ok(parsed.connector_key)
+        Ok((parsed.connector_key, parsed.module_ai_key, parsed.app_url))
+    }
+
+    /// The connector key from the credentials, opening a wrapped bundle if present.
+    pub fn connector_key(&self) -> Result<String, String> {
+        Ok(self.module_secrets()?.0)
     }
 }
 
 #[cfg(test)]
 mod custody_tests {
     use super::*;
-    use keystore::custody::{MemoryStore, FakeMode, MasterKey, wrap_bundle, OsKeyStore};
+    use keystore::custody::{wrap_bundle, FakeMode, MasterKey, MemoryStore, OsKeyStore};
     use keystore::recovery::RecoveryKey;
 
     #[test]
@@ -291,7 +322,10 @@ mod custody_tests {
         assert!(is_bundle(&raw));
         let mut store = MemoryStore::new(FakeMode::Working);
         store.store_master("svc", &master).unwrap();
-        assert_eq!(open_bundle_credentials(&raw, &store, "svc", None).unwrap(), creds);
+        assert_eq!(
+            open_bundle_credentials(&raw, &store, "svc", None).unwrap(),
+            creds
+        );
         let locked = MemoryStore::new(FakeMode::Locked);
         let error = open_bundle_credentials(&raw, &locked, "svc", None).unwrap_err();
         assert!(error.starts_with("app_keystore_locked"), "{error}");

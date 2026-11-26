@@ -284,6 +284,29 @@ fn running_record(folder: &Path, config: &Config, port: u16) -> Result<instance:
     })
 }
 
+/// Reads the bundle beside an --instance argument and supplies its module
+/// secrets, for the separate installer and package processes.
+fn supply_module_secrets_from_args() {
+    let args: Vec<String> = std::env::args().collect();
+    let Some(position) = args.iter().position(|arg| arg == "--instance") else {
+        return;
+    };
+    let Some(instance) = args.get(position + 1) else {
+        return;
+    };
+    let folder = std::path::PathBuf::from(instance);
+    let Ok(config) = moss_network::config::Config::read(&folder.join("network.json")) else {
+        return;
+    };
+    if let Ok((connector_key, ai_key, producer_url)) = config.module_secrets() {
+        modules::set_module_secrets(modules::ModuleSecrets {
+            connector_key,
+            ai_key,
+            producer_url,
+        });
+    }
+}
+
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("lifecycle-module") {
         if module_lifecycle_service::run(std::env::args().skip(2).collect()).is_err() {
@@ -295,6 +318,7 @@ fn main() {
         return;
     }
     if std::env::args().nth(1).as_deref() == Some("apply-module-package") {
+        supply_module_secrets_from_args();
         if module_package_apply::run(std::env::args().skip(2).collect()).is_err() {
             eprintln!("Package activation failed");
             std::process::exit(1);
@@ -302,6 +326,7 @@ fn main() {
         return;
     }
     if std::env::args().nth(1).as_deref() == Some("install-module") {
+        supply_module_secrets_from_args();
         let runtime_free = module_install::run(std::env::args().skip(2).collect());
         if let Err(error) = runtime_free {
             eprintln!("moss-server: {error:#}");
@@ -328,9 +353,13 @@ fn main() {
     let prepared = runtime.block_on(async {
         let config = Config::read(&args.network)?;
         let platform = config.platform().await?;
-        // Module settings no longer hold the connector key after key custody.
-        if let Ok(key) = config.connector_key() {
-            modules::set_connector_key_override(key);
+        // Module settings no longer hold their secrets after key custody.
+        if let Ok((connector_key, ai_key, producer_url)) = config.module_secrets() {
+            modules::set_module_secrets(modules::ModuleSecrets {
+                connector_key,
+                ai_key,
+                producer_url,
+            });
         }
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
         let listener = tokio::net::TcpListener::bind(config.listen)

@@ -57,4 +57,4 @@ jobs:
           echo "Negative control script exit: $code"
           cat "$RUNNER_TEMP/key-custody-negative.log"
           test "$code" -ne 0
-          grep -q "app_keystore_unavailable\|plaintext\|AssertionError" "$RUNNER_TEMP/key-custody-negative.log"
+          grep -q "plaintext remains in" "$RUNNER_TEMP/key-custody-negative.log"

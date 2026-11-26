@@ -136,7 +136,9 @@ mod linux {
                 .ok()
                 .and_then(|v| bool::try_from(v).ok())
                 .ok_or_else(|| {
-                    CustodyError::Unavailable("the key store did not report its locked state".into())
+                    CustodyError::Unavailable(
+                        "the key store did not report its locked state".into(),
+                    )
                 })?;
             if locked {
                 return Err(CustodyError::Locked);

@@ -87,6 +87,19 @@ def main():
     assert done.returncode == 0, done.stdout + done.stderr
     print("headless key-file choice: ok")
 
+    # Headless setup writes the bundle's own master key to the chosen file, and
+    # a start with no key store opens the bundle from that recorded file only.
+    headless = scratch / "headless-instance"
+    headless.mkdir()
+    (headless / "credentials.json").write_text(json.dumps(CREDS))
+    key_file = scratch / "headless-master.key"
+    done = cli("setup-headless", "--root", str(headless), "--key-file", str(key_file))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert key_file.is_file() and not (headless / "credentials.json").exists()
+    done = cli("start", "--root", str(headless), "--mode", "missing")
+    assert done.returncode == 0 and "started=true" in done.stdout, done.stdout + done.stderr
+    print("headless setup starts from its recorded key file: ok")
+
     # 3. Migration removes the plaintext file and leaves no plaintext under the root.
     root = scratch / "instance"
     (root / "nested").mkdir(parents=True)

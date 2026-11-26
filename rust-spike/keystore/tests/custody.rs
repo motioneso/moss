@@ -130,15 +130,68 @@ fn migration_strips_module_settings_secrets_and_catches_nested_copies() {
     let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
     assert!(!modules.contains("test-connector-key-9012"), "{modules}");
     assert!(!modules.contains("test-ai-key-7890"), "{modules}");
-    assert!(modules.contains("migrations_url"), "plain settings stay: {modules}");
+    assert!(
+        modules.contains("migrations_url"),
+        "plain settings stay: {modules}"
+    );
     let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
     let words: Vec<String> = {
         // The nested value is inside the wrapped bundle, not on disk.
         let master = start_gate(&store, "svc").unwrap();
         let plain = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
-        assert!(String::from_utf8(plain).unwrap().contains("nested-secret-value-3456"));
+        assert!(String::from_utf8(plain)
+            .unwrap()
+            .contains("nested-secret-value-3456"));
         Vec::new()
     };
     let _ = words;
     assert!(find_plaintext(dir.path(), &[b"nested-secret-value-3456".to_vec()]).is_empty());
+}
+
+#[test]
+fn migration_with_real_setup_shape_strips_all_plain_secrets() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    // Real provision repeats the app address as the module producer address.
+    fs::write(
+        dir.path().join("modules.json"),
+        br#"{"data":"/tmp/data","producer_url":"postgres://app:test-app-secret-1234@127.0.0.1/db","connector_key":"test-connector-key-9012","ai_key":"test-module-ai-key-3456","migrations_url":"postgres://m:x@127.0.0.1/db"}"#,
+    )
+    .unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    migrate(dir.path(), &mut store, "svc", false).unwrap();
+    assert!(find_plaintext(
+        dir.path(),
+        &[
+            b"test-app-secret-1234".to_vec(),
+            b"test-module-ai-key-3456".to_vec()
+        ]
+    )
+    .is_empty());
+    // The AI key survives inside the bundle, not in the settings file.
+    let master = start_gate(&store, "svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
+    assert!(String::from_utf8(payload)
+        .unwrap()
+        .contains("test-module-ai-key-3456"));
+}
+
+#[test]
+fn failed_migration_keeps_everything_recoverable() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","ai_key":"test-module-ai-key-3456"}"#).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    // A leaked copy makes migration fail after the bundle is verified.
+    let result = migrate(dir.path(), &mut store, "svc", true);
+    assert!(result.is_err());
+    // The settings still hold their secrets, so a clean retry loses nothing.
+    let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
+    assert!(modules.contains("test-module-ai-key-3456"), "{modules}");
+    assert!(dir.path().join("credentials.json").exists());
+    // The owner removes the stray plain copy, then the retry loses nothing.
+    fs::remove_file(dir.path().join("credentials-plaintext-copy.json")).unwrap();
+    let clean = migrate(dir.path(), &mut store, "svc", false);
+    assert!(clean.is_ok());
 }

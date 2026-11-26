@@ -107,7 +107,9 @@ fn load_fake(mode: &str, root: &Path) -> FileFakeStore {
         mode,
         path: state_dir.join(format!(
             ".fake-keystore-{}",
-            root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "instance".into())
+            root.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "instance".into())
         )),
     }
 }
@@ -115,7 +117,7 @@ fn load_fake(mode: &str, root: &Path) -> FileFakeStore {
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(command) = args.first().map(String::as_str) else {
-        eprintln!("usage: key-custody <setup|migrate|start|recover|probe|platform-smoke> --root DIR --mode MODE");
+        eprintln!("usage: key-custody <setup|migrate|start|recover|probe|platform-smoke|setup-headless> --root DIR --mode MODE");
         return ExitCode::from(2);
     };
     let root = PathBuf::from(arg(&args, "--root").unwrap_or("."));
@@ -178,11 +180,13 @@ fn main() -> ExitCode {
             } else {
                 Box::new(load_fake(mode, &root)) as Box<dyn OsKeyStore>
             };
-            let key_file = arg(&args, "--key-file").map(Path::new);
-            let loaded = if mode == "locked" || mode == "missing" || mode == "broken" {
+            let key_file = arg(&args, "--key-file")
+                .map(PathBuf::from)
+                .or_else(|| keystore::custody::recorded_key_file(&root));
+            let loaded = if mode == "locked" {
                 start_gate(store.as_ref(), &service).map(|_| ())
             } else {
-                load_master(store.as_ref(), &service, key_file).and_then(|master| {
+                load_master(store.as_ref(), &service, key_file.as_deref()).and_then(|master| {
                     let bundle = read_bundle(&root)?;
                     keystore::custody::unwrap_with_master(&bundle, &master).map(|_| ())
                 })
@@ -210,6 +214,21 @@ fn main() -> ExitCode {
                 Err(error) => fail(error),
             }
         }
+        "setup-headless" => {
+            // Real headless setup: the bundle's master key goes to the chosen
+            // file, and the choice is recorded beside the bundle.
+            let key_file = PathBuf::from(arg(&args, "--key-file").unwrap_or("master.key"));
+            let credentials = std::fs::read(root.join("credentials.json")).unwrap_or_default();
+            match keystore::custody::set_up_headless(&root, &credentials, &key_file) {
+                Ok(migration) => {
+                    println!("words={}", migration.recovery.words().join(" "));
+                    println!("bundle={}", migration.bundle_path.display());
+                    println!("key_file_choice={}", key_file.display());
+                    ExitCode::SUCCESS
+                }
+                Err(error) => fail(error),
+            }
+        }
         "choose-key-file" => {
             // Records the owner's headless setup choice. No key is made here.
             let path = PathBuf::from(arg(&args, "--key-file").unwrap_or("master.key"));
@@ -218,7 +237,9 @@ fn main() -> ExitCode {
                     println!("key_file_choice={}", path.display());
                     match keystore::custody::recorded_key_file(&root) {
                         Some(recorded) if recorded == path => ExitCode::SUCCESS,
-                        _ => fail(CustodyError::Damaged("the key-file choice was not recorded".into())),
+                        _ => fail(CustodyError::Damaged(
+                            "the key-file choice was not recorded".into(),
+                        )),
                     }
                 }
                 Err(error) => fail(error),
