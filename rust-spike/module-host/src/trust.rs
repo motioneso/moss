@@ -1,29 +1,12 @@
 use anyhow::{ensure, Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
-use ring::signature::{UnparsedPublicKey, ED25519};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
-pub fn valid_digest(s: &str) -> bool {
-    s.len() == 64
-        && s.bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
-pub fn verify(key: &str, bytes: &[u8], signature: &str) -> Result<()> {
-    let key = STANDARD
-        .decode(key)
-        .context("The signing key is not valid")?;
-    let sig = STANDARD
-        .decode(signature.trim())
-        .context("The signature is not valid")?;
-    UnparsedPublicKey::new(&ED25519, key)
-        .verify(bytes, &sig)
-        .map_err(|_| anyhow::anyhow!("The signature does not match; nothing was installed"))
-}
+#[path = "trust_crypto.rs"]
+mod crypto;
+pub use crypto::{digest, valid_digest, verify};
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Publisher {

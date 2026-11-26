@@ -6,6 +6,8 @@
   "type": "module",
   "packageManager": "pnpm@10.6.2",
   "scripts": {
+    "test:rust-phase7-update-feed": "tsx rust-spike/app-update/tools/phase7-update-feed-gate.ts",
+    "test:rust-phase7-os-trust": "python3 rust-spike/shell/tools/phase7_os_trust.py",
     "test:rust-phase7-pg-bundle": "python3 rust-spike/bundled-db/tools/phase7_pg_bundle.py",
     "test:rust-phase7-instance-service": "python3 rust-spike/shell/tools/phase7_instance_service.py",
     "test:rust-app-runtime-routing": "cargo test --manifest-path rust-spike/shell/Cargo.toml -p moss-app runtime_proof::staged_runtime_provisions_starts_and_stops_local_server -- --ignored --nocapture",

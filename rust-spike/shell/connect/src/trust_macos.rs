@@ -1,4 +1,5 @@
-//! macOS (WKWebView) certificate pinning for a server's web view.
+//! macOS (WKWebView) trust for a server's web view. Public-mode profiles use default OS
+//! handling; the pin comparison below applies only to pinned profiles.
 //!
 //! wry's navigation delegate does not answer server-trust challenges, so the answering method is
 //! added to its class once. Every TLS connection a server view makes then reaches `challenge`,
@@ -27,6 +28,7 @@ const CANCEL: isize = 2;
 struct Pin {
     id: String,
     certificate: Vec<u8>,
+    os_trust: bool,
     proxy: EventLoopProxy<UserEvent>,
 }
 
@@ -70,6 +72,7 @@ pub fn install(
             Pin {
                 id: opened.id.clone(),
                 certificate: opened.certificate.clone(),
+                os_trust: opened.os_trust,
                 proxy,
             },
         );
@@ -141,6 +144,9 @@ unsafe extern "C-unwind" fn challenge(
         let Some(pin) = guard.as_ref().and_then(|g| g.as_ref()?.get(&key)) else {
             return answer(DEFAULT_HANDLING, std::ptr::null_mut());
         };
+        if pin.os_trust {
+            return answer(DEFAULT_HANDLING, std::ptr::null_mut());
+        }
         let presented = leaf(trust);
         if presented.as_deref() == Some(pin.certificate.as_slice()) {
             let class = AnyClass::get(c"NSURLCredential");

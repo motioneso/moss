@@ -94,6 +94,7 @@ export const rustModules = [
 ];
 
 export const hostGates = [
+  "phase7-update-feed",
   "module-bootstrap",
   "phase6-lifecycle-api",
   "phase6-registry-api",

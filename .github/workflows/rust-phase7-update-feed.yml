@@ -1,0 +1,129 @@
+name: Rust phase7_update_feed
+on:
+  pull_request:
+    paths:
+      - "rust-spike/app-update/**"
+      - "rust-spike/module-host/src/trust*.rs"
+      - ".github/workflows/rust-phase7-update-feed.yml"
+  push:
+    branches: [main]
+    paths:
+      - "rust-spike/app-update/**"
+      - "rust-spike/module-host/src/trust*.rs"
+      - ".github/workflows/rust-phase7-update-feed.yml"
+  workflow_dispatch:
+    inputs:
+      configured_key:
+        description: Use the named real signing secrets (main only); default generates a throwaway key
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_update_feed:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-update-target
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Signed feed and every refusal through the real client
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/app-update/Cargo.toml --test phase7_update_feed -- --nocapture --test-threads=1
+      - name: Refusal guard removals and private-output control must fail
+        run: python rust-spike/app-update/tools/negative-controls.py
+      - name: Build the native test-feed artifact
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/app-update/Cargo.toml
+      - name: Prepare native release input
+        shell: python
+        run: |
+          import os, pathlib, shutil
+          root = pathlib.Path('native')
+          root.mkdir()
+          name = 'moss-app-update-' + os.environ['RUNNER_OS'] + ('-aarch64' if os.environ['RUNNER_ARCH'] == 'ARM64' else '-x86_64')
+          shutil.copyfile(pathlib.Path(os.environ['CARGO_TARGET_DIR']) / 'debug' / ('moss-app-update.exe' if os.name == 'nt' else 'moss-app-update'), root / (name + ('.exe' if os.name == 'nt' else '')))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-update-${{ runner.os }}
+          path: native/*
+          if-no-files-found: error
+  publish_test_feed:
+    needs: phase7_update_feed
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-update-target
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-update-*
+          path: native
+          merge-multiple: true
+      - name: Build release tool before supplying signing secrets
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/app-update/Cargo.toml
+      - name: Assemble immutable GitHub Releases locations
+        shell: python
+        run: |
+          import json, os, pathlib
+          tag = 'rust-app-updates-test-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          rows = []
+          for file in sorted(pathlib.Path('native').iterdir()):
+              target = file.name.removeprefix('moss-app-update-').removesuffix('.exe').split('-')
+              rows.append(dict(os={'Linux':'linux','macOS':'macos','Windows':'windows'}[target[0]], arch=target[1], version='0.1.0', url=f'https://github.com/{os.environ["GITHUB_REPOSITORY"]}/releases/download/{tag}/{file.name}', file=str(file), schemaMin=0, schemaMax=0))
+          pathlib.Path('release-input.json').write_text(json.dumps(rows))
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'UPDATE_TAG={tag}\n')
+      - name: Sign test feed with an in-memory throwaway key by default
+        env:
+          MOSS_APP_UPDATE_SIGNING_KEY_ID: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.configured_key && secrets.MOSS_APP_UPDATE_SIGNING_KEY_ID || '' }}
+          MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.configured_key && secrets.MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY || '' }}
+          CONFIGURED_KEY: ${{ inputs.configured_key || false }}
+        shell: bash
+        run: |
+          options=()
+          if [[ "$CONFIGURED_KEY" == true ]]; then
+            test "$GITHUB_REF" = refs/heads/main
+            options+=(--configured-key)
+          fi
+          "$CARGO_TARGET_DIR/debug/moss-app-update" release release-input.json feed "$((GITHUB_RUN_ID * 1000 + GITHUB_RUN_ATTEMPT))" "${options[@]}"
+      - name: Publish a test feed, never overwrite the production channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release create "$UPDATE_TAG" native/* feed/index.json feed/index.json.sig feed/public-key.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "App update test feed $GITHUB_RUN_ID" --notes "Phase 7 preflight tool artifacts only. Not an installer. The public key is test evidence, never client trust."
+      - name: Make the complete test release visible
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release edit "$UPDATE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+      - name: Read the published feed with the client and verify the native bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release download "$UPDATE_TAG" --repo "$GITHUB_REPOSITORY" --dir published
+          key_id=generated-ci
+          if [[ "${{ inputs.configured_key || false }}" == true ]]; then
+            key_id=$(python3 -c 'import json; print(json.load(open("feed/index.json"))["signingKey"])')
+          fi
+          # Trust the key kept by this job, never the key in the downloaded feed.
+          "$CARGO_TARGET_DIR/debug/moss-app-update" check published "$key_id" feed/public-key.txt seen.json 0 published/moss-app-update-Linux-x86_64

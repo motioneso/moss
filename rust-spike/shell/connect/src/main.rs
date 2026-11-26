@@ -2,8 +2,8 @@
 //! needed, or to one on another computer. Everything else runs on the server.
 //!
 //! The app's own screens are served from `moss-app://`. Server pages open in a separate web
-//! view with its own profile. That view allows the server's pinned certificate and closes any
-//! page load that arrived over a different one (see `trust_on_linux`).
+//! view with its own profile. Public-mode views use OS trust; pinned views retain the
+//! certificate checks and platform limitations documented in the trust modules.
 
 mod desktop;
 mod launch;
@@ -50,6 +50,7 @@ enum UserEvent {
     },
     Show(Value),
     Open(Opened),
+    PublicServer(String),
     ShowServers,
     /// Another program asked this window to show a saved server, and maybe one of its pages.
     OpenLink {
@@ -85,6 +86,7 @@ struct Opened {
     name: String,
     origin: String,
     certificate: Vec<u8>,
+    os_trust: bool,
 }
 
 /// Declared in this order so the web view drops before the profile it uses.
@@ -403,6 +405,7 @@ impl App {
             }
             UserEvent::Show(state) => self.show(state),
             UserEvent::Open(opened) => self.open(opened),
+            UserEvent::PublicServer(origin) => self.add_remote(origin, String::new()),
             UserEvent::ShowServers => {
                 self.turn += 1;
                 self.list_servers();
@@ -789,6 +792,7 @@ impl App {
                     name,
                     origin,
                     certificate,
+                    os_trust: matches!(&target, Target::Remote(remote) if remote.pin.is_empty()),
                 }),
                 Err(problem) => UserEvent::Show(problem_screen(&target, &problem)),
             };
@@ -821,10 +825,18 @@ impl App {
                 return self.show(json!({"screen":"add", "address": address, "error": error, "first": self.servers.last.is_none()}))
             }
         };
+        // Re-adding a saved address must never replace a user-confirmed pin with OS trust.
+        if let Some(remote) = self.servers.remotes.iter().find(|r| r.origin == origin) {
+            return self.choose(remote.id.clone());
+        }
         self.show(json!({"screen":"connecting", "name": origin.trim_start_matches("https://")}));
         let first = self.servers.last.is_none();
         let (proxy, turn) = (self.proxy.clone(), self.turn);
         self.runtime.spawn(async move {
+            if reach::has_os_trust(&origin).await {
+                let _ = proxy.send_event(UserEvent::Later(turn, Box::new(UserEvent::PublicServer(origin))));
+                return;
+            }
             let state = match reach::peek_certificate(&origin).await {
                 Ok(fingerprint) => json!({"screen":"check", "address": origin, "fingerprint": fingerprint}),
                 Err(problem) => json!({"screen":"add", "address": origin, "error": problem.reason(), "first": first}),
@@ -959,7 +971,11 @@ impl App {
                 let server = opened.id.clone();
                 let origin = opened.origin.clone();
                 let data = self.store.data.clone();
-                let pin = moss_network::instance::fingerprint(&opened.certificate);
+                let pin = if opened.os_trust {
+                    String::new()
+                } else {
+                    moss_network::instance::fingerprint(&opened.certificate)
+                };
                 move |request: Request<String>| {
                     if url::Url::parse(&request.uri().to_string())
                         .is_ok_and(|u| u.origin().ascii_serialization() == origin)
