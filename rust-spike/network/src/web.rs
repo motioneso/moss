@@ -1,7 +1,9 @@
 use crate::{
     config::Config,
+    firewall::Refusal,
     limit::SignInLimit,
     policy::{loopback, Policy},
+    sharing::{Control, Failure},
 };
 use axum::{
     body::{to_bytes, Body},
@@ -36,6 +38,7 @@ use tokio::{
 pub struct Network {
     pub platform: Arc<Platform>,
     pub policy: Policy,
+    control: Option<Control>,
     config: Mutex<Config>,
     config_path: PathBuf,
     setup: Mutex<()>,
@@ -48,9 +51,11 @@ impl Network {
         platform: Arc<Platform>,
         config: Config,
         path: PathBuf,
+        control: Option<Control>,
     ) -> Result<Arc<Self>, String> {
         Ok(Arc::new(Self {
             policy: config.policy()?,
+            control,
             platform,
             config: Mutex::new(config),
             config_path: path,
@@ -417,7 +422,12 @@ async fn network_status(
         .map_err(|_| ApiError::http(500, "Invalid public certificate"))?;
     let fingerprint = crate::instance::fingerprint(&leaf);
     Ok(Json(
-        json!({"sharing":n.policy.sharing(), "origins":config.origins, "fingerprint":fingerprint}),
+        json!({
+            "sharing":n.policy.sharing(),
+            "origins":config.origins,
+            "fingerprint":fingerprint,
+            "firewall":n.control.as_ref().map(|c| c.firewall.state().word()),
+        }),
     ))
 }
 
@@ -452,19 +462,58 @@ struct Sharing {
     sharing: bool,
 }
 
+fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
+    let message = match refusal {
+        Refusal::Declined => "The firewall did not allow Moss.",
+        Refusal::Failed => "The firewall did not take the change.",
+    };
+    (
+        StatusCode::CONFLICT,
+        Json(json!({"code":"app_firewall_refused", "error":message, "sharing":sharing})),
+    )
+        .into_response()
+}
+
 async fn set_sharing(
     State(n): State<Arc<Network>>,
     Extension(access): Extension<AccessContext>,
     Json(body): Json<Sharing>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     require_admin(&n, &access).await?;
     let mut config = n.config.lock().await;
+    let previous = config.sharing;
     let mut saved = config.clone();
     saved.sharing = body.sharing;
-    saved
-        .write(&n.config_path)
-        .map_err(|_| ApiError::http(500, "Sharing was not saved. Try again."))?;
-    n.policy.set_sharing(saved.sharing);
-    *config = saved;
-    Ok(Json(json!({"sharing":body.sharing})))
+    let Some(control) = &n.control else {
+        saved
+            .write(&n.config_path)
+            .map_err(|_| ApiError::http(500, "Sharing was not saved. Try again."))?;
+        n.policy.set_sharing(saved.sharing);
+        *config = saved;
+        return Ok(Json(json!({"sharing":body.sharing})).into_response());
+    };
+    let save = |on: bool| {
+        let mut next = config.clone();
+        next.sharing = on;
+        next.write(&n.config_path).map_err(|_| ())
+    };
+    let result = control.apply(body.sharing, previous, &n.policy, save).await;
+    let reply = |on: bool| {
+        Json(json!({"sharing":on, "firewall":control.firewall.state().word()})).into_response()
+    };
+    match result {
+        Ok(()) => {
+            *config = saved;
+            Ok(reply(body.sharing))
+        }
+        // Sharing is off either way; only the rule's removal was refused.
+        Err(Failure::Firewall(refusal)) => {
+            if !body.sharing {
+                *config = saved;
+            }
+            Ok(firewall_refused(refusal, false))
+        }
+        Err(Failure::Save) => Err(ApiError::http(500, "Sharing was not saved. Try again.")),
+        Err(Failure::Switch) => Err(ApiError::http(500, "Sharing could not change. Try again.")),
+    }
 }
