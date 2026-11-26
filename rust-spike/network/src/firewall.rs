@@ -4,6 +4,13 @@
 //! removes it. The rule is changed by `moss-server firewall-rule`, run with the owner's
 //! approval from the operating system's own prompt. A record in the instance folder names the
 //! rule that is open, so turning sharing off or removing the instance always finds it.
+//!
+//! Moss only ever touches a rule it can prove it made. The live rule carries the proof. The
+//! Windows rule name and the ufw comment are `moss-<instance>-<token>`, the firewalld service
+//! file `moss-<instance>.xml` holds the token in its description, and the macOS entry is Moss's
+//! own server path, removed only when the record shows Moss added it. The local record alone
+//! never proves ownership. Every delete looks the live rule up by that marker first, and a
+//! lookup that cannot give a clear answer is an error, never "gone".
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -62,9 +69,16 @@ pub struct Rule {
     /// The Linux firewall manager used at add time. Removal uses the same one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manager: Option<String>,
+    /// The firewalld service name (`moss-<instance>`). Its file holds the token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    /// macOS only. True when Moss added the application firewall entry, false when the entry
+    /// was already there. Removal runs only when this is true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_added: Option<bool>,
 }
 
-/// A firewalld port command. `op` is `add`, `remove` or `query`.
+/// A firewalld service command. `op` is `add`, `remove` or `query`.
 fn firewalld(rule: &Rule, permanent: bool, op: &str) -> Vec<String> {
     let mut args = vec!["firewall-cmd".to_owned()];
     if permanent {
@@ -73,19 +87,74 @@ fn firewalld(rule: &Rule, permanent: bool, op: &str) -> Vec<String> {
     if let Some(zone) = &rule.zone {
         args.push(format!("--zone={zone}"));
     }
-    args.push(format!("--{op}-port={}/tcp", rule.port));
+    match service_name(rule) {
+        Some(service) => args.push(format!("--{op}-service={service}")),
+        None => args.push(format!("--{op}-port={}/tcp", rule.port)),
+    }
     args
+}
+
+/// The firewalld service for a rule. Moss owns `moss-<instance>`; its file holds the token.
+fn service_name(rule: &Rule) -> Option<String> {
+    if let Some(service) = &rule.service {
+        return Some(service.clone());
+    }
+    // Marker names are moss-<instance>-<token>. Dropping the last part names the service.
+    let rest = rule
+        .name
+        .strip_prefix("moss-")
+        .or_else(|| rule.name.strip_prefix("Moss-"))?;
+    let instance = rest.rsplit_once('-').map_or(rest, |(head, _)| head);
+    if instance.is_empty() {
+        return None;
+    }
+    Some(format!("moss-{instance}"))
+}
+
+fn service_path(rule: &Rule) -> Option<PathBuf> {
+    let service = service_name(rule)?;
+    let dir = std::env::var_os("MOSS_FIREWALLD_SERVICE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/etc/firewalld/services"));
+    Some(dir.join(format!("{service}.xml")))
+}
+
+fn service_xml(rule: &Rule) -> Option<String> {
+    let service = service_name(rule)?;
+    let token = rule.token.as_deref()?;
+    Some(format!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<service>\n  <short>{service}</short>\n  <description>{token}</description>\n  <port port=\"{}\" protocol=\"tcp\"/>\n</service>\n",
+        rule.port
+    ))
+}
+
+/// Whether service file text proves this rule is Moss's. The token and the port must both match.
+fn service_file_is_ours(text: &str, rule: &Rule) -> bool {
+    let Some(token) = rule.token.as_deref() else {
+        return false;
+    };
+    text.contains(&format!("<description>{token}</description>"))
+        && text.contains(&format!("port=\"{}\"", rule.port))
 }
 
 impl Rule {
     /// Names and paths reach operating system commands, so only plain values are accepted.
     pub fn check(&self) -> Result<(), &'static str> {
         let plain = |c: char| c.is_ascii_alphanumeric() || "-_.".contains(c);
-        if !self.name.starts_with("Moss-") {
-            return Err("The rule name must start with Moss-");
+        if !(self.name.starts_with("moss-") || self.name.starts_with("Moss-")) {
+            return Err("The rule name must start with moss-");
         }
-        if self.name.is_empty() || self.name.len() > 64 || !self.name.chars().all(plain) {
+        if self.name.is_empty() || self.name.len() > 96 || !self.name.chars().all(plain) {
             return Err("The rule name must be short and plain");
+        }
+        if let Some(service) = &self.service {
+            if !service.starts_with("moss-")
+                || service.is_empty()
+                || service.len() > 64
+                || !service.chars().all(plain)
+            {
+                return Err("The firewall service must be short and plain");
+            }
         }
         if let Some(zone) = &self.zone {
             if zone.is_empty() || zone.len() > 64 || !zone.chars().all(plain) {
@@ -196,18 +265,10 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
                 firewalld(rule, true, "remove"),
                 firewalld(rule, false, "remove"),
             ],
+            // The comment carries the marker, so a later delete can prove the rule is Moss's.
             (Linux::Ufw, Action::Add) => vec![cmd(&[
-                "ufw",
-                "allow",
-                "in",
-                "proto",
-                "tcp",
-                "to",
-                "any",
-                "port",
-                &port,
-                "comment",
-                rule.token.as_deref().unwrap_or(&rule.name),
+                "ufw", "allow", "in", "proto", "tcp", "to", "any", "port", &port, "comment",
+                &rule.name,
             ])],
             (Linux::Ufw, Action::Remove) => vec![cmd(&[
                 "ufw", "delete", "allow", "in", "proto", "tcp", "to", "any", "port", &port,
@@ -349,17 +410,23 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
     }
     if action == Action::Add {
         match (os, linux) {
-            // Only a rule Moss created may carry its name.
+            // Only a rule Moss created may carry its marker name.
             (Os::Windows, _) => match exists(os, linux, rule) {
                 Some(false) => {}
                 Some(true) => return Err(FOREIGN),
                 None => return Err("The firewall could not be read"),
             },
-            (Os::Linux, Linux::Firewalld) => match firewalld_halves(rule) {
-                Some((false, false)) => {}
-                Some((true, true)) => return Ok(true),
-                Some(_) => return Err(FOREIGN),
-                None => return Err("The firewall could not be read"),
+            (Os::Linux, Linux::Firewalld) => match firewalld_mark(rule) {
+                // Our own service file from an earlier step in this add may be finished here.
+                ServiceMark::Ours => {}
+                ServiceMark::Foreign => return Err(FOREIGN),
+                ServiceMark::Unreadable => return Err("The firewall could not be read"),
+                ServiceMark::Missing => match firewalld_halves(rule) {
+                    Some((false, false)) => {}
+                    // Assigned with no Moss service file is someone else's rule.
+                    Some(_) => return Err(FOREIGN),
+                    None => return Err("The firewall could not be read"),
+                },
             },
             // The add and any rollback only touch a rule known to be absent before.
             _ => match exists(os, linux, rule) {
@@ -367,6 +434,20 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
                 Some(false) => {}
                 None => return Err("The firewall could not be read"),
             },
+        }
+    }
+    if os == Os::Linux && linux == Linux::Firewalld && action == Action::Add {
+        // The Moss-owned service file comes first. Only this service is ever added or removed.
+        let (Some(path), Some(xml)) = (service_path(rule), service_xml(rule)) else {
+            return Err("The firewall could not be read");
+        };
+        if let Some(parent) = path.parent() {
+            if std::fs::create_dir_all(parent).is_err() {
+                return Err("The firewall refused the rule");
+            }
+        }
+        if std::fs::write(&path, xml).is_err() {
+            return Err("The firewall refused the rule");
         }
     }
     for step in plan(os, linux, action, rule) {
@@ -385,19 +466,98 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
         Action::Add if present != Some(true) => {
             rolled_back(os, linux, rule, "The firewall did not keep the change")
         }
+        Action::Add => {
+            // The live rule must carry Moss's marker, not just the right port.
+            let marked = if os == Os::Mac {
+                present == Some(true)
+            } else {
+                owned(os, linux, rule) == Ok(true)
+            };
+            if marked {
+                Ok(false)
+            } else {
+                rolled_back(os, linux, rule, "The firewall did not keep the change")
+            }
+        }
         Action::Remove if present != Some(false) => Err("The firewall did not keep the change"),
-        _ => Ok(false),
+        Action::Remove => {
+            // The service is unassigned in both halves and its marker proved it is Moss's, so
+            // its file goes now. The file stays while any assignment remains.
+            if os == Os::Linux && linux == Linux::Firewalld {
+                if let Some(path) = service_path(rule) {
+                    match std::fs::remove_file(&path) {
+                        Ok(()) => {}
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(_) => return Err("The firewall did not keep the change"),
+                    }
+                }
+            }
+            Ok(false)
+        }
     }
 }
 
-/// Whether the one rule a remove would delete carries Moss's token. Where the firewall holds no
-/// marker (firewalld, macOS), the record proves ownership: removal only runs for a rule that was
-/// absent before Moss added it. A failed read is an error, never "gone".
+/// Whether listing text proves a Windows rule is Moss's. `None` means the text is no clear answer.
+fn windows_marker(text: &str, rule: &Rule) -> Option<bool> {
+    let token = rule.token.as_deref()?;
+    if text.contains("No rules match") {
+        return Some(false);
+    }
+    let count = text.matches("Rule Name:").count();
+    if count == 0 {
+        return None;
+    }
+    // Exactly one rule holds the marker name and it carries the token for this port and program.
+    Some(
+        count == 1
+            && text.contains(token)
+            && text.contains(&rule.port.to_string())
+            && text.contains(&rule.program.display().to_string()),
+    )
+}
+
+/// Whether `ufw show added` text proves the rules on the port are Moss's.
+fn ufw_marker(text: &str, rule: &Rule) -> bool {
+    let needle = format!("allow {}/tcp", rule.port);
+    let lines: Vec<&str> = text.lines().filter(|l| l.contains(&needle)).collect();
+    // Every rule on the port must carry the marker, or nothing is deleted.
+    !lines.is_empty() && lines.iter().all(|l| l.contains(&rule.name))
+}
+
+/// Whether the macOS application firewall listing proves Moss may remove its own entry.
+fn mac_marker(text: &str, rule: &Rule) -> bool {
+    rule.entry_added == Some(true) && text.contains(&rule.program.display().to_string())
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ServiceMark {
+    Ours,
+    Foreign,
+    Missing,
+    Unreadable,
+}
+
+fn firewalld_mark(rule: &Rule) -> ServiceMark {
+    let Some(path) = service_path(rule) else {
+        return ServiceMark::Unreadable;
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(text) if service_file_is_ours(&text, rule) => ServiceMark::Ours,
+        Ok(_) => ServiceMark::Foreign,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => ServiceMark::Missing,
+        Err(_) => ServiceMark::Unreadable,
+    }
+}
+
+/// Whether the one rule a remove would delete carries Moss's marker on the live rule. A failed
+/// read is an error, never "gone". A record with no token proves nothing, so it never deletes.
 fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
     const UNREADABLE: &str = "The firewall could not be read";
+    if rule.token.is_none() {
+        return Err(UNREADABLE);
+    }
     match (os, linux) {
         (Os::Windows, _) => {
-            let token = rule.token.as_deref().ok_or(UNREADABLE)?;
             let verbose = cmd(&[
                 "netsh",
                 "advfirewall",
@@ -408,52 +568,59 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 "verbose",
             ]);
             match run_code(&verbose) {
-                // Exactly one rule holds the name and it carries the token.
-                Some((0, text)) => {
-                    Ok(text.matches("Rule Name:").count() == 1 && text.contains(token))
-                }
+                Some((0, text)) => windows_marker(&text, rule).ok_or(UNREADABLE),
                 Some((1, text)) if text.contains("No rules match") => Ok(false),
+                Some((_, text)) => windows_marker(&text, rule).ok_or(UNREADABLE),
                 _ => Err(UNREADABLE),
             }
         }
-        (Os::Linux, Linux::Ufw) => {
-            let token = rule.token.as_deref().ok_or(UNREADABLE)?;
-            let needle = format!("allow {}/tcp", rule.port);
-            match run_code(&cmd(&["ufw", "show", "added"])) {
-                Some((0, text)) => {
-                    let lines: Vec<&str> = text.lines().filter(|l| l.contains(&needle)).collect();
-                    // Every rule on the port must be Moss's, or nothing is deleted.
-                    Ok(!lines.is_empty() && lines.iter().all(|l| l.contains(token)))
-                }
+        (Os::Linux, Linux::Ufw) => match run_code(&cmd(&["ufw", "show", "added"])) {
+            Some((0, text)) => Ok(ufw_marker(&text, rule)),
+            _ => Err(UNREADABLE),
+        },
+        (Os::Linux, Linux::Firewalld) => {
+            if rule.manager.as_deref() != Some("firewalld") {
+                return Err(UNREADABLE);
+            }
+            match firewalld_mark(rule) {
+                ServiceMark::Ours => Ok(true),
+                ServiceMark::Foreign => Ok(false),
+                ServiceMark::Missing => match firewalld_halves(rule) {
+                    // Assigned with no Moss file is someone else's rule. It stays.
+                    Some(_) => Ok(false),
+                    None => Err(UNREADABLE),
+                },
+                ServiceMark::Unreadable => Err(UNREADABLE),
+            }
+        }
+        (Os::Mac, _) => {
+            // Only the record showing Moss added this path lets a remove run at all.
+            match rule.entry_added {
+                Some(false) => return Ok(false),
+                None => return Err(UNREADABLE),
+                Some(true) => {}
+            }
+            match run_code(&cmd(&[SOCKET_FILTER, "--listapps"])) {
+                Some((0, text)) => Ok(mac_marker(&text, rule)),
                 _ => Err(UNREADABLE),
             }
         }
-        // A record from before ownership tokens proves nothing, so it never deletes.
-        _ if rule.token.is_none() => Err(UNREADABLE),
-        (Os::Linux, Linux::Firewalld) if rule.manager.is_none() => Err(UNREADABLE),
-        _ => Ok(true),
+        _ => Err(UNREADABLE),
     }
 }
 
 /// Takes a failed add back out and reports `reason`, or says so when the rule could not be removed.
+/// The rollback goes through the same marker check as any other delete.
 fn rolled_back(
     os: Os,
     linux: Linux,
     rule: &Rule,
     reason: &'static str,
 ) -> Result<bool, &'static str> {
-    let _ = apply_quietly(Action::Remove, rule, os, linux);
-    if present_query(os, linux, rule).is_some() && exists(os, linux, rule) != Some(false) {
-        return Err(STUCK);
+    match apply_with(os, linux, Action::Remove, rule) {
+        Ok(_) if exists(os, linux, rule) == Some(false) => Err(reason),
+        _ => Err(STUCK),
     }
-    Err(reason)
-}
-
-fn apply_quietly(action: Action, rule: &Rule, os: Os, linux: Linux) -> Option<()> {
-    for step in plan(os, linux, action, rule) {
-        output(&step);
-    }
-    Some(())
 }
 
 /// What the app tells the owner about the firewall.
@@ -484,6 +651,8 @@ pub enum Refusal {
     Foreign,
     /// No supported firewall manager was found. Sharing stays off.
     NoManager,
+    /// A record from before ownership tokens. It never deletes, and the owner removes the old rule.
+    Legacy,
 }
 
 impl Refusal {
@@ -494,6 +663,7 @@ impl Refusal {
             Refusal::Stuck => "stuck",
             Refusal::Foreign => "foreign_rule",
             Refusal::NoManager => "no_firewall_manager",
+            Refusal::Legacy => "legacy_rule",
         }
     }
 }
@@ -516,13 +686,21 @@ struct Record {
 #[derive(Clone)]
 pub struct Firewall {
     folder: PathBuf,
-    name: String,
+    instance: String,
     program: PathBuf,
     stand_in: Option<PathBuf>,
 }
 
 impl Firewall {
     pub fn new(folder: &Path, program: PathBuf) -> Self {
+        Self::with_stand_in(
+            folder,
+            program,
+            std::env::var_os(STAND_IN_ENV).map(PathBuf::from),
+        )
+    }
+
+    fn with_stand_in(folder: &Path, program: PathBuf, stand_in: Option<PathBuf>) -> Self {
         let instance = folder
             .file_name()
             .and_then(|n| n.to_str())
@@ -535,13 +713,13 @@ impl Firewall {
                     '-'
                 }
             })
-            .take(48)
+            .take(24)
             .collect::<String>();
         Firewall {
             folder: folder.to_owned(),
-            name: format!("Moss-{instance}"),
+            instance,
             program,
-            stand_in: std::env::var_os(STAND_IN_ENV).map(PathBuf::from),
+            stand_in,
         }
     }
 
@@ -560,23 +738,34 @@ impl Firewall {
         }
     }
 
-    /// Whether the rule the record describes is still Moss's own. Only Windows can say, by the
-    /// token in the rule. Where nothing can be checked this is true.
-    pub fn rule_intact(&self) -> bool {
-        match self.recorded() {
-            Ok(Some(record)) if record.confirmed => {
-                if this_os() != Os::Windows || record.preexisting {
-                    return true;
-                }
-                owned(Os::Windows, Linux::Nothing, &record.rule) == Ok(true)
-            }
-            _ => false,
+    /// Whether the live rule still carries Moss's marker for `port`. A record from before
+    /// ownership tokens, a rule that was already open before Moss, a wrong port, or a lookup
+    /// that cannot answer all mean sharing stays off. This runs against the real rule, with no
+    /// stand-in shortcut.
+    pub fn rule_intact(&self, port: u16) -> bool {
+        let Ok(Some(record)) = self.recorded() else {
+            return false;
+        };
+        let rule = &record.rule;
+        if !record.confirmed || record.preexisting || rule.token.is_none() || rule.port != port {
+            return false;
         }
+        let (os, linux) = match this_os() {
+            Os::Windows => (Os::Windows, Linux::Nothing),
+            Os::Mac => (Os::Mac, Linux::Nothing),
+            Os::Linux => match rule.manager.as_deref() {
+                Some("ufw") => (Os::Linux, Linux::Ufw),
+                Some("firewalld") => (Os::Linux, Linux::Firewalld),
+                _ => return false,
+            },
+        };
+        owned(os, linux, rule) == Ok(true)
+            && (linux != Linux::Firewalld || exists(os, linux, rule) == Some(true))
     }
 
     pub fn state(&self) -> State {
         match self.recorded() {
-            Ok(Some(record)) if record.confirmed => State::Allowed,
+            Ok(Some(record)) if record.confirmed && record.rule.token.is_some() => State::Allowed,
             _ => State::NotAsked,
         }
     }
@@ -610,45 +799,83 @@ impl Firewall {
                 _ => {}
             }
         }
-        let rule = Rule {
-            name: self.name.clone(),
+        let token = new_token();
+        let mut rule = Rule {
+            // The marker names the instance and this one add, on the live rule itself.
+            name: format!("moss-{}-{token}", self.instance),
             port,
             program: self.program.clone(),
             zone,
-            token: Some(new_token()),
+            token: Some(token),
             manager,
+            service: Some(format!("moss-{}", self.instance)),
+            entry_added: None,
         };
+        if this_os() == Os::Mac {
+            // The macOS marker is the server path entry. Moss may remove it only when Moss
+            // added it, so the add needs to know whether the entry is already there.
+            rule.entry_added = match exists(Os::Mac, Linux::Nothing, &rule) {
+                Some(false) => Some(true),
+                Some(true) => Some(false),
+                None => return Err(Refusal::Failed),
+            };
+        }
         rule.check().map_err(|_| Refusal::Failed)?;
         match self.recorded()? {
-            Some(open) if open.confirmed && open.rule == rule => return Ok(()),
+            Some(open) if open.confirmed && open.rule.port == rule.port => return Ok(()),
             // A different rule, or one that was never confirmed, goes before a new one opens.
             Some(_) => self.close().await?,
             None => {}
         }
-        // The record comes first, so a crash during the change still leaves a way to remove it.
-        // Windows carries a token, so removal never touches a rule that lacks it. Elsewhere the
-        // record claims the rule only when none was open before the add.
-        let linux = match rule.manager.as_deref() {
-            Some("ufw") => Linux::Ufw,
-            Some("firewalld") => Linux::Firewalld,
-            _ => Linux::Nothing,
+        // Intent is written before the add, then the add, then the live marker is confirmed.
+        // A crash at any step leaves either nothing or a rule the marker can still prove.
+        // The macOS entry is claimed only when Moss is the one adding it.
+        let added = if this_os() == Os::Mac {
+            rule.entry_added == Some(true)
+        } else {
+            true
         };
-        // Windows and ufw rules carry the token, so removal never touches a rule without it.
-        let claim =
-            cfg!(windows) || linux == Linux::Ufw || exists(this_os(), linux, &rule) == Some(false);
         self.write_record(&Record {
             rule: rule.clone(),
             confirmed: false,
             preexisting: false,
-            added: claim,
+            added,
         })?;
         match self.run(Action::Add, rule.clone()).await {
-            Ok(preexisting) => self.write_record(&Record {
-                rule,
-                confirmed: true,
-                preexisting,
-                added: !preexisting,
-            }),
+            Ok(preexisting) => {
+                if !preexisting {
+                    // Confirm the marker on the live rule before calling this allowed.
+                    let linux = match rule.manager.as_deref() {
+                        Some("ufw") => Linux::Ufw,
+                        Some("firewalld") => Linux::Firewalld,
+                        _ => Linux::Nothing,
+                    };
+                    let marked = if this_os() == Os::Mac {
+                        exists(Os::Mac, Linux::Nothing, &rule) == Some(true)
+                    } else {
+                        owned(this_os(), linux, &rule) == Ok(true)
+                    };
+                    if !marked {
+                        let _ = self.write_record(&Record {
+                            rule: rule.clone(),
+                            confirmed: false,
+                            preexisting: false,
+                            added: true,
+                        });
+                        return Err(Refusal::Stuck);
+                    }
+                }
+                let mut stored = rule.clone();
+                if this_os() == Os::Mac {
+                    stored.entry_added = Some(!preexisting);
+                }
+                self.write_record(&Record {
+                    rule: stored,
+                    confirmed: true,
+                    preexisting,
+                    added: !preexisting,
+                })
+            }
             // The rule may be open, so the record now allows its removal.
             Err(Refusal::Stuck) => {
                 let _ = self.write_record(&Record {
@@ -671,13 +898,17 @@ impl Firewall {
         let Some(record) = self.recorded()? else {
             return Ok(());
         };
+        // A record from before ownership tokens never deletes and is never quietly cleared.
+        if record.rule.token.is_none() && (record.confirmed || record.added) {
+            return Err(Refusal::Legacy);
+        }
         // A rule is only removed when Moss added it. A record written before the owner's answer
         // proves nothing, because the rule under that name may belong to someone else.
         if !record.preexisting && (record.confirmed || record.added) {
-            // An old record without a token never deletes. The record stays and the owner is
-            // told to remove the old rule by hand.
+            // A record from before ownership tokens never deletes. The record stays and the
+            // owner is told to remove the old rule by hand.
             if record.rule.token.is_none() {
-                return Err(Refusal::Stuck);
+                return Err(Refusal::Legacy);
             }
             self.run(Action::Remove, record.rule).await?;
         }
@@ -697,7 +928,8 @@ fn new_token() -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    format!("Moss-owner-{nanos:x}-{:x}", std::process::id())
+    let mixed = (nanos >> 64) as u64 ^ nanos as u64 ^ (u64::from(std::process::id()) << 32);
+    format!("{mixed:016x}")
 }
 
 fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
@@ -722,6 +954,14 @@ fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
     if let Some(manager) = &rule.manager {
         args.push("--manager".into());
         args.push(manager.clone());
+    }
+    if let Some(service) = &rule.service {
+        args.push("--service".into());
+        args.push(service.clone());
+    }
+    if let Some(entry_added) = rule.entry_added {
+        args.push("--entry-added".into());
+        args.push(entry_added.to_string());
     }
     args
 }
@@ -834,12 +1074,14 @@ mod tests {
 
     fn rule() -> Rule {
         Rule {
-            name: "Moss-default".into(),
+            name: "moss-default-0123456789abcdef".into(),
             port: 5198,
             program: std::env::current_exe().unwrap(),
             zone: None,
-            token: None,
+            token: Some("0123456789abcdef".into()),
             manager: None,
+            service: Some("moss-default".into()),
+            entry_added: None,
         }
     }
 
@@ -977,6 +1219,213 @@ mod tests {
     }
 
     #[test]
+    fn every_live_rule_carries_the_marker() {
+        let owned = rule();
+        let win = plan(Os::Windows, Linux::Nothing, Action::Add, &owned);
+        assert!(win[0].contains(&format!("name={}", owned.name)));
+        assert!(win[0].contains(&"description=0123456789abcdef".to_owned()));
+        assert!(owned.name.starts_with("moss-default-"));
+        let ufw = plan(Os::Linux, Linux::Ufw, Action::Add, &owned);
+        assert!(ufw[0].contains(&owned.name));
+        let fwd = plan(Os::Linux, Linux::Firewalld, Action::Add, &owned);
+        assert!(fwd
+            .iter()
+            .flatten()
+            .any(|a| a == "--add-service=moss-default"));
+        assert!(!fwd.iter().flatten().any(|a| a.contains("-port=")));
+        let xml = service_xml(&owned).unwrap();
+        assert!(xml.contains("<description>0123456789abcdef</description>"));
+        assert!(xml.contains("port=\"5198\""));
+    }
+
+    #[test]
+    fn marker_checks_accept_ours_and_refuse_foreign_rules() {
+        let owned = rule();
+        let program = owned.program.display().to_string();
+        let good = format!(
+            "Rule Name: {}\n{program}\n5198\n0123456789abcdef\n",
+            owned.name
+        );
+        assert_eq!(windows_marker(&good, &owned), Some(true));
+        // Negative controls. A foreign token, a second rule, and a garbled answer never prove.
+        let foreign = good.replace("0123456789abcdef", "someone-else");
+        assert_eq!(windows_marker(&foreign, &owned), Some(false));
+        let two = format!("{good}Rule Name: other\n");
+        assert_eq!(windows_marker(&two, &owned), Some(false));
+        assert_eq!(windows_marker("No rules match", &owned), Some(false));
+        assert_eq!(windows_marker("garbled", &owned), None);
+
+        let ufw_good = format!("ufw allow 5198/tcp comment {}", owned.name);
+        assert!(ufw_marker(&ufw_good, &owned));
+        let ufw_foreign = "ufw allow 5198/tcp";
+        assert!(!ufw_marker(ufw_foreign, &owned));
+        assert!(!ufw_marker(&format!("{ufw_good}\n{ufw_foreign}"), &owned));
+        assert!(!ufw_marker("", &owned));
+
+        let mut mac = owned.clone();
+        mac.entry_added = Some(true);
+        assert!(mac_marker(&program, &mac));
+        mac.entry_added = Some(false);
+        assert!(!mac_marker(&program, &mac));
+        mac.entry_added = None;
+        assert!(!mac_marker(&program, &mac));
+        mac.entry_added = Some(true);
+        assert!(!mac_marker("/usr/bin/true", &mac));
+
+        assert!(service_file_is_ours(&service_xml(&owned).unwrap(), &owned));
+        let bad_token = service_xml(&owned)
+            .unwrap()
+            .replace("0123456789abcdef", "nope");
+        assert!(!service_file_is_ours(&bad_token, &owned));
+        let bad_port = service_xml(&owned).unwrap().replace("5198", "6000");
+        assert!(!service_file_is_ours(&bad_port, &owned));
+    }
+
+    #[test]
+    fn a_delete_without_marker_proof_is_an_error_or_a_no_op() {
+        // No token at all proves nothing on any system.
+        let mut legacy = rule();
+        legacy.token = None;
+        for (os, linux) in [
+            (Os::Windows, Linux::Nothing),
+            (Os::Mac, Linux::Nothing),
+            (Os::Linux, Linux::Ufw),
+            (Os::Linux, Linux::Firewalld),
+        ] {
+            assert!(owned(os, linux, &legacy).is_err());
+        }
+        // macOS without the record showing Moss added the entry never deletes.
+        assert!(owned(Os::Mac, Linux::Nothing, &rule()).is_err());
+        let mut preexisting = rule();
+        preexisting.entry_added = Some(false);
+        assert_eq!(owned(Os::Mac, Linux::Nothing, &preexisting), Ok(false));
+    }
+
+    #[test]
+    fn firewalld_remove_only_touches_its_own_service_file() {
+        let folder = scratch();
+        std::env::set_var("MOSS_FIREWALLD_SERVICE_DIR", folder.path());
+        let mut fwd = rule();
+        fwd.manager = Some("firewalld".into());
+        let path = service_path(&fwd).unwrap();
+        // A foreign service file is left alone and the remove is a no-op success.
+        std::fs::write(
+            &path,
+            "<service><description>someone-else</description></service>",
+        )
+        .unwrap();
+        assert_eq!(firewalld_mark(&fwd), ServiceMark::Foreign);
+        assert_eq!(owned(Os::Linux, Linux::Firewalld, &fwd), Ok(false));
+        assert!(path.exists());
+        // Our file with no clear assignment answer is an error, and the file stays.
+        std::fs::write(&path, service_xml(&fwd).unwrap()).unwrap();
+        assert_eq!(firewalld_mark(&fwd), ServiceMark::Ours);
+        if Command::new("firewall-cmd")
+            .arg("--state")
+            .output()
+            .is_err()
+        {
+            assert!(apply_with(Os::Linux, Linux::Firewalld, Action::Remove, &fwd).is_err());
+            assert!(path.exists());
+        }
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(firewalld_mark(&fwd), ServiceMark::Missing);
+        std::env::remove_var("MOSS_FIREWALLD_SERVICE_DIR");
+    }
+
+    #[tokio::test]
+    async fn a_legacy_record_never_deletes_and_stays() {
+        let folder = scratch();
+        // The folder name keeps the instance so the firewall can be built from it.
+        let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
+        let mut legacy = rule();
+        legacy.token = None;
+        firewall
+            .write_record(&Record {
+                rule: legacy,
+                confirmed: true,
+                preexisting: false,
+                added: true,
+            })
+            .unwrap();
+        assert_eq!(firewall.close().await, Err(Refusal::Legacy));
+        assert!(folder.path().join(RECORD_FILE).exists());
+        assert_eq!(firewall.state(), State::NotAsked);
+        assert!(!firewall.rule_intact(5198));
+    }
+
+    #[tokio::test]
+    async fn restart_needs_the_live_marker_and_the_current_port() {
+        let folder = scratch();
+        let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
+        let mut current = rule();
+        current.manager = Some("ufw".into());
+        firewall
+            .write_record(&Record {
+                rule: current,
+                confirmed: true,
+                preexisting: false,
+                added: true,
+            })
+            .unwrap();
+        // Wrong port, and right port with no live marked rule, both keep sharing off.
+        assert!(!firewall.rule_intact(6000));
+        assert!(!firewall.rule_intact(5198));
+    }
+
+    #[cfg(unix)]
+    fn stand_in(folder: &Scratch, body: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let script = folder.path().join("stand-in.sh");
+        std::fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn intent_is_written_first_and_an_unmarked_add_stays_unconfirmed() {
+        let folder = scratch();
+        let seen = folder.path().join("seen.txt");
+        let script = stand_in(
+            &folder,
+            &format!("printf '%s' \"$*\" > '{}'\nexit 0", seen.display()),
+        );
+        let firewall = Firewall::with_stand_in(
+            folder.path(),
+            std::env::current_exe().unwrap(),
+            Some(script),
+        );
+        // The stand-in approves but adds no rule, so the marker check must refuse to confirm.
+        assert_eq!(firewall.open(5198).await, Err(Refusal::Stuck));
+        let record = firewall.recorded().unwrap().unwrap();
+        assert!(!record.confirmed && record.added);
+        assert!(record.rule.token.is_some());
+        assert!(record
+            .rule
+            .name
+            .contains(&record.rule.token.clone().unwrap()));
+        // The helper was handed the marker name for this instance.
+        let handed = std::fs::read_to_string(&seen).unwrap();
+        assert!(handed.contains("add") && handed.contains("moss-"));
+        assert_eq!(firewall.state(), State::NotAsked);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_declined_prompt_leaves_no_rule_and_no_record() {
+        let folder = scratch();
+        let script = stand_in(&folder, "exit 126");
+        let firewall = Firewall::with_stand_in(
+            folder.path(),
+            std::env::current_exe().unwrap(),
+            Some(script),
+        );
+        assert_eq!(firewall.open(5198).await, Err(Refusal::Declined));
+        assert!(!folder.path().join(RECORD_FILE).exists());
+    }
+
+    #[test]
     fn linux_prompt_never_opens_a_terminal() {
         if cfg!(unix) && !cfg!(target_os = "macos") {
             let command = elevated(None, Action::Add, &rule()).ok().unwrap();
@@ -1026,7 +1475,7 @@ pub fn command(args: &[String]) -> i32 {
         _ => return 2,
     };
     let (mut name, mut port, mut program, mut zone) = (None, None, None, None);
-    let (mut token, mut manager) = (None, None);
+    let (mut token, mut manager, mut service, mut entry_added) = (None, None, None, None);
     let mut rest = args.iter().skip(2);
     while let Some(flag) = rest.next() {
         let Some(value) = rest.next() else { return 2 };
@@ -1037,6 +1486,8 @@ pub fn command(args: &[String]) -> i32 {
             "--zone" => zone = Some(value.clone()),
             "--token" => token = Some(value.clone()),
             "--manager" => manager = Some(value.clone()),
+            "--service" => service = Some(value.clone()),
+            "--entry-added" => entry_added = value.parse::<bool>().ok(),
             _ => return 2,
         }
     }
@@ -1056,6 +1507,8 @@ pub fn command(args: &[String]) -> i32 {
             zone,
             token,
             manager,
+            service,
+            entry_added,
         },
     ) {
         Ok(true) => EXIT_ALREADY,

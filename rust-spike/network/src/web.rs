@@ -477,6 +477,7 @@ fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
             "The firewall already has a rule with Moss's name that Moss did not create."
         }
         Refusal::NoManager => "Moss could not find a firewall manager it can use.",
+        Refusal::Legacy => "An old Moss firewall rule is still there. Remove it by hand.",
     };
     (
         StatusCode::CONFLICT,

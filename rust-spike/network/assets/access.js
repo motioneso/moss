@@ -10,7 +10,9 @@ const firewallReasons = {
   no_firewall_manager:
     "Moss could not find a firewall manager it can use (ufw or firewalld). Sharing is still off. Install and turn on one of them, then try again.",
   stuck:
-    "The firewall rule may still be open. Try again, or remove Moss's rule in your firewall settings."
+    "The firewall rule may still be open. Try again, or remove Moss's rule in your firewall settings.",
+  legacy_rule:
+    "An old Moss firewall rule is still there and Moss cannot prove it made it. Sharing is off. Remove the old Moss rule in your firewall settings, then try again."
 };
 const explanation = (code, reason) =>
   firewallReasons[reason] ||

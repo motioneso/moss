@@ -342,15 +342,13 @@ fn main() {
             &folder,
             std::env::current_exe().map_err(|_| "Cannot find the server program")?,
         );
-        // Saved sharing reopens the network only when the firewall can still be trusted. A
-        // missing Linux manager or a replaced Windows rule turns sharing off first.
-        if config.sharing && std::env::var_os(firewall::STAND_IN_ENV).is_none() {
-            let manager_gone = firewall::manager_missing();
-            if manager_gone || !firewall.rule_intact() {
-                eprintln!("moss-server: the firewall check failed, so sharing is turned off");
-                config.sharing = false;
-                let _ = config.write(&args.network);
-            }
+        // Saved sharing reopens the network only when the live rule still carries Moss's
+        // marker for the current port. That check runs against the real rule, with no
+        // stand-in shortcut, and the record is kept when it fails.
+        if config.sharing && !firewall.rule_intact(config.listen.port()) {
+            eprintln!("moss-server: the firewall check failed, so sharing is turned off");
+            config.sharing = false;
+            let _ = config.write(&args.network);
         }
         let platform = config.platform().await?;
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
