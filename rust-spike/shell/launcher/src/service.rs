@@ -4,6 +4,8 @@ use moss_network::instance::{Running, RUNNING_FILE};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+#[cfg(windows)]
+mod windows;
 
 pub const STOPPED: &str = "service-stopped";
 const REMEDY: &str =
@@ -48,9 +50,9 @@ fn registration(folder: &Path) -> Result<PathBuf, String> {
         .join("Library/LaunchAgents")
         .join(format!("{id}.plist")));
     #[cfg(windows)]
-    return Ok(folder.join("login-entry.json"));
+    return Ok(folder.join("login-task.xml"));
 }
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", windows))]
 fn xml(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -94,11 +96,7 @@ fn register(install: &Path, folder: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let contents = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>Label</key><string>{}</string><key>ProgramArguments</key><array><string>{}</string><string>service-run</string><string>{}</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ProcessType</key><string>Background</string><key>ExitTimeOut</key><integer>200</integer></dict></plist>", name(folder), xml(&launcher.to_string_lossy()), xml(&folder.to_string_lossy()));
     #[cfg(windows)]
-    let contents = format!(
-        "{} service-run {}",
-        windows_arg(&launcher),
-        windows_arg(folder)
-    );
+    let contents = windows::definition(&launcher, folder)?;
     private_write(&path, contents.as_bytes())?;
     #[cfg(target_os = "linux")]
     {
@@ -130,18 +128,13 @@ fn register(install: &Path, folder: &Path) -> Result<(), String> {
     }
     #[cfg(windows)]
     {
-        checked(Command::new("reg.exe").args([
-            "add",
-            RUN_KEY,
-            "/v",
-            &name(folder),
-            "/t",
-            "REG_SZ",
-            "/d",
-            &contents,
-            "/f",
-        ]))?;
-        // Explicit Start begins the action now; subsequent sign-ins use the separate Run item.
+        checked(
+            Command::new("schtasks.exe")
+                .args(["/Create", "/TN", &name(folder), "/XML"])
+                .arg(path)
+                .arg("/F"),
+        )?;
+        // Start now even outside an interactive session. Future logons use the saved task.
         let mut command = Command::new(launcher);
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x0000_0008 | 0x0000_0200 | 0x0800_0000);
@@ -156,8 +149,6 @@ fn register(install: &Path, folder: &Path) -> Result<(), String> {
         Ok(())
     }
 }
-#[cfg(windows)]
-const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 #[cfg(windows)]
 fn windows_arg(path: &Path) -> String {
     let text = path.to_string_lossy();
@@ -189,12 +180,12 @@ pub fn stop(_install: &Path, folder: &Path) -> Result<(), String> {
         &format!("{}.service", name(&folder)),
     ]))?;
     #[cfg(windows)]
-    if Command::new("reg.exe")
-        .args(["query", RUN_KEY, "/v", &name(&folder)])
+    if Command::new("schtasks.exe")
+        .args(["/Query", "/TN", &name(&folder)])
         .output()
         .is_ok_and(|o| o.status.success())
     {
-        checked(Command::new("reg.exe").args(["delete", RUN_KEY, "/v", &name(&folder), "/f"]))?;
+        checked(Command::new("schtasks.exe").args(["/Change", "/TN", &name(&folder), "/Disable"]))?;
     }
     if folder.join(RUNNING_FILE).exists() {
         let running = Running::read(&folder)?;
@@ -240,7 +231,8 @@ fn unload(folder: &Path) -> Result<(), String> {
 pub fn remove(install: &Path, folder: &Path) -> Result<(), String> {
     stop(install, folder)?;
     let folder = canonical(folder)?;
-
+    #[cfg(windows)]
+    checked(Command::new("schtasks.exe").args(["/Delete", "/TN", &name(&folder), "/F"]))?;
     std::fs::remove_file(registration(&folder)?).map_err(|_| REMEDY)?;
     #[cfg(target_os = "linux")]
     checked(Command::new("systemctl").args(["--user", "daemon-reload"]))?;

@@ -138,6 +138,10 @@ On each OS, a fresh machine, with clicks only:
    test feed. Update. The app shows "Update failed. Your previous version is running." and the
    planted data is intact on the old cluster.
 
+6. On Windows, sign out and back in (including after reboot): the own-user Task Scheduler
+   logon task starts the server without the desktop app. Stop keeps it down until Start.
+   Part 2 CI replays the exact action read back from Task Scheduler; it does not prove real logon.
+
 The coordinator records each result. Ben decides a stop. If the Mac gate fails, Mac installs both
 programs but uses another computer as its server (split design section 11). The click-only run on
 macOS and Windows needs part 17b; an unsigned rehearsal runs first and is reported separately.
@@ -206,6 +210,11 @@ Each has empty, loading and error states. The coordinator sends the set to Ben a
 approval in this plan before parts 6, 10, 11 and 16c start.
 
 ## Rulings ledger
+
+- 2026-11-26, coordinator ruling for JS-429: CI may replay the exact registered Windows
+  task action read back from Task Scheduler. Assert an own-user logon trigger, least privilege,
+  real server health and native task removal. Linux and macOS also read back from their native
+  managers. Actual Windows logon remains in the part 18 fresh-machine checklist.
 
 - 2026-11-25, Ben: mockups M1 to M7 approved as drawn. Screen parts 6, 10, 11 and 16c may start
   when their dependencies merge.

@@ -251,9 +251,9 @@ python3 rust-spike/shell/tools/install-version.py --staged "$STAGED" --programs 
 This is the unsigned program layout seam, not a native package or updater.
 
 For each local instance the app installs a separate systemd **user** unit on Linux, a
-LaunchAgent on macOS, or a separate **HKCU Run login item** on Windows. The Windows task brief
-allows a login item or service; this uses a login item rather than the plan's suggested Task
-Scheduler task so no batch-logon permission or saved password is needed. The server login
+LaunchAgent on macOS, or an own-user **Task Scheduler logon task** on Windows. The Windows task uses an
+interactive token with least privilege and a logon trigger restricted to the owner's SID;
+no batch-logon permission or saved password is needed. The server login
 entry is independent of the desktop app's login preference. No product command needs admin.
 
 Stop writes the instance's `service-stopped` marker, disables its login start, and waits for
@@ -275,7 +275,9 @@ The `phase7_instance_service` runner requires built app/server/launcher/database
 the `instance-fixture` example and the pinned PostgreSQL bundle. It uses a fresh scratch
 folder, a real database and `/api/hello`; it never launches the desktop app in its positive
 proof. CI restarts Linux's user manager, reloads the saved macOS login agent, or replays the
-Windows login startup processor as a standard user. The app-only negative control registers
+exact Windows task action read back from Task Scheduler as a standard user. All platforms
+read their registration back from the native manager and verify removal. Real Windows logon
+is deferred to the part 18 fresh-machine gate, per the coordinator's ruling. The app-only negative control registers
 only the desktop app and must fail the same independent server-registration assertion.
 On a working computer use `--local-lifecycle-only`; the full manager restart is restricted
 to disposable CI because it would otherwise stop unrelated user services.

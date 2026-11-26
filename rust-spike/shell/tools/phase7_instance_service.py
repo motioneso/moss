@@ -14,6 +14,7 @@ import subprocess
 import time
 import urllib.request
 import html
+import phase7_service_registration as registration
 
 
 def command(args, check=True, **kwargs):
@@ -146,9 +147,11 @@ def main():
     def database_down():
         result = subprocess.run([str(install / ('moss-db' + suffix)), 'status', '--root', str(folder / 'database')], capture_output=True)
         return not json.loads(result.stdout).get('supervisor_pid')
+    replayed = []
     def restart_registration():
         # Linux restarts the entire user service manager. launchd re-loads the saved login
-        # agent. Windows runs its own login startup processor after ending the old action.
+        # agent. Windows replays the exact Task Scheduler read-back after verified shutdown.
+        # Coordinator ruling: actual Windows logon remains the part 18 fresh-machine gate.
         if platform.system() == 'Linux':
             command(['sudo', 'systemctl', 'restart', f'user@{os.getuid()}.service'])
         elif platform.system() == 'Darwin':
@@ -170,14 +173,19 @@ def main():
                     return not any(len(row) > 1 and row[1] == pid for row in csv.reader(result.stdout.splitlines()))
                 wait_for(lambda: action_down() and database_down() and not answering(),
                          'logout ends service action, private database and HTTPS')
-            command(['runonce.exe', '/AlternateShellStartup'])
+            action = registration.read_back(name, launcher, folder, enabled=not (folder / 'service-stopped').exists())
+            assert action, 'Task Scheduler lost the server login task'
+            print('COMMAND:', action['command_line'], flush=True)
+            process = subprocess.Popen(action['command_line'], cwd=action['cwd'], stdin=subprocess.DEVNULL,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       creationflags=0x00000008 | 0x00000200 | 0x08000000)
+            replayed.append(process)
+            if (folder / 'service-stopped').exists():
+                assert process.wait(timeout=20) == 0, 'queued task did not respect Stop'
+            print('PASS: replayed exact Task Scheduler action; real Windows logon deferred to part 18', flush=True)
     app_login = None
     def independent_login_registration():
-        if platform.system() == 'Linux':
-            return subprocess.run(['systemctl', '--user', 'is-enabled', name + '.service'], capture_output=True).returncode == 0
-        if platform.system() == 'Darwin':
-            return (Path.home() / 'Library/LaunchAgents' / (name + '.plist')).is_file()
-        return subprocess.run(['reg.exe', 'query', r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run', '/v', name], capture_output=True).returncode == 0
+        return registration.read_back(name, launcher, folder)
     try:
         if not args.negative_app_only:
             command([launcher, 'service-start', folder])
@@ -201,8 +209,8 @@ def main():
                 app_login.parent.mkdir(parents=True, exist_ok=True)
                 app_login.write_text('<plist version="1.0"><dict><key>Label</key><string>' + name + '-app</string><key>ProgramArguments</key><array><string>' + html.escape(str(launcher)) + '</string><string>moss-app</string></array><key>RunAtLoad</key><true/></dict></plist>')
             else:
-                command(['reg.exe', 'add', r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run', '/v', name + '-app', '/t', 'REG_SZ', '/d', launch, '/f'])
-                app_login = 'registry'
+                registration.register_app_task(name + '-app', launcher, args.scratch / 'app-data', args.scratch)
+                app_login = 'task'
             print('NEGATIVE CONTROL: desktop app autostart registered; no server service', flush=True)
             assert independent_login_registration(), 'server login registration exists independently of app autostart'
             raise AssertionError('Negative control unexpectedly passed')
@@ -223,8 +231,12 @@ def main():
     finally:
         if not args.negative_app_only:
             command([launcher, 'service-remove', folder])
-        if app_login == 'registry':
-            command(['reg.exe', 'delete', r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run', '/v', name + '-app', '/f'])
+            registration.assert_removed(name)
+            for process in replayed:
+                assert process.wait(timeout=20) == 0
+        if app_login == 'task':
+            command(['schtasks.exe', '/Delete', '/TN', name + '-app', '/F'])
+            registration.assert_removed(name + '-app')
         elif app_login is not None:
             app_login.unlink()
         shutil.rmtree(args.scratch)
