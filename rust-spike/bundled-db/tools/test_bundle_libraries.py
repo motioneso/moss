@@ -43,6 +43,19 @@ def pe_fixture(names, plus=True, delayed=False):
 
 
 class LibraryTests(unittest.TestCase):
+    def test_extension_imports_bundled_postgres_exe(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            bundle, system = root / "bundle", root / "system"
+            (bundle / "bin").mkdir(parents=True)
+            (bundle / "lib").mkdir()
+            system.mkdir()
+            (bundle / "lib/vector.dll").write_bytes(pe_fixture(["postgres.exe"]))
+            with self.assertRaisesRegex(ValueError, "Windows dependency outside bundle"):
+                validate_windows(bundle, system)
+            (bundle / "bin/postgres.exe").write_bytes(pe_fixture([]))
+            validate_windows(bundle, system)
+
     def test_mac_copies_loader_relative_sibling_from_original_directory(self):
         spec = importlib.util.spec_from_file_location("builder", Path(__file__).with_name("build-pg-bundle.py"))
         builder = importlib.util.module_from_spec(spec)

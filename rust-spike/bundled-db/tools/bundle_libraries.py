@@ -16,7 +16,7 @@ iphlpapi.dll kernel32.dll kernelbase.dll mpr.dll msimg32.dll msvcrt.dll ncrypt.d
 netapi32.dll normaliz.dll ntdll.dll ole32.dll oleaut32.dll powrprof.dll propsys.dll
 psapi.dll rpcrt4.dll secur32.dll security.dll setupapi.dll shell32.dll shlwapi.dll
 sspicli.dll ucrtbase.dll user32.dll userenv.dll usp10.dll version.dll winhttp.dll
-wininet.dll winmm.dll winspool.drv wintrust.dll wldap32.dll ws2_32.dll wtsapi32.dll
+wininet.dll winmm.dll wintrust.dll wldap32.dll ws2_32.dll wtsapi32.dll
 """.split())
 
 
@@ -100,7 +100,8 @@ def pe_imports(file):
             if end < 0:
                 raise ValueError(f"Unterminated PE import name: {file.name}")
             name = data[start:end].decode("ascii")
-            if not name or any(c in name for c in "/\\:") or not name.lower().endswith(".dll"):
+            # PostgreSQL extensions link to the exports of postgres.exe.
+            if not name or any(c in name for c in "/\\:") or not name.lower().endswith((".dll", ".exe")):
                 raise ValueError(f"Invalid PE import name: {file.name}")
             imports.append(name)
         else:
@@ -119,7 +120,7 @@ def validate_windows(bundle, system=None):
         available = {p.name.casefold(): p.resolve() for p in (bundle / "bin").iterdir() if p.is_file()}
         for dependency in pe_imports(file):
             name = dependency.casefold()
-            if name.startswith(("api-ms-win-", "ext-ms-win-")):
+            if name.endswith(".dll") and name.startswith(("api-ms-win-", "ext-ms-win-")):
                 continue  # Windows API-set contracts are provided by the OS loader.
             target = available.get(name)
             if target and target.is_relative_to(bundle):
