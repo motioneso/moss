@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moss · Install, backup and update screens · Draft</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../../apps/web/src/styles/components-forms.css" />
+    <link rel="stylesheet" href="mockups.css" />
+  </head>
+  <body>
+    <div class="review-bar">
+      <strong>Phase 7 · Design draft</strong
+      ><label
+        >Appearance
+        <select id="appearance" class="jds-select">
+          <option value="light">Forest · Light</option>
+          <option value="dark">Forest · Dark</option>
+          <option value="sage">Sage · Light</option>
+        </select></label
+      >
+    </div>
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="brand">Moss<span class="jds-eyebrow">Phase 7</span></div>
+        <nav class="screen-index" aria-label="Screen drafts">
+          <a href="#m1">M1 · First run</a><a href="#m2">M2 · Recovery key</a
+          ><a href="#m3">M3 · Servers and tray</a><a href="#m4">M4 · Sharing</a
+          ><a href="#m5">M5 · Backups</a><a href="#m6">M6 · Updates</a
+          ><a href="#m7">M7 · Docker import</a>
+        </nav>
+      </aside>
+      <main>
+        <header class="page-head">
+          <div class="jds-eyebrow">Install, backup and update</div>
+          <h1>Your Moss</h1>
+        </header>
+
+        <!-- M1 First run -->
+
+        <article id="m1" class="screen" aria-labelledby="title-1">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">M1 · Desktop app</div>
+              <h2 id="title-1">First run</h2>
+            </div>
+            <span class="where">Desktop only</span>
+          </header>
+          <div class="window">
+            <div class="window__bar"><span>Moss</span><span>7.1.0</span></div>
+            <div class="window__body">
+              <h3>Where does your Moss live?</h3>
+              <div class="choices">
+                <a class="jds-card jds-card--interactive choice" href="#m2">
+                  <strong>This computer</strong>
+                  <span class="meta">Moss runs here.</span>
+                </a>
+                <a class="jds-card jds-card--interactive choice" href="#m3">
+                  <strong>Another computer</strong>
+                  <span class="meta">Connect to a Moss you already run.</span>
+                </a>
+              </div>
+              <div class="more actions">
+                <a class="jds-btn jds-btn--secondary" href="#m5-restore">Restore a backup</a>
+                <a class="jds-btn jds-btn--secondary" href="#m7">Move from Docker</a>
+              </div>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <div class="jds-empty" role="status">
+                  <div class="jds-empty__title">No servers yet</div>
+                  <div class="jds-empty__actions">
+                    <a class="jds-btn jds-btn--primary" href="#m1">Set up Moss</a>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Setting up this computer…</p>
+                <ol class="progress">
+                  <li class="done">Made your data folder</li>
+                  <li aria-current="step">Starting the database</li>
+                  <li>Creating your account</li>
+                </ol>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert" class="failure">Moss could not start on this computer.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m1">Retry</a
+                  ><a class="jds-btn jds-btn--quiet" href="#m1">Show details</a>
+                </div>
+              </div>
+            </div>
+          </details>
+        </article>
+
+        <!-- M2 Recovery key -->
+
+        <article id="m2" class="screen" aria-labelledby="title-2">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">M2 · Desktop app · First run</div>
+              <h2 id="title-2">Recovery key</h2>
+            </div>
+            <span class="where">Desktop only</span>
+          </header>
+          <div class="window">
+            <div class="window__bar"><span>Moss</span><span>Step 2 of 3</span></div>
+            <div class="window__body">
+              <h3>Your recovery key</h3>
+              <p class="meta">Backups open only with these words.</p>
+              <ol class="words" aria-label="Recovery words">
+                <li>harbor</li>
+                <li>lantern</li>
+                <li>meadow</li>
+                <li>copper</li>
+                <li>ridge</li>
+                <li>violet</li>
+                <li>anchor</li>
+                <li>timber</li>
+                <li>falcon</li>
+                <li>quarry</li>
+                <li>pepper</li>
+                <li>glacier</li>
+                <li>orchard</li>
+                <li>saddle</li>
+                <li>ember</li>
+                <li>willow</li>
+                <li>canyon</li>
+                <li>marble</li>
+                <li>thistle</li>
+                <li>beacon</li>
+                <li>juniper</li>
+                <li>pebble</li>
+                <li>summit</li>
+                <li>clover</li>
+              </ol>
+              <div class="actions">
+                <button class="jds-btn jds-btn--secondary" type="button">Copy</button
+                ><button class="jds-btn jds-btn--secondary" type="button">Print</button
+                ><button class="jds-btn jds-btn--secondary" type="button">Save as file</button>
+              </div>
+              <div class="result">
+                <h3>Check your key</h3>
+                <div class="check-words">
+                  <label class="field"
+                    >Word 4 <input class="jds-input" type="text" autocomplete="off"
+                  /></label>
+                  <label class="field"
+                    >Word 11 <input class="jds-input" type="text" autocomplete="off"
+                  /></label>
+                  <label class="field"
+                    >Word 19 <input class="jds-input" type="text" autocomplete="off"
+                  /></label>
+                </div>
+                <div class="actions">
+                  <button class="jds-btn jds-btn--primary" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No key store on this computer.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--secondary" href="#m2">Keep the key in a file</a>
+                </div>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Making your key…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert" class="failure">Your key store is locked.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m2">Unlock and retry</a>
+                </div>
+                <p role="alert" class="failure">Word 11 does not match.</p>
+              </div>
+            </div>
+          </details>
+        </article>
+
+        <!-- M3 Servers, status and tray -->
+
+        <article id="m3" class="screen" aria-labelledby="title-3">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">M3 · Desktop app</div>
+              <h2 id="title-3">Servers and tray</h2>
+            </div>
+            <span class="where">Desktop only</span>
+          </header>
+          <div class="split">
+            <div class="window">
+              <div class="window__bar"><span>Moss · Servers</span><span>7.1.0</span></div>
+              <div class="window__body">
+                <div class="section-label">
+                  Servers <a class="jds-btn jds-btn--quiet jds-btn--sm" href="#m1">Add</a>
+                </div>
+                <div class="entry">
+                  <div>
+                    <strong>This computer</strong>
+                    <div class="meta">Moss 7.1.0 · Backed up today 03:00</div>
+                  </div>
+                  <div class="actions">
+                    <span class="jds-indicator jds-indicator--ready"
+                      ><span class="jds-indicator__dot"></span><span>Running</span></span
+                    ><a class="jds-btn jds-btn--primary jds-btn--sm" href="#m3">Open</a
+                    ><a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m3-stop">Stop</a>
+                  </div>
+                </div>
+                <div class="entry">
+                  <div>
+                    <strong>Test copy</strong>
+                    <div class="meta">Moss 7.0.4</div>
+                  </div>
+                  <div class="actions">
+                    <span class="jds-indicator jds-indicator--idle"
+                      ><span class="jds-indicator__dot"></span><span>Stopped</span></span
+                    ><a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m3">Start</a>
+                  </div>
+                </div>
+                <div class="entry">
+                  <div>
+                    <strong>Office</strong>
+                    <div class="meta">Another computer · Moss 7.1.0</div>
+                  </div>
+                  <div class="actions">
+                    <span class="jds-indicator jds-indicator--ready"
+                      ><span class="jds-indicator__dot"></span><span>Reachable</span></span
+                    ><a class="jds-btn jds-btn--primary jds-btn--sm" href="#m3">Open</a>
+                  </div>
+                </div>
+                <div class="result">
+                  <div class="section-label">This computer</div>
+                  <dl class="facts">
+                    <dt>Status</dt>
+                    <dd>Running since 08:12</dd>
+                    <dt>Version</dt>
+                    <dd>7.1.0 · Up to date</dd>
+                    <dt>Last backup</dt>
+                    <dd>Today 03:00 · Verified</dd>
+                    <dt>Sharing</dt>
+                    <dd><a href="#m4">Off</a></dd>
+                    <dt>Starts</dt>
+                    <dd>When you sign in</dd>
+                  </dl>
+                  <div class="actions">
+                    <a class="jds-btn jds-btn--secondary" href="#m5">Back up now</a
+                    ><a class="jds-btn jds-btn--secondary" href="#m6">Check for updates</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="stack">
+              <div class="section-label">Tray menu</div>
+              <div class="tray">
+                <div class="jds-menu__list" role="menu" aria-label="Moss tray menu">
+                  <button type="button" role="menuitem">Open Moss</button>
+                  <button type="button" role="menuitem" disabled>Running · 7.1.0</button>
+                  <hr />
+                  <button type="button" role="menuitem">Stop server</button>
+                  <button type="button" role="menuitem">Check for updates</button>
+                  <button type="button" role="menuitem">Desktop settings</button>
+                  <hr />
+                  <button type="button" role="menuitem">Quit app</button>
+                </div>
+              </div>
+              <div id="m3-stop" class="dialog-row">
+                <div class="jds-dialog" role="dialog" aria-labelledby="stop-title">
+                  <div class="jds-dialog__head">
+                    <div class="jds-dialog__heading">
+                      <div class="jds-dialog__title" id="stop-title">Stop Moss?</div>
+                    </div>
+                  </div>
+                  <div class="jds-dialog__body">
+                    Phones and other computers lose access until you start it again.
+                  </div>
+                  <div class="jds-dialog__foot">
+                    <button class="jds-btn jds-btn--quiet" type="button">Cancel</button
+                    ><button class="jds-btn jds-btn--primary" type="button">Stop</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <div class="jds-empty" role="status">
+                  <div class="jds-empty__title">No servers yet</div>
+                  <div class="jds-empty__actions">
+                    <a class="jds-btn jds-btn--primary" href="#m1">Add a server</a>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Checking servers…</p>
+                <p role="status">Stopping…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert" class="failure">Moss could not stop.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m3">Retry</a
+                  ><a class="jds-btn jds-btn--quiet" href="#m3">Show details</a>
+                </div>
+                <p role="alert" class="failure">Moss did not start when you signed in.</p>
+              </div>
+            </div>
+          </details>
+        </article>
+
+        <!-- M4 Sharing -->
+
+        <article id="m4" class="screen" aria-labelledby="title-4">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">M4 · Settings / Sharing</div>
+              <h2 id="title-4">Sharing</h2>
+            </div>
+            <span class="where">Desktop and phone</span>
+          </header>
+          <div class="split">
+            <div>
+              <div class="entry">
+                <div>
+                  <strong>Share on your network</strong>
+                  <div class="meta">Phones and other computers can reach Moss</div>
+                </div>
+                <label class="jds-switch"
+                  ><input type="checkbox" aria-label="Share on your network" /><span
+                    class="jds-switch__track"
+                    ><span class="jds-switch__thumb"></span></span
+                ></label>
+              </div>
+              <div class="entry">
+                <div>
+                  <strong>Address</strong>
+                  <div class="meta">this-computer.local</div>
+                </div>
+                <span class="jds-badge jds-badge--neutral">Off</span>
+              </div>
+              <div class="entry">
+                <div>
+                  <strong>Firewall</strong>
+                  <div class="meta">Not asked yet</div>
+                </div>
+              </div>
+            </div>
+            <div class="dialog-row">
+              <div class="jds-dialog" role="dialog" aria-labelledby="share-title">
+                <div class="jds-dialog__head">
+                  <div class="jds-dialog__heading">
+                    <div class="jds-dialog__title" id="share-title">
+                      Share Moss on your network?
+                    </div>
+                  </div>
+                </div>
+                <div class="jds-dialog__body">
+                  Your computer will ask to let Moss through its firewall.
+                </div>
+                <div class="jds-dialog__foot">
+                  <button class="jds-btn jds-btn--quiet" type="button">Cancel</button
+                  ><button class="jds-btn jds-btn--primary" type="button">Turn on</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">No network found.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Waiting for your firewall…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert" class="failure">The firewall did not allow Moss.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m4">Try again</a
+                  ><a class="jds-btn jds-btn--quiet" href="#m4">Open firewall settings</a>
+                </div>
+              </div>
+            </div>
+          </details>
+        </article>
+
+        <!-- M5 Backups and restore -->
+
+        <article id="m5" class="screen" aria-labelledby="title-5">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">M5 · Settings / Backups</div>
+              <h2 id="title-5">Backups</h2>
+            </div>
+            <div class="actions">
+              <span class="where">Desktop and phone · Admin</span
+              ><button class="jds-btn jds-btn--primary" type="button">Back up now</button>
+            </div>
+          </header>
+          <div class="split">
+            <div>
+              <div class="section-label">Backups <span class="meta">Newest first</span></div>
+              <div class="entry">
+                <div>
+                  <strong>Today 03:00</strong>
+                  <div class="meta">412 MB</div>
+                </div>
+                <div class="actions">
+                  <span class="jds-badge jds-badge--forest">Verified</span
+                  ><a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m5-restore">Restore</a>
+                </div>
+              </div>
+              <div class="entry">
+                <div>
+                  <strong>Yesterday 03:00</strong>
+                  <div class="meta">410 MB</div>
+                </div>
+                <div class="actions">
+                  <span class="jds-badge jds-badge--neutral">Not verified</span
+                  ><button class="jds-btn jds-btn--quiet jds-btn--sm" type="button">Verify</button
+                  ><a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m5-restore">Restore</a>
+                </div>
+              </div>
+              <div class="entry">
+                <div>
+                  <strong>Sunday 03:00</strong>
+                  <div class="meta">402 MB · Weekly</div>
+                </div>
+                <div class="actions">
+                  <span class="jds-badge jds-badge--steel">Pinned</span
+                  ><span class="jds-badge jds-badge--forest">Verified</span
+                  ><a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m5-restore">Restore</a>
+                </div>
+              </div>
+              <div class="entry">
+                <div>
+                  <strong>18 November 03:00</strong>
+                  <div class="meta">398 MB · Weekly</div>
+                </div>
+                <div class="actions">
+                  <span class="jds-badge jds-badge--red">Verify failed</span
+                  ><button class="jds-btn jds-btn--quiet jds-btn--sm" type="button">
+                    Show details
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="section-label">Settings</div>
+              <div class="entry">
+                <div>
+                  <strong>Folder</strong>
+                  <div class="meta">Backups drive</div>
+                </div>
+                <button class="jds-btn jds-btn--secondary jds-btn--sm" type="button">Change</button>
+              </div>
+              <div class="entry">
+                <div><strong>Schedule</strong></div>
+                <select class="jds-select" aria-label="Backup schedule">
+                  <option>Daily at 03:00</option>
+                  <option>Daily at 23:00</option>
+                  <option>Off</option>
+                </select>
+              </div>
+              <div class="entry">
+                <div>
+                  <strong>Keep</strong>
+                  <div class="meta">7 daily, 4 weekly</div>
+                </div>
+              </div>
+              <div class="entry">
+                <div><strong>Recovery key</strong></div>
+                <a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m2">Show</a>
+              </div>
+            </div>
+          </div>
+          <div id="m5-restore" class="result">
+            <div class="thirds">
+              <div class="dialog-row">
+                <div class="jds-dialog" role="dialog" aria-labelledby="restore-title">
+                  <div class="jds-dialog__head">
+                    <div class="jds-dialog__heading">
+                      <div class="jds-dialog__title" id="restore-title">Restore Sunday 03:00?</div>
+                    </div>
+                  </div>
+                  <div class="jds-dialog__body">
+                    Changes made after Sunday 03:00 are lost.
+                    <label class="field"
+                      >Recovery key
+                      <textarea class="jds-input" aria-label="Recovery key words"></textarea>
+                    </label>
+                  </div>
+                  <div class="jds-dialog__foot">
+                    <button class="jds-btn jds-btn--quiet" type="button">Cancel</button
+                    ><button class="jds-btn jds-btn--primary" type="button">Restore</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="section-label">Restoring</div>
+                <ol class="progress">
+                  <li class="done">Checked the backup</li>
+                  <li aria-current="step">Restoring a new copy</li>
+                  <li>Checking the copy</li>
+                  <li>Switching over</li>
+                </ol>
+              </div>
+              <div>
+                <div class="section-label">Done</div>
+                <p role="status">Restored Sunday 03:00.</p>
+                <a class="jds-btn jds-btn--primary" href="#m5">Open Moss</a>
+              </div>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <div class="jds-empty" role="status">
+                  <div class="jds-empty__title">No backups yet</div>
+                  <div class="jds-empty__actions">
+                    <button class="jds-btn jds-btn--primary" type="button">Back up now</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Reading backups…</p>
+                <p role="status">Backing up… 61%</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert" class="failure">The backups folder is not reachable.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m5">Retry</a
+                  ><a class="jds-btn jds-btn--quiet" href="#m5">Change folder</a>
+                </div>
+                <p role="alert" class="failure">These words do not open this backup.</p>
+                <p role="alert" class="failure">This backup is damaged.</p>
+              </div>
+            </div>
+          </details>
+        </article>
+
+        <!-- M6 Updates -->
+
+        <article id="m6" class="screen" aria-labelledby="title-6">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">M6 · Desktop app and Settings</div>
+              <h2 id="title-6">Updates</h2>
+            </div>
+            <span class="where">Version row on phone</span>
+          </header>
+          <div class="thirds">
+            <div class="dialog-row">
+              <div class="jds-dialog" role="dialog" aria-labelledby="upd-title">
+                <div class="jds-dialog__head">
+                  <div class="jds-dialog__heading">
+                    <div class="jds-dialog__title" id="upd-title">Moss 7.2.0 is ready</div>
+                  </div>
+                </div>
+                <div class="jds-dialog__body">
+                  <a href="#m6">What's new</a>
+                </div>
+                <div class="jds-dialog__foot">
+                  <button class="jds-btn jds-btn--quiet" type="button">Later</button
+                  ><button class="jds-btn jds-btn--primary" type="button">Update now</button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="section-label">Updating to 7.2.0</div>
+              <ol class="progress">
+                <li class="done">Downloaded</li>
+                <li class="done">Signature checked</li>
+                <li class="done">Backed up</li>
+                <li aria-current="step">Updating your data</li>
+                <li>Checking</li>
+                <li>Switching over</li>
+              </ol>
+            </div>
+            <div>
+              <div class="section-label">Update failed</div>
+              <p role="alert" class="failure">Update failed. Your previous version is running.</p>
+              <div class="actions">
+                <a class="jds-btn jds-btn--secondary" href="#m6">Show details</a>
+              </div>
+              <div class="result">
+                <p role="alert" class="failure">Moss needs your help to finish the update.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m5-restore">Restore last backup</a
+                  ><a class="jds-btn jds-btn--quiet" href="#m6">Show details</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="result">
+            <div class="section-label">Settings / Desktop</div>
+            <div class="entry">
+              <div>
+                <strong>Version</strong>
+                <div class="meta">7.1.0 · Up to date · Checked 09:40</div>
+              </div>
+              <button class="jds-btn jds-btn--secondary jds-btn--sm" type="button">
+                Check now
+              </button>
+            </div>
+            <div class="entry">
+              <div><strong>Update automatically</strong></div>
+              <label class="jds-switch"
+                ><input type="checkbox" aria-label="Update automatically" checked /><span
+                  class="jds-switch__track"
+                  ><span class="jds-switch__thumb"></span></span
+              ></label>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">Moss is up to date.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Checking for updates…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert" class="failure">Could not check for updates.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m6">Retry</a>
+                </div>
+                <p role="alert" class="failure">This update is not signed by Moss.</p>
+              </div>
+            </div>
+          </details>
+        </article>
+
+        <!-- M7 Docker import -->
+
+        <article id="m7" class="screen" aria-labelledby="title-7">
+          <header class="screen-head">
+            <div>
+              <div class="jds-eyebrow">M7 · Desktop app · First run</div>
+              <h2 id="title-7">Move from Docker</h2>
+            </div>
+            <span class="where">Desktop only</span>
+          </header>
+          <div class="window">
+            <div class="window__bar"><span>Moss · Move from Docker</span><span>7.1.0</span></div>
+            <div class="window__body">
+              <div class="thirds">
+                <div>
+                  <div class="section-label">1 · Export</div>
+                  <p>On the computer that runs Docker:</p>
+                  <pre class="cmd"><code>moss-export --out moss.mossbak</code></pre>
+                  <label class="field"
+                    >Export file
+                    <input class="jds-input" type="file" />
+                  </label>
+                  <label class="field"
+                    >Export key
+                    <textarea class="jds-input" aria-label="Export key words"></textarea>
+                  </label>
+                  <button class="jds-btn jds-btn--primary" type="button">Check export</button>
+                </div>
+                <div>
+                  <div class="section-label">2 · Check</div>
+                  <dl class="facts">
+                    <dt>From</dt>
+                    <dd>Moss 2026.11</dd>
+                    <dt>Accounts</dt>
+                    <dd>3</dd>
+                    <dt>Size</dt>
+                    <dd>18 GB</dd>
+                    <dt>Moves</dt>
+                    <dd>Tasks, Finance, Meals, Calendar, News</dd>
+                    <dt>Not yet</dt>
+                    <dd>Workshop, Food</dd>
+                  </dl>
+                  <p class="meta">Every account moves together.</p>
+                  <div class="actions">
+                    <button class="jds-btn jds-btn--quiet" type="button">Cancel</button
+                    ><button class="jds-btn jds-btn--primary" type="button">Move</button>
+                  </div>
+                </div>
+                <div>
+                  <div class="section-label">3 · Move</div>
+                  <ol class="progress">
+                    <li class="done">Checked the export</li>
+                    <li aria-current="step">Copying data</li>
+                    <li>Copying files</li>
+                    <li>Checking</li>
+                  </ol>
+                  <div class="result">
+                    <p role="status">Moved 3 accounts.</p>
+                    <a class="jds-btn jds-btn--primary" href="#m7">Open Moss</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <details class="variants">
+            <summary>States</summary>
+            <div class="state-grid">
+              <div>
+                <h3>Empty</h3>
+                <p role="status">Choose an export file.</p>
+              </div>
+              <div>
+                <h3>Loading</h3>
+                <p role="status">Reading the export…</p>
+              </div>
+              <div>
+                <h3>Error</h3>
+                <p role="alert" class="failure">These words do not open this export.</p>
+                <p role="alert" class="failure">This export is damaged.</p>
+                <p role="alert" class="failure">This export needs a newer Moss.</p>
+                <div class="actions">
+                  <a class="jds-btn jds-btn--primary" href="#m7">Try again</a>
+                </div>
+              </div>
+            </div>
+          </details>
+        </article>
+      </main>
+    </div>
+    <script>
+      document.querySelector("#appearance").addEventListener("change", (event) => {
+        document.documentElement.dataset.colorMode =
+          event.target.value === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = event.target.value === "sage" ? "sage" : "";
+      });
+    </script>
+  </body>
+</html>
