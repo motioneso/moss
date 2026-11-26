@@ -33,7 +33,8 @@ checks their recorded digests and the source lock, starts an isolated throwaway
 cluster on loopback, checks ICU initialization and both extension/server versions,
 creates a vector row, dumps it with `pg_dump` using both gzip and zstd, restores into
 fresh databases with `pg_restore`, and checks the row. Linux also checks that the
-runtime library closure resolves inside the bundle apart from glibc. Inherited libpq settings are discarded.
+runtime library closure from every executable resolves inside the bundle apart from glibc.
+Inherited libpq settings are discarded.
 It stops its own server and removes its own cluster even after a failed assertion.
 It never connects to the developer's database.
 

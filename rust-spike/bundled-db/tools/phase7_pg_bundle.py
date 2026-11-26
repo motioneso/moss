@@ -43,7 +43,10 @@ def validate(bundle):
 def validate_libraries(bundle, tools, env):
     if platform.system() != "Linux":
         return
-    for file in [*tools.values(), *(bundle / "lib").rglob("*.so*")]:
+    # ldd on an executable follows its full inherited RPATH closure. Running
+    # it on a copied ICU library alone discards that loader context and reports
+    # a false system dependency even when the executable is self-contained.
+    for file in tools.values():
         result = subprocess.run(["ldd", str(file)], env=env, capture_output=True, text=True, check=True)
         for line in result.stdout.splitlines():
             if "=>" not in line:
