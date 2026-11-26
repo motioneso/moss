@@ -1,9 +1,12 @@
 """Parser/policy tests, separate from the real linked CI negative controls."""
 import os
+import importlib.util
 from pathlib import Path
 import struct
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from bundle_libraries import pe_imports, validate_windows
 
@@ -40,6 +43,31 @@ def pe_fixture(names, plus=True, delayed=False):
 
 
 class LibraryTests(unittest.TestCase):
+    def test_mac_copies_loader_relative_sibling_from_original_directory(self):
+        spec = importlib.util.spec_from_file_location("builder", Path(__file__).with_name("build-pg-bundle.py"))
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            bundle, original = root / "bundle", root / "icu"
+            (bundle / "bin").mkdir(parents=True)
+            (bundle / "lib").mkdir()
+            original.mkdir()
+            (bundle / "bin/initdb").write_bytes(b"executable fixture")
+            (original / "libicuuc.dylib").write_bytes(b"icu fixture")
+            (original / "libicudata.dylib").write_bytes(b"icu data fixture")
+
+            def otool(args, **kwargs):
+                file = Path(args[-1])
+                dep = {"initdb": str(original / "libicuuc.dylib"),
+                       "libicuuc.dylib": "@loader_path/libicudata.dylib"}.get(file.name)
+                output = str(file) + ":\n" + (f"\t{dep} (compatibility version 1.0.0)\n" if dep else "")
+                return subprocess.CompletedProcess(args, 0, stdout=output)
+
+            with patch.object(builder.subprocess, "run", side_effect=otool), patch.object(builder, "run"):
+                builder.relocate_mac(bundle)
+            self.assertEqual((bundle / "lib/libicudata.dylib").read_bytes(), b"icu data fixture")
+
     def test_reads_pe32_pe64_and_delay_imports(self):
         with tempfile.TemporaryDirectory() as root:
             file = Path(root) / "probe.dll"

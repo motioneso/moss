@@ -101,6 +101,7 @@ def relocate_mac(out):
     # Rewrite dependencies recursively, including Homebrew ICU's C++ dependency.
     pending = list((out / "bin").iterdir()) + list((out / "lib").rglob("*.dylib")) + list((out / "lib").rglob("*.so"))
     seen = set()
+    originals = {}
     while pending:
         file = pending.pop()
         if file in seen or file.is_symlink():
@@ -111,12 +112,19 @@ def relocate_mac(out):
             continue
         for line in result.stdout.splitlines()[1:]:
             dep = line.strip().split(" (", 1)[0]
-            if not dep.startswith("/") or dep.startswith(("/usr/lib/", "/System/")):
+            if dep.startswith("@loader_path/") and file in originals:
+                source = originals[file].parent / dep.removeprefix("@loader_path/")
+            elif dep.startswith("/") and not dep.startswith(("/usr/lib/", "/System/")):
+                source = Path(dep)
+            else:
                 continue
-            target = out / "lib" / Path(dep).name
+            target = out / "lib" / source.name
             if not target.exists():
-                shutil.copy2(dep, target)
+                shutil.copy2(source, target)
                 target.chmod(target.stat().st_mode | 0o200)
+                # Homebrew ICU also uses loader-relative sibling dependencies.
+                # Resolve those against the original library before copying them.
+                originals[target] = source.resolve()
                 pending.append(target)
             relative = os.path.relpath(target, file.parent)
             run("install_name_tool", "-change", dep, f"@loader_path/{relative}", file)
