@@ -6,14 +6,11 @@ const say = (message) => {
 };
 const firewallReasons = {
   firewall_service_unavailable: "Reinstall Moss or restart the firewall.",
-  foreign_rule:
-    "The firewall already has a rule named like Moss's that Moss did not create. Moss left it alone and sharing is still off. Rename or remove that rule in your firewall settings, then try again.",
-  no_firewall_manager:
-    "Moss could not find a firewall manager it can use (ufw or firewalld). Sharing is still off. Install and turn on one of them, then try again.",
+  foreign_rule: "Rename or remove the other rule in your firewall settings, then try again.",
+  no_firewall_manager: "Install and turn on ufw or firewalld, then try again.",
   stuck:
     "The firewall rule may still be open. Try again, or remove Moss's rule in your firewall settings.",
-  legacy_rule:
-    "An old Moss firewall rule is still there and Moss cannot prove it made it. Sharing is off. Remove the old Moss rule in your firewall settings, then try again."
+  legacy_rule: "Remove the old Moss rule in your firewall settings, then try again."
 };
 const explanation = (code, reason) =>
   firewallReasons[reason] ||
@@ -25,8 +22,7 @@ const explanation = (code, reason) =>
     setup_is_complete: "Moss already has an owner. Go back and sign in.",
     setup_is_local_only: "Create the owner account on the computer running Moss.",
     origin_or_sharing_refused: "This address is not allowed. Open Moss at a trusted address.",
-    app_firewall_refused:
-      "The firewall did not allow Moss. Sharing is still off. Try again and choose Allow, or add Moss in your firewall settings.",
+    app_firewall_refused: "The firewall did not allow Moss. Try again and choose Allow.",
     host_refused: "This address is not trusted. Open Moss at its configured address."
   }[code];
 async function call(path, method = "GET", body) {
@@ -141,7 +137,7 @@ if (sharing) {
       await call("/api/network", "PUT", { sharing: on });
       // The change reply carries no address list, so the screen reads the full state again.
       paint(await call("/api/network"));
-      say(on ? "Sharing is on." : "Sharing is off.");
+      say("");
     } catch (error) {
       say(error.message);
       retry.hidden = paused;
@@ -154,21 +150,21 @@ if (sharing) {
   call("/api/network")
     .then((result) => {
       paint(result);
-      say(paused ? "Sharing is paused." : result.sharing ? "Sharing is on." : "Sharing is off.");
+      say("");
     })
     .catch((error) => say(error.message));
   resume.addEventListener("click", () => put(true));
   box.addEventListener("change", () => {
     if (box.checked) {
       box.checked = false;
-      confirmBox.hidden = false;
+      confirmBox.showModal();
     } else put(false);
   });
   document.getElementById("cancel").addEventListener("click", () => {
-    confirmBox.hidden = true;
+    confirmBox.close();
   });
   const start = () => {
-    confirmBox.hidden = true;
+    confirmBox.close();
     put(true);
   };
   document.getElementById("turn-on").addEventListener("click", start);

@@ -1,0 +1,34 @@
+/* Layout only. Controls, type and surfaces use the shared Moss design system. */
+.sharing-page {
+  padding: var(--space-6);
+}
+.sharing-panel {
+  width: 100%;
+  display: grid;
+  gap: var(--space-5);
+}
+.sharing-settings {
+  display: grid;
+  gap: var(--space-5);
+}
+.sharing-row {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+.sharing-settings p,
+.sharing-settings ul {
+  margin: 0;
+}
+.sharing-settings {
+  overflow-wrap: anywhere;
+}
+dialog.jds-dialog {
+  margin: auto;
+  padding: 0;
+}
+@media (max-width: 600px) {
+  .sharing-page {
+    padding: var(--space-4);
+  }
+}

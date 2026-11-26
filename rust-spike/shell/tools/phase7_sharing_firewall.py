@@ -139,9 +139,23 @@ def remove_windows_plant(name, marker, port, program):
 
 def mac_apps():
     text = sudo([SOCKET_FILTER, '--listapps']).stdout
-    expect(text.lstrip().startswith('ALF:'), 'macOS returned an application listing')
-    return [line.split(':', 1)[1].strip() for line in text.splitlines()
-            if ':' in line and line.split(':', 1)[0].strip().isdigit()]
+    lines = text.strip().splitlines()
+    expect(bool(lines), 'macOS returned an application listing')
+    header = lines[0].strip()
+    prefixes = ['ALF: total number of apps = ', 'Total number of apps = ']
+    count = next((header[len(prefix):].strip() for prefix in prefixes if header.startswith(prefix)), '')
+    expect(count.isdecimal(), 'macOS returned an application count')
+    paths = []
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line in ['(Allow incoming connections)', '(Block incoming connections)']:
+            continue
+        index, separator, path = line.partition(':')
+        expect(separator and index.strip() == str(len(paths) + 1) and path.strip().startswith('/'),
+               'macOS returned a numbered application path')
+        paths.append(path.strip())
+    expect(len(paths) == int(count), 'macOS listing is complete')
+    return paths
 
 
 class Probe:

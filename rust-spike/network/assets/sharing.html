@@ -5,18 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sharing · Moss</title>
     <link rel="stylesheet" href="/app.css" />
+    <link rel="stylesheet" href="/sharing.css" />
     <script src="/boot-theme.js"></script>
     <script src="/access.js" defer></script>
   </head>
   <body>
-    <main class="auth-screen">
-      <section class="auth-panel" aria-labelledby="auth-title">
+    <main class="sharing-page">
+      <section class="sharing-panel" aria-labelledby="auth-title">
         <div>
           <p class="jds-eyebrow">Moss · Settings / Sharing</p>
           <h1 id="auth-title">Sharing</h1>
         </div>
-        <form class="auth-form" id="sharing">
-          <div class="jds-field">
+        <form class="sharing-settings" id="sharing">
+          <div class="sharing-row">
             <strong>Share on your network</strong>
             <p>Phones and other computers can reach Moss</p>
             <label class="jds-switch"
@@ -28,7 +29,7 @@
                 ><span class="jds-switch__thumb"></span></span
             ></label>
           </div>
-          <div class="jds-field">
+          <div class="sharing-row">
             <strong>Address</strong>
             <p id="address">None</p>
             <span class="jds-badge jds-badge--neutral" id="address-state">Off</span>
@@ -38,7 +39,7 @@
               Resume
             </button>
           </div>
-          <div class="jds-field">
+          <div class="sharing-row">
             <strong>Firewall</strong>
             <p id="firewall">Not asked yet</p>
           </div>
@@ -48,7 +49,7 @@
             >Download public certificate</a
           >
         </form>
-        <div class="jds-dialog" role="dialog" aria-labelledby="share-title" id="confirm" hidden>
+        <dialog class="jds-dialog" aria-labelledby="share-title" id="confirm">
           <div class="jds-dialog__head">
             <div class="jds-dialog__heading">
               <div class="jds-dialog__title" id="share-title">Share Moss on your network?</div>
@@ -61,7 +62,7 @@
             <button class="jds-btn jds-btn--quiet" id="cancel" type="button">Cancel</button
             ><button class="jds-btn jds-btn--primary" id="turn-on" type="button">Turn on</button>
           </div>
-        </div>
+        </dialog>
         <p id="status" role="status" aria-live="polite">Loading sharing settings…</p>
         <div id="retry" hidden>
           <button class="jds-btn jds-btn--primary" id="try-again" type="button">Try again</button>

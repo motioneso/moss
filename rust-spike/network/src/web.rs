@@ -73,6 +73,7 @@ pub fn router(network: Arc<Network>, private: Router, web: PathBuf) -> Router {
     let pages = Router::new()
         .route("/sign-in", get(|| async { Html(include_str!("../assets/sign-in.html")) }))
         .route("/setup", get(|| async { Html(include_str!("../assets/setup.html")) }))
+        .route("/sharing.css", get(|| async { ([(header::CONTENT_TYPE, "text/css")], include_str!("../assets/sharing.css")) }))
         .route("/access.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], include_str!("../assets/access.js")) }))
         .route("/moss-start.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], "const app = await import('/app.js'); await app.default({module_or_path:'/app_bg.wasm'});") }))
         .route("/api/setup/status", get(setup_status))

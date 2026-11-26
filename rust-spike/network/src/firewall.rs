@@ -381,10 +381,14 @@ fn run_code(args: &[String]) -> Option<(i32, String)> {
         .spawn()
         .ok()?;
     let mut pipe = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        pipe.by_ref().take(1_048_577).read_to_end(&mut bytes).ok()?;
-        (bytes.len() <= 1_048_576).then_some(bytes)
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let result = (|| {
+            let mut bytes = Vec::new();
+            pipe.by_ref().take(1_048_577).read_to_end(&mut bytes).ok()?;
+            (bytes.len() <= 1_048_576).then_some(bytes)
+        })();
+        let _ = send.send(result);
     });
     let start = Instant::now();
     let code = loop {
@@ -400,7 +404,9 @@ fn run_code(args: &[String]) -> Option<(i32, String)> {
             }
         }
     }?;
-    let bytes = reader.join().ok()??;
+    let bytes = receive
+        .recv_timeout(Duration::from_secs(30).saturating_sub(start.elapsed()))
+        .ok()??;
     Some((code, String::from_utf8(bytes).ok()?))
 }
 
@@ -431,21 +437,21 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
             Some(needle) if os == Os::Linux && linux == Linux::Ufw => (code == 0
                 && text.starts_with("Added user rules"))
             .then(|| !ufw_lines(&text, rule).is_empty()),
-            Some(_) if os == Os::Mac => (code == 0 && text.trim_start().starts_with("ALF:"))
-                .then(|| mac_path_present(&text, &rule.program)),
+            Some(_) if os == Os::Mac => (code == 0)
+                .then(|| {
+                    mac_paths(&text)
+                        .map(|paths| paths.contains(&rule.program.to_string_lossy().as_ref()))
+                })
+                .flatten(),
             Some(needle) => (code == 0).then(|| text.contains(needle)),
             // netsh answers 0 for a match and 1 for none. Any other code means it could not say.
             None if os == Os::Windows => match code {
                 0 => Some(true),
-                1 if text.contains("No rules match") => Some(false),
+                1 if text.trim() == "No rules match the specified criteria." => Some(false),
                 _ => None,
             },
             // Firewalld answers 0 for yes and 1 for no. Any other code means it could not say.
-            None => match code {
-                0 => Some(true),
-                1 => Some(false),
-                _ => None,
-            },
+            None => firewalld_answer(code, &text),
         }
     };
     let saved = read(&query)?;
@@ -476,12 +482,19 @@ pub fn apply(action: Action, rule: &Rule) -> Result<bool, &'static str> {
     apply_with(this_os(), linux, action, rule)
 }
 
+fn firewalld_answer(code: i32, text: &str) -> Option<bool> {
+    match (code, text.trim()) {
+        (0, "yes") => Some(true),
+        (1, "no") => Some(false),
+        _ => None,
+    }
+}
+
 /// Saved and live firewalld state for the port. Either one keeps it open.
 fn firewalld_halves(rule: &Rule) -> Option<(bool, bool)> {
-    let query = |permanent: bool| match run_code(&firewalld(rule, permanent, "query"))?.0 {
-        0 => Some(true),
-        1 => Some(false),
-        _ => None,
+    let query = |permanent: bool| {
+        let (code, text) = run_code(&firewalld(rule, permanent, "query"))?;
+        firewalld_answer(code, &text)
     };
     Some((query(true)?, query(false)?))
 }
@@ -625,12 +638,38 @@ fn ufw_marker(text: &str, rule: &Rule) -> bool {
         })
 }
 
+fn mac_paths(text: &str) -> Option<Vec<&str>> {
+    let mut lines = text.trim().lines();
+    let header = lines.next()?.trim();
+    // New macOS versions omit the old ALF prefix. Both formats come from socketfilterfw.
+    let count = header
+        .strip_prefix("ALF: total number of apps = ")
+        .or_else(|| header.strip_prefix("Total number of apps = "))?
+        .trim()
+        .parse::<usize>()
+        .ok()?;
+    let mut paths = Vec::new();
+    for line in lines {
+        let line = line.trim();
+        if line.is_empty()
+            || matches!(
+                line,
+                "(Allow incoming connections)" | "(Block incoming connections)"
+            )
+        {
+            continue;
+        }
+        let (index, path) = line.split_once(':')?;
+        if index.trim().parse::<usize>().ok()? != paths.len() + 1 || !path.trim().starts_with('/') {
+            return None;
+        }
+        paths.push(path.trim());
+    }
+    (paths.len() == count).then_some(paths)
+}
+
 fn mac_path_present(text: &str, program: &Path) -> bool {
-    text.lines().any(|line| {
-        line.split_once(':').is_some_and(|(index, path)| {
-            index.trim().parse::<u32>().is_ok() && path.trim() == program.to_string_lossy()
-        })
-    })
+    mac_paths(text).is_some_and(|paths| paths.contains(&program.to_string_lossy().as_ref()))
 }
 
 /// Only the exact application path and a record saying Moss added it allow removal.
@@ -718,9 +757,7 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 Some(true) => {}
             }
             match run_code(&cmd(&[SOCKET_FILTER, "--listapps"])) {
-                Some((0, text)) if text.trim_start().starts_with("ALF:") => {
-                    Ok(mac_marker(&text, rule))
-                }
+                Some((0, text)) if mac_paths(&text).is_some() => Ok(mac_marker(&text, rule)),
                 _ => Err(UNREADABLE),
             }
         }
@@ -1528,6 +1565,27 @@ mod tests {
         let mut preexisting = rule();
         preexisting.entry_added = Some(false);
         assert_eq!(owned(Os::Mac, Linux::Nothing, &preexisting), Ok(false));
+    }
+
+    #[test]
+    fn firewalld_query_requires_a_clear_answer_and_success_code() {
+        assert_eq!(firewalld_answer(0, "yes\n"), Some(true));
+        assert_eq!(firewalld_answer(1, "no\n"), Some(false));
+        for (code, text) in [(0, "error"), (1, "timeout"), (2, "no"), (0, "no")] {
+            assert_eq!(firewalld_answer(code, text), None);
+        }
+    }
+
+    #[test]
+    fn mac_listing_accepts_native_headers_but_never_incomplete_or_failed_output() {
+        for prefix in ["ALF: total number of apps = ", "Total number of apps = "] {
+            let text = format!("{prefix}1 \n1 : /moss-server \n  (Allow incoming connections)\n");
+            assert_eq!(mac_paths(&text), Some(vec!["/moss-server"]));
+            assert_eq!(mac_paths(&format!("{prefix}0\n")), Some(vec![]));
+            assert!(mac_paths(&text.replace("= 1", "= 2")).is_none());
+        }
+        assert!(mac_paths("You need root access").is_none());
+        assert!(mac_paths("Total number of apps = 0\nerror").is_none());
     }
 
     #[test]
