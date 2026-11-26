@@ -2,8 +2,8 @@
 //! needed, or to one on another computer. Everything else runs on the server.
 //!
 //! The app's own screens are served from `moss-app://`. Server pages open in a separate web
-//! view with its own profile. That view allows the server's pinned certificate and closes any
-//! page load that arrived over a different one (see `trust_on_linux`).
+//! view with its own profile. Public-mode views use OS trust; pinned views retain the
+//! certificate checks and platform limitations documented in the trust modules.
 
 mod desktop;
 mod launch;

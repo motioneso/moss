@@ -1,4 +1,5 @@
-//! Windows (WebView2) certificate pinning for a server's web view.
+//! Windows (WebView2) trust for a server's web view. Public-mode profiles use OS trust
+//! and cancel every certificate-error event; the exception below applies only to pinned profiles.
 //!
 //! WebView2 raises a server-certificate-error event only when the system does not already trust
 //! the certificate. The handler allows the pinned certificate and cancels everything else, so a

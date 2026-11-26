@@ -1,4 +1,5 @@
-//! macOS (WKWebView) certificate pinning for a server's web view.
+//! macOS (WKWebView) trust for a server's web view. Public-mode profiles use default OS
+//! handling; the pin comparison below applies only to pinned profiles.
 //!
 //! wry's navigation delegate does not answer server-trust challenges, so the answering method is
 //! added to its class once. Every TLS connection a server view makes then reaches `challenge`,

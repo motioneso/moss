@@ -5,7 +5,8 @@ use crate::{Opened, UserEvent};
 use tao::event_loop::EventLoopProxy;
 use wry::WebView;
 
-/// Allows the pinned certificate for this server's host in its own profile, and reports failed
+/// Public-mode views use WebKit's normal OS trust with no exception or leaf comparison.
+/// Pinned mode allows the certificate for this server's host in its own profile, and reports failed
 /// loads so the app can show why. WebKit also accepts certificates a public authority signed, so
 /// every committed load is compared with the pin and closed when it differs. The request has
 /// already been sent by then; WebKitGTK has no earlier hook. Only page loads are checked, so later
