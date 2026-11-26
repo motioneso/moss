@@ -9,7 +9,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - name: Compare startup processing as a standard user
+      - name: Exercise a real disposable standard-user logon
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -17,40 +17,86 @@ jobs:
           New-Item -ItemType Directory $work | Out-Null
           $script = Join-Path $work 'probe.py'
           @'
-          import csv, html, pathlib, subprocess, sys, time
+          import pathlib, subprocess, sys, time, winreg
           root = pathlib.Path(__file__).parent
           if len(sys.argv) > 1:
-              (root / sys.argv[1]).write_text('started')
+              (root / 'shell-started').write_text('started')
               raise SystemExit(0)
-          identity = subprocess.check_output(['whoami.exe', '/user', '/fo', 'csv', '/nh'], text=True)
-          sid = next(csv.reader(identity.splitlines()))[1]
-          for mode in ('InteractiveToken', 'S4U'):
-              arguments = subprocess.list2cmdline([str(pathlib.Path(__file__)), mode])
-              xml = f'''<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{sid}</UserId></LogonTrigger></Triggers><Principals><Principal id="Author"><UserId>{sid}</UserId><LogonType>{mode}</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit></Settings><Actions Context="Author"><Exec><Command>{html.escape(sys.executable)}</Command><Arguments>{html.escape(arguments)}</Arguments></Exec></Actions></Task>'''
-              definition = root / 'task.xml'
-              definition.write_text(xml, encoding='utf-16')
-              result = subprocess.run(['schtasks.exe', '/Create', '/TN', 'MossLoginProbe', '/XML', str(definition), '/F'], stdin=subprocess.DEVNULL, capture_output=True, text=True)
-              print('PROBE: own-user scheduler', mode, 'create exit', result.returncode, result.stdout.strip(), result.stderr.strip(), flush=True)
-              if result.returncode == 0:
-                  result = subprocess.run(['schtasks.exe', '/Run', '/TN', 'MossLoginProbe'])
-                  time.sleep(15)
-                  print('PROBE: own-user scheduler', mode, 'run exit', result.returncode, 'started', (root / mode).exists(), flush=True)
-                  subprocess.run(['schtasks.exe', '/Query', '/TN', 'MossLoginProbe', '/V', '/FO', 'LIST'])
-                  subprocess.run(['schtasks.exe', '/Delete', '/TN', 'MossLoginProbe', '/F'], check=True)
+          entry = subprocess.list2cmdline([sys.executable, str(pathlib.Path(__file__)), 'login'])
+          with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run') as registry:
+              winreg.SetValueEx(registry, 'MossLoginProbe', 0, winreg.REG_SZ, entry)
+          (root / 'registered').write_text('registered')
+          deadline = time.monotonic() + 120
+          while time.monotonic() < deadline and not (root / 'shell-started').exists():
+              time.sleep(1)
+          print('PROBE: real native logon processed Run entry', (root / 'shell-started').exists(), flush=True)
+          assert (root / 'shell-started').exists()
           '@ | Set-Content $script
           $account = 'moss-login-probe'
           $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
           $user = New-LocalUser -Name $account -Password $password -AccountNeverExpires
           try {
               Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
+              Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-555') -Member $user
               & icacls $work /grant ('*' + $user.SID.Value + ':(OI)(CI)M') /Q
               if ($LASTEXITCODE -ne 0) { throw 'Could not grant probe access' }
               $credential = [pscredential]::new("$env:COMPUTERNAME\$account", $password)
               $process = Start-Process (Get-Command python.exe).Source -Credential $credential -LoadUserProfile -WorkingDirectory $work -ArgumentList $script -RedirectStandardOutput "$work/out.txt" -RedirectStandardError "$work/err.txt" -PassThru
-              if (-not $process.WaitForExit(120000)) { $process.Kill($true); throw 'Probe timeout' }
-              Get-Content "$work/out.txt" -Tail 30
-              Get-Content "$work/err.txt" -Tail 30
-              if ($process.ExitCode -ne 0) { throw 'Probe failed' }
+              $deadline = (Get-Date).AddSeconds(30)
+              while (-not (Test-Path "$work/registered") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+              if (-not (Test-Path "$work/registered")) { throw 'Registry probe did not start' }
+              Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
+              Start-Service TermService
+              Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class ProbeCredential {
+              [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+              public struct Credential {
+                  public uint Flags, Type;
+                  public string TargetName, Comment;
+                  public long LastWritten;
+                  public uint BlobSize;
+                  public IntPtr Blob;
+                  public uint Persist, AttributeCount;
+                  public IntPtr Attributes;
+                  public string TargetAlias, UserName;
+              }
+              [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+              public static extern bool CredWriteW(ref Credential credential, uint flags);
+              [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+              public static extern bool CredDeleteW(string target, uint type, uint flags);
+          }
+          '@
+              $entry = [ProbeCredential+Credential]::new()
+              $entry.Type = 1
+              $entry.TargetName = 'TERMSRV/127.0.0.2'
+              $entry.UserName = "$env:COMPUTERNAME\$account"
+              $entry.Persist = 2
+              $entry.BlobSize = $password.Length * 2
+              $entry.Blob = [Runtime.InteropServices.Marshal]::SecureStringToCoTaskMemUnicode($password)
+              try {
+                  if (-not [ProbeCredential]::CredWriteW([ref]$entry, 0)) { throw 'Credential probe setup failed' }
+              } finally {
+                  [Runtime.InteropServices.Marshal]::ZeroFreeCoTaskMemUnicode($entry.Blob)
+              }
+              @"
+          full address:s:127.0.0.2
+          username:s:$env:COMPUTERNAME\$account
+          prompt for credentials:i:0
+          authentication level:i:0
+          enablecredsspsupport:i:1
+          screen mode id:i:1
+          desktopwidth:i:1280
+          desktopheight:i:720
+          "@ | Set-Content "$work/probe.rdp"
+              $client = Start-Process mstsc.exe -ArgumentList "$work/probe.rdp" -PassThru
+              if (-not $process.WaitForExit(150000)) { $process.Kill($true); throw 'Probe timeout' }
+              Get-Content "$work/out.txt" -Tail 10
+              Get-Content "$work/err.txt" -Tail 10
+              & quser.exe
+              if ($process.ExitCode -ne 0) { throw 'Real logon probe failed' }
           } finally {
+              [ProbeCredential]::CredDeleteW('TERMSRV/127.0.0.2', 1, 0) | Out-Null
               Remove-LocalUser -Name $account
           }
