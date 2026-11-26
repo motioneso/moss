@@ -843,8 +843,9 @@ impl App {
             ..
         }) = self.store.find(&self.servers, &id)
         {
-            let needs = folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
-                && !folder.join(keystore::custody::BUNDLE_FILE).exists();
+            // An old file beside a bundle is an interrupted migration. It
+            // resumes and shows fresh words before it counts as done.
+            let needs = folder.join(keystore::custody::LEGACY_CREDENTIALS).exists();
             if needs {
                 self.pending_custody = Some((name.clone(), id.clone()));
                 match custody_setup(&folder, &name) {

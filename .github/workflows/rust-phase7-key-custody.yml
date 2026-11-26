@@ -45,10 +45,39 @@ jobs:
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml -p moss-network --lib custody -- --test-threads=1
       - name: Build key custody driver
         run: cargo +1.95.0 build --locked --manifest-path rust-spike/Cargo.toml -p keystore --bin key-custody
+      - name: Linux keyring session for the custody proof
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y gnome-keyring dbus-x11
+      - name: phase7_key_custody on Linux inside a keyring session
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dbus-run-session -- bash -e -c '
+            eval "$(printf %s "" | gnome-keyring-daemon --unlock --components=secrets)"
+            python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-proof"
+          '
       - name: phase7_key_custody
+        if: runner.os != 'Linux'
         shell: bash
         run: python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-proof"
+      - name: Negative control must fail on Linux inside a keyring session
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set +e
+          dbus-run-session -- bash -e -c '
+            eval "$(printf %s "" | gnome-keyring-daemon --unlock --components=secrets)"
+            python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-negative" --negative-plaintext
+          ' > "$RUNNER_TEMP/key-custody-negative.log" 2>&1
+          code=$?
+          echo "Negative control script exit: $code"
+          cat "$RUNNER_TEMP/key-custody-negative.log"
+          test "$code" -ne 0
+          grep -q "plaintext remains in" "$RUNNER_TEMP/key-custody-negative.log"
       - name: Negative control must fail
+        if: runner.os != 'Linux'
         shell: bash
         run: |
           set +e

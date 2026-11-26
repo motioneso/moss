@@ -82,6 +82,9 @@ def main():
     # Headless Linux with no keychain session may choose a key file.
     done = cli("probe", "--root", str(scratch), "--mode", "missing", "--session", "headless")
     assert done.returncode == 0 and "route=key-file-choice" in done.stdout, done.stdout
+    done = cli("probe", "--root", str(scratch), "--mode", "broken", "--session", "headless")
+    assert done.returncode == 3 and "route=stop" in done.stdout, done.stdout
+    print("headless broken store stops too: ok")
     chosen = scratch / "chosen-master.key"
     done = cli("choose-key-file", "--root", str(locked_root), "--key-file", str(chosen))
     assert done.returncode == 0, done.stdout + done.stderr
@@ -139,24 +142,20 @@ def main():
     assert done.returncode == 0 and "started=true" in done.stdout, done.stdout + done.stderr
     print("start with working store: ok")
 
-    # 6. Real operating system key store. macOS and Windows runners have one, so
-    # there it must store and reload. Linux CI has no Secret Service session, so
-    # there an unavailable answer is reported, not passed off as working.
-    import sys as _sys
+    # 6. Real operating system key store. Every gate machine must store and
+    # reload through it: macOS and Windows runners have one, and the Linux job
+    # starts a keyring session before this step.
     done = cli("platform-smoke", "--root", str(scratch))
-    if _sys.platform in ("darwin", "win32"):
-        assert done.returncode == 0 and "platform=working" in done.stdout, done.stdout + done.stderr
-        plat_root = scratch / "platform-instance"
-        plat_root.mkdir()
-        (plat_root / "credentials.json").write_text(json.dumps(CREDS))
-        done = cli("migrate", "--root", str(plat_root), "--mode", "platform")
-        assert done.returncode == 0, done.stdout + done.stderr
-        assert not (plat_root / "credentials.json").exists()
-        done = cli("start", "--root", str(plat_root), "--mode", "platform")
-        assert done.returncode == 0 and "started=true" in done.stdout, done.stdout + done.stderr
-        print("platform key store migration and start: ok")
-    else:
-        print(f"platform key store smoke exit {done.returncode} on this Linux runner")
+    assert done.returncode == 0 and "platform=working" in done.stdout, done.stdout + done.stderr
+    plat_root = scratch / "platform-instance"
+    plat_root.mkdir()
+    (plat_root / "credentials.json").write_text(json.dumps(CREDS))
+    done = cli("migrate", "--root", str(plat_root), "--mode", "platform")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not (plat_root / "credentials.json").exists()
+    done = cli("start", "--root", str(plat_root), "--mode", "platform")
+    assert done.returncode == 0 and "started=true" in done.stdout, done.stdout + done.stderr
+    print("platform key store migration and start: ok")
     # No credential secret may sit anywhere in the scratch area, in any file.
     hits = []
     for path in sorted(scratch.rglob("*")):

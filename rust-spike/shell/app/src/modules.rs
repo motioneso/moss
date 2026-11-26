@@ -2,6 +2,13 @@
 //! still owns module schema creation; this opens the installed catalog.
 use crate::module_embedding::{ActivityRows, EmbeddingConfig, SettingsEmbeddings};
 use anyhow::Result;
+use moss_calendar_host::CalendarPorts;
+use moss_backtrack_host::BacktrackPorts;
+use moss_scratchpad_host::ScratchpadPorts;
+use moss_meetings_host::MeetingsPorts;
+use moss_connectors_host::ConnectorsPorts;
+use moss_email_host::EmailPorts;
+use moss_memory_host::ports::MemoryPorts;
 use axum::{
     body::Bytes,
     extract::{Path as UrlPath, Query, State},
@@ -10,16 +17,8 @@ use axum::{
     routing::{any, get},
     Extension, Json, Router,
 };
-use moss_backtrack_host::BacktrackPorts;
-use moss_calendar_host::CalendarPorts;
-use moss_connectors_host::ConnectorsPorts;
-use moss_email_host::EmailPorts;
-use moss_meetings_host::MeetingsPorts;
-use moss_memory_host::ports::MemoryPorts;
 use moss_module_host::{
-    account_preferences::{
-        weather_bindings, wellness_bindings, AccountPreferencesPorts, Binding, JsonShape,
-    },
+    account_preferences::{weather_bindings, wellness_bindings, AccountPreferencesPorts, Binding, JsonShape},
     ai::{
         EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings,
         DEFAULT_EMBEDDING_MODEL,
@@ -35,7 +34,6 @@ use moss_module_host::{
     runtime::{CallScope, Ports, Request},
     worker::Worker,
 };
-use moss_scratchpad_host::ScratchpadPorts;
 use safety_core::{
     access::AccessContext,
     db::Database,
@@ -64,8 +62,7 @@ pub struct Settings {
     #[serde(default)]
     pub(crate) producer_url: String,
     pub(crate) worker_url: String,
-    /// Absent after key custody strips it from this file. The server then supplies
-    /// the key from the wrapped bundle through the override below.
+    /// Absent after key custody strips it. The bundle supplies it at start.
     #[serde(default)]
     pub(crate) connector_key: String,
     /// Opens stored AI provider credentials. Absent means module AI fails closed.
@@ -242,24 +239,21 @@ fn module_preferences(
     let mut bindings = weather_bindings();
     bindings.extend(wellness_bindings());
     bindings.extend([
-        (
-            ("sports".into(), "standings-competitions".into()),
-            Binding::Json {
-                key: "sports.standings_competition_keys".into(),
-                shape: JsonShape::TextList {
-                    max_items: 64,
-                    max_len: 200,
+            (
+                ("sports".into(), "standings-competitions".into()),
+                Binding::Json {
+                    key: "sports.standings_competition_keys".into(),
+                    shape: JsonShape::TextList { max_items: 64, max_len: 200 },
                 },
-            },
-        ),
-        (
-            ("sports".into(), "standings-last-viewed".into()),
-            Binding::Json {
-                key: "sports.standings_last_viewed".into(),
-                shape: JsonShape::LastViewed,
-            },
-        ),
-    ]);
+            ),
+            (
+                ("sports".into(), "standings-last-viewed".into()),
+                Binding::Json {
+                    key: "sports.standings_last_viewed".into(),
+                    shape: JsonShape::LastViewed,
+                },
+            ),
+        ]);
     if notes_base.is_some() {
         bindings.extend([
             (
@@ -316,7 +310,10 @@ fn linked_notes(
     )?
     .with_account_base(base.clone())
     .with_private_export("notes", "private-export", private_base);
-    let linked: Arc<dyn Ports> = Arc::new(LinkedNotesPorts::new(Arc::new(folders), next));
+    let linked: Arc<dyn Ports> = Arc::new(LinkedNotesPorts::new(
+        Arc::new(folders),
+        next,
+    ));
     // Notes folder browse, link and status. The setting keys are fixed here.
     Ok(Arc::new(
         FolderSettingsPorts::new(
@@ -356,11 +353,7 @@ pub fn set_module_secrets(secrets: ModuleSecrets) {
 
 /// Supplies only the connector key from the wrapped credential bundle.
 pub fn set_connector_key_override(key: String) {
-    set_module_secrets(ModuleSecrets {
-        connector_key: key,
-        ai_key: None,
-        producer_url: String::new(),
-    });
+    set_module_secrets(ModuleSecrets { connector_key: key, ai_key: None, producer_url: String::new() });
 }
 
 pub fn read_settings(path: &Path) -> Result<Settings> {
@@ -424,16 +417,8 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         .outlook_browser
         .as_ref()
         .map(|o| {
-            moss_connectors_host::outlook_scan::OutlookBinding::new(
-                &o.endpoint,
-                o.owner,
-                &o.account,
-            )
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "outlook_browser needs a plain http address on this machine and an account"
-                )
-            })
+            moss_connectors_host::outlook_scan::OutlookBinding::new(&o.endpoint, o.owner, &o.account)
+                .ok_or_else(|| anyhow::anyhow!("outlook_browser needs a plain http address on this machine and an account"))
         })
         .transpose()?;
     let cipher = SecretCipher::connectors(
@@ -526,34 +511,29 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         },
         |services| {
             let services = match notes_base.clone() {
-                Some(base) => {
-                    let services = memory(
-                        preferences_database.clone(),
-                        base.clone(),
-                        private_base.clone(),
-                        Arc::new(IntelligenceEmbeddings::new(
-                            notes_intelligence,
-                            DEFAULT_EMBEDDING_MODEL.into(),
-                        )),
-                        services,
-                    )?;
-                    linked_notes(preferences_database, base, private_base, services)
-                }
-                None => {
-                    // Private export needs no linked notes folder.
-                    let folders = PreferenceFolders::new(
-                        preferences_database,
-                        BTreeMap::new(),
-                        BTreeMap::new(),
-                    )?
-                    .with_private_export(
-                        "notes",
-                        "private-export",
-                        private_base,
-                    );
-                    Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services))
-                        as Arc<dyn Ports>)
-                }
+            Some(base) => {
+                let services = memory(
+                    preferences_database.clone(),
+                    base.clone(),
+                    private_base.clone(),
+                    Arc::new(IntelligenceEmbeddings::new(
+                        notes_intelligence,
+                        DEFAULT_EMBEDDING_MODEL.into(),
+                    )),
+                    services,
+                )?;
+                linked_notes(preferences_database, base, private_base, services)
+            }
+            None => {
+                // Private export needs no linked notes folder.
+                let folders = PreferenceFolders::new(
+                    preferences_database,
+                    BTreeMap::new(),
+                    BTreeMap::new(),
+                )?
+                .with_private_export("notes", "private-export", private_base);
+                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
+            }
             }?;
             let services = module_preferences(preferences_database_sports, notes_base, services)?;
             // Sports source photos: the host re-encodes pictures and keeps the private copies.
@@ -563,47 +543,36 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             ) as Arc<dyn Ports>;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
             let authority_database = meetings_database.clone();
-            let device_store =
-                moss_meetings_host::device_store::DeviceStore::new(meetings_database.clone());
+            let device_store = moss_meetings_host::device_store::DeviceStore::new(meetings_database.clone());
             let device_requests = safety_core::device_requests::DeviceRequests::shared();
             let services = Arc::new(
                 MeetingsPorts::new(meetings_database, services)?
                     .with_recordings(&settings.data.join("modules/files"))?
                     .with_devices(Arc::new(device_store.clone()))
-                    .with_capture_authority(Arc::new(
-                        moss_meetings_host::device_store::NativeAuthority::new(
-                            device_store.clone(),
-                            device_requests.clone(),
-                        ),
-                    )),
+                    .with_capture_authority(Arc::new(moss_meetings_host::device_store::NativeAuthority::new(
+                        device_store.clone(),
+                        device_requests.clone(),
+                    ))),
             ) as Arc<dyn Ports>;
             // Backtrack answers only its own screen-text calls, as the signed-in person. Mac uploads
             // are refused until the device link check is supplied.
             let services = Arc::new(
                 BacktrackPorts::new(backtrack_database, services)?.with_links(Arc::new(
-                    crate::companion_links::StoreLinks {
-                        devices: device_store,
-                        requests: device_requests,
-                    },
+                    crate::companion_links::StoreLinks { devices: device_store, requests: device_requests },
                 )),
             ) as Arc<dyn Ports>;
             // Scratchpad answers only its own note calls, as the signed-in person.
-            let services =
-                Arc::new(ScratchpadPorts::new(scratchpad_database, services)?) as Arc<dyn Ports>;
+            let services = Arc::new(ScratchpadPorts::new(scratchpad_database, services)?) as Arc<dyn Ports>;
             // Calendar keeps its settings in the account's real preferences and reads the
             // account timezone. The wrapper only answers calls made by the Calendar module.
-            let services =
-                Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;
+            let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;
             // Connectors answers only its own account calls and seals secrets with the
             // connector key. Every other call passes through.
-            let mut connectors =
-                ConnectorsPorts::new(connectors_database, services, &connectors_key)?
-                    .with_worker_url(&connectors_worker_url)?;
+            let mut connectors = ConnectorsPorts::new(connectors_database, services, &connectors_key)?
+                .with_worker_url(&connectors_worker_url)?;
             if let Some(url) = &google_test_url {
                 eprintln!("WARNING: test_only_google_token_url is set. Google sign-in talks to {url}, not Google.");
-                connectors = connectors.with_google(
-                    moss_connectors_host::google::GoogleConfig::test_only_loopback(url)?,
-                );
+                connectors = connectors.with_google(moss_connectors_host::google::GoogleConfig::test_only_loopback(url)?);
             }
             if let Some(mail) = &mail_test {
                 // Release builds never send mail logins to a stand-in server.
@@ -612,19 +581,14 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                     "test_only_mail is only allowed in a debug build"
                 );
                 eprintln!("WARNING: test_only_mail is set. Mail sign-in talks to stand-in servers on this machine, not to a provider.");
-                let pem = mail
-                    .trusted_certificate
-                    .as_ref()
-                    .map(std::fs::read_to_string)
-                    .transpose()?;
-                connectors =
-                    connectors.with_mail(moss_connectors_host::imap::MailConfig::test_only_ports(
-                        mail.imap_port,
-                        mail.imap_tls,
-                        mail.smtp_port,
-                        &mail.smtp_security,
-                        pem.as_deref(),
-                    )?);
+                let pem = mail.trusted_certificate.as_ref().map(std::fs::read_to_string).transpose()?;
+                connectors = connectors.with_mail(moss_connectors_host::imap::MailConfig::test_only_ports(
+                    mail.imap_port,
+                    mail.imap_tls,
+                    mail.smtp_port,
+                    &mail.smtp_security,
+                    pem.as_deref(),
+                )?);
             }
             connectors = connectors.with_outlook(outlook.clone());
             let services = Arc::new(connectors) as Arc<dyn Ports>;
@@ -632,11 +596,8 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             let services = Arc::new(EmailPorts::new(email_database, services)?) as Arc<dyn Ports>;
             // Memory answers only its own graph calls, as the signed-in person.
             Ok(Arc::new(
-                MemoryPorts::new(memory_database, memory_embeddings, services)?.with_authority(
-                    Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(
-                        authority_database,
-                    )),
-                ),
+                MemoryPorts::new(memory_database, memory_embeddings, services)?
+                    .with_authority(Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(authority_database))),
             ) as Arc<dyn Ports>)
         },
     )?;
@@ -893,28 +854,20 @@ async fn dispatch(
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.starts_with("application/octet-stream"));
     let (access, staged, body) = if binary {
-        let id = format!(
-            "{}{}",
-            moss_module_host::staged::PREFIX,
-            uuid::Uuid::new_v4()
-        );
+        let id = format!("{}{}", moss_module_host::staged::PREFIX, uuid::Uuid::new_v4());
         let (guard, json) = moss_module_host::staged::stage_body(&id, body.to_vec());
-        (
-            AccessContext::new(access.actor_user_id(), id),
-            Some(guard),
-            json,
-        )
+        (AccessContext::new(access.actor_user_id(), id), Some(guard), json)
     } else {
         let Ok(text) = std::str::from_utf8(&body) else {
             return StatusCode::BAD_REQUEST.into_response();
         };
-        (
-            access,
-            None,
-            if text.is_empty() { "null" } else { text }.to_owned(),
-        )
+        (access, None, if text.is_empty() { "null" } else { text }.to_owned())
     };
-    let target = alias(uri.path_and_query().map(|p| p.as_str()).unwrap_or("/"));
+    let target = alias(
+        uri.path_and_query()
+            .map(|p| p.as_str())
+            .unwrap_or("/"),
+    );
     match tokio::task::spawn_blocking(move || {
         let _slot = slot;
         let _staged = staged;
@@ -961,21 +914,13 @@ fn module_response(output: &str) -> Response {
         image: Option<Picture>,
     }
     match serde_json::from_str::<Reply>(output) {
-        Ok(Reply {
-            status: 200,
-            image: Some(picture),
-            ..
-        }) => {
+        Ok(Reply { status: 200, image: Some(picture), .. }) => {
             // A package cannot choose the type or the cache time freely, and a body that does not
             // match its declared type is never sent.
-            let Some(bytes) =
-                moss_module_host::route_image::decode(&picture.content_type, &picture.base64)
-            else {
+            let Some(bytes) = moss_module_host::route_image::decode(&picture.content_type, &picture.base64) else {
                 return StatusCode::BAD_GATEWAY.into_response();
             };
-            let max_age = picture
-                .max_age
-                .min(moss_module_host::route_image::MAX_AGE_LIMIT);
+            let max_age = picture.max_age.min(moss_module_host::route_image::MAX_AGE_LIMIT);
             (
                 StatusCode::OK,
                 [
@@ -1007,14 +952,8 @@ mod tests {
     fn old_weather_paths_reach_the_weather_package() {
         for (old, new) in [
             ("/api/me/weather-location", "/api/m/weather/location"),
-            (
-                "/api/me/weather-location/search?query=a",
-                "/api/m/weather/location/search?query=a",
-            ),
-            (
-                "/api/me/weather-location/reverse?lat=1&lon=2",
-                "/api/m/weather/location/reverse?lat=1&lon=2",
-            ),
+            ("/api/me/weather-location/search?query=a", "/api/m/weather/location/search?query=a"),
+            ("/api/me/weather-location/reverse?lat=1&lon=2", "/api/m/weather/location/reverse?lat=1&lon=2"),
             ("/api/me/weather-unit", "/api/m/weather/unit"),
             ("/api/me/weather-unitx", "/api/me/weather-unitx"),
             ("/api/m/news/feed", "/api/m/news/feed"),
@@ -1051,15 +990,9 @@ mod tests {
         let response = module_response(reply);
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CONTENT_TYPE], "image/gif");
-        assert_eq!(
-            response.headers()[header::X_CONTENT_TYPE_OPTIONS],
-            "nosniff"
-        );
+        assert_eq!(response.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
         // The browser cache time is clamped to a day.
-        assert_eq!(
-            response.headers()[header::CACHE_CONTROL],
-            "private, max-age=86400"
-        );
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "private, max-age=86400");
     }
 
     #[test]
@@ -1075,10 +1008,7 @@ mod tests {
     #[test]
     fn old_news_picture_paths_reach_the_news_package() {
         assert_eq!(alias("/api/news/images/abc"), "/api/m/news/images/abc");
-        assert_eq!(
-            alias("/api/news/favicon/bbc.com"),
-            "/api/m/news/favicon/bbc.com"
-        );
+        assert_eq!(alias("/api/news/favicon/bbc.com"), "/api/m/news/favicon/bbc.com");
         assert_eq!(alias("/api/news/overview"), "/api/news/overview");
     }
 }

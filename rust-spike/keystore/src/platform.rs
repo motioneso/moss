@@ -82,8 +82,13 @@ mod linux {
 
     impl SecretServiceStore {
         fn session(&self) -> Result<(Connection, OwnedObjectPath), CustodyError> {
-            let connection =
-                Connection::session().map_err(|e| CustodyError::Unavailable(e.to_string()))?;
+            let connection = Connection::session().map_err(|e| {
+                if std::env::var_os("DBUS_SESSION_BUS_ADDRESS").is_none() {
+                    CustodyError::NoSession
+                } else {
+                    CustodyError::Unavailable(e.to_string())
+                }
+            })?;
             let reply = connection
                 .call_method(
                     Some(SERVICE),

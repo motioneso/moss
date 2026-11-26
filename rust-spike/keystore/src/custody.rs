@@ -25,6 +25,8 @@ const KEY_FILE_KIND: &str = "moss-master-key-file";
 pub enum CustodyError {
     Locked,
     Unavailable(String),
+    /// There is no keychain session at all, as on a headless server.
+    NoSession,
     WrongWords,
     BadWords(WordsError),
     Damaged(String),
@@ -41,6 +43,9 @@ impl CustodyError {
 
     pub fn reason(&self) -> String {
         match self {
+            CustodyError::NoSession => {
+                "No key store found. Check your key store, then try again.".to_string()
+            }
             CustodyError::Locked => {
                 "Your key store is locked. Unlock your key store, then try again.".to_string()
             }
@@ -110,7 +115,7 @@ impl MemoryStore {
         match self.mode {
             FakeMode::Working => Ok(()),
             FakeMode::Locked => Err(CustodyError::Locked),
-            FakeMode::Missing => Err(CustodyError::Unavailable("no key store".into())),
+            FakeMode::Missing => Err(CustodyError::NoSession),
             FakeMode::Broken => Err(CustodyError::Unavailable("key store did not answer".into())),
         }
     }
@@ -286,6 +291,33 @@ pub fn unwrap_with_recovery(
     unwrap_with_master(bundle, &MasterKey::from_bytes(master))
 }
 
+/// The master key a recovery key unwraps, so a restore can put it back in a store.
+pub fn master_from_recovery(bundle: &Value, recovery: &RecoveryKey) -> Result<MasterKey, CustodyError> {
+    let header = header_of(bundle)?;
+    let master_bytes = unseal(
+        recovery.bytes(),
+        header.as_bytes(),
+        bundle.get("masterByRecovery").ok_or_else(|| CustodyError::Damaged("no wrapped master key".into()))?,
+    )
+    .ok_or(CustodyError::WrongWords)?;
+    let bytes: [u8; 32] = master_bytes.try_into().map_err(|_| CustodyError::WrongWords)?;
+    Ok(MasterKey::from_bytes(bytes))
+}
+
+/// Restores the master key into a store from typed recovery words.
+pub fn restore_to_store(
+    bundle: &Value,
+    typed: &[String],
+    store: &mut dyn OsKeyStore,
+    service: &str,
+) -> Result<Vec<u8>, CustodyError> {
+    let recovery = crate::recovery::parse_words(typed).map_err(CustodyError::BadWords)?;
+    let master = master_from_recovery(bundle, &recovery)?;
+    let payload = unwrap_with_master(bundle, &master)?;
+    store.store_master(service, &master)?;
+    Ok(payload)
+}
+
 /// Restores the wrapped bundle from typed recovery words. Wrong words are refused.
 pub fn restore_with_words(bundle: &Value, typed: &[String]) -> Result<Vec<u8>, CustodyError> {
     let recovery = crate::recovery::parse_words(typed).map_err(CustodyError::BadWords)?;
@@ -349,13 +381,10 @@ pub fn setup_route(desktop_session: bool, probe: Result<(), CustodyError>) -> Se
     match probe {
         Ok(()) => SetupRoute::OsStore,
         Err(CustodyError::Locked) => SetupRoute::Stop(CustodyError::Locked),
-        Err(error) => {
-            if desktop_session {
-                SetupRoute::Stop(error)
-            } else {
-                SetupRoute::KeyFileChoice
-            }
-        }
+        // Only a machine with no keychain session at all may choose a key file.
+        // A store that is there but broken stops setup on every machine.
+        Err(CustodyError::NoSession) if !desktop_session => SetupRoute::KeyFileChoice,
+        Err(error) => SetupRoute::Stop(error),
     }
 }
 
@@ -580,7 +609,6 @@ fn prepare(
     let master = MasterKey::generate();
     let recovery = RecoveryKey::generate();
     let bundle = wrap_bundle(&master, &recovery, &payload);
-    store.store_master(service, &master)?;
     let bundle_path = instance_root.join(BUNDLE_FILE);
     write_private(&bundle_path, &serde_json::to_vec_pretty(&bundle).unwrap())?;
     if leak_plaintext {
@@ -599,6 +627,9 @@ fn prepare(
             "the new bundle does not hold the credentials".into(),
         ));
     }
+    // Only now, with the new bundle verified on disk, does its master
+    // replace the old one in the store.
+    store.store_master(service, &master)?;
     let remaining: Vec<PathBuf> = find_plaintext(instance_root, &secrets)
         .into_iter()
         .filter(|path| path != &legacy && path != &instance_root.join("modules.json"))

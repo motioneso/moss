@@ -75,7 +75,7 @@ fn desktop_missing_or_broken_store_stops_with_no_key_file_route() {
     for mode in [FakeMode::Missing, FakeMode::Broken] {
         let store = MemoryStore::new(mode);
         match setup_route(true, store.probe()) {
-            SetupRoute::Stop(CustodyError::Unavailable(_)) => {}
+            SetupRoute::Stop(_) => {}
             other => panic!("desktop must stop, got {other:?}"),
         }
     }
@@ -90,6 +90,9 @@ fn desktop_missing_or_broken_store_stops_with_no_key_file_route() {
         setup_route(false, missing.probe()),
         SetupRoute::KeyFileChoice
     );
+    // Headless with a broken store may not. Broken stops everywhere.
+    let broken = MemoryStore::new(FakeMode::Broken);
+    assert!(matches!(setup_route(false, broken.probe()), SetupRoute::Stop(_)));
 }
 
 #[test]
@@ -194,4 +197,48 @@ fn failed_migration_keeps_everything_recoverable() {
     fs::remove_file(dir.path().join("credentials-plaintext-copy.json")).unwrap();
     let clean = migrate(dir.path(), &mut store, "svc", false);
     assert!(clean.is_ok());
+}
+
+#[test]
+fn interrupted_migration_resumes_and_shows_fresh_words() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","ai_key":"test-module-ai-key-3456"}"#).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    // Killed after the bundle was written, before the old file was deleted.
+    let prepared = keystore::custody::prepare_instance(dir.path(), &mut store, "svc").unwrap();
+    let first_words: Vec<String> = prepared.words().iter().map(|s| s.to_string()).collect();
+    drop(prepared);
+    assert!(dir.path().join("credentials.json").exists());
+    assert!(dir.path().join("key-bundle.json").exists());
+    // Relaunch resumes, shows words, and loses nothing.
+    let prepared = keystore::custody::prepare_instance(dir.path(), &mut store, "svc").unwrap();
+    assert_eq!(prepared.words().len(), 24);
+    let second_words: Vec<String> = prepared.words().iter().map(|s| s.to_string()).collect();
+    assert_ne!(first_words, second_words);
+    prepared.commit().unwrap();
+    assert!(!dir.path().join("credentials.json").exists());
+    let master = start_gate(&store, "svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
+    assert!(String::from_utf8(payload).unwrap().contains("test-module-ai-key-3456"));
+}
+
+#[test]
+fn failed_bundle_write_on_retry_keeps_the_old_bundle_opening() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","ai_key":"test-module-ai-key-3456"}"#).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    keystore::custody::prepare_instance(dir.path(), &mut store, "svc").unwrap();
+    // The staging file cannot be created, so the retry bundle write fails.
+    fs::create_dir(dir.path().join("key-bundle.staging")).unwrap();
+    assert!(keystore::custody::prepare_instance(dir.path(), &mut store, "svc").is_err());
+    // The old bundle still opens with its AI key.
+    let master = start_gate(&store, "svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
+    assert!(String::from_utf8(payload).unwrap().contains("test-module-ai-key-3456"));
+    fs::remove_dir(dir.path().join("key-bundle.staging")).unwrap();
+    keystore::custody::prepare_instance(dir.path(), &mut store, "svc").unwrap().commit().unwrap();
 }

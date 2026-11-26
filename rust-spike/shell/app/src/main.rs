@@ -286,6 +286,83 @@ fn running_record(folder: &Path, config: &Config, port: u16) -> Result<instance:
 
 /// Reads the bundle beside an --instance argument and supplies its module
 /// secrets, for the separate installer and package processes.
+/// Moves one instance's plain credentials into the key store. The one place
+/// recovery words are printed, for the owner running setup in a terminal.
+fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
+    use keystore::custody::{prepare_instance, setup_route, KeyFileStore, SetupRoute};
+    let mut instance: Option<std::path::PathBuf> = None;
+    let mut key_file: Option<std::path::PathBuf> = None;
+    let mut iter = raw.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--instance" => instance = iter.next().map(std::path::PathBuf::from),
+            "--key-file" => key_file = iter.next().map(std::path::PathBuf::from),
+            _ => {}
+        }
+    }
+    let folder = instance.ok_or("usage: moss-server migrate-keys --instance DIR [--key-file FILE]")?;
+    let network_file = folder.join("network.json");
+    let mut config = moss_network::config::Config::read(&network_file)
+        .map_err(|e| format!("cannot read the instance settings: {e}"))?;
+    if !folder.join(keystore::custody::LEGACY_CREDENTIALS).exists() {
+        return Err("this instance has no plain credentials file to migrate".into());
+    }
+    let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "default".into());
+    let service = keystore::platform::service_name(&name);
+    let platform = keystore::platform::platform_store();
+    let prepared = match setup_route(false, platform.probe()) {
+        SetupRoute::OsStore => prepare_instance(&folder, &mut keystore::platform::platform_store(), &service),
+        SetupRoute::KeyFileChoice => {
+            let path = key_file.ok_or("no keychain session here. Name the key file to create with --key-file")?;
+            let mut store = KeyFileStore::new(path.clone());
+            let prepared = prepare_instance(&folder, &mut store, &service);
+            if prepared.is_ok() {
+                keystore::custody::record_key_file_choice(&folder, &path)
+                    .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+            }
+            prepared
+        }
+        SetupRoute::Stop(error) => return Err(format!("{}: {}", error.code(), error.reason())),
+    }
+    .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    config.credentials = prepared.bundle_path().to_path_buf();
+    config.write(&network_file).map_err(|e| format!("cannot save the instance settings: {e}"))?;
+    let words = prepared.words().join(" ");
+    prepared.commit().map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    println!("Write these recovery words down. They are shown once:");
+    println!("{words}");
+    Ok(())
+}
+
+/// Puts the master key back into this machine's key store from the owner's
+/// recovery words, read from one line on stdin.
+fn restore_keys(raw: Vec<String>) -> Result<(), String> {
+    let mut instance: Option<std::path::PathBuf> = None;
+    let mut iter = raw.iter();
+    while let Some(arg) = iter.next() {
+        if arg.as_str() == "--instance" {
+            instance = iter.next().map(std::path::PathBuf::from);
+        }
+    }
+    let folder = instance.ok_or("usage: moss-server restore-keys --instance DIR")?;
+    let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "default".into());
+    let service = keystore::platform::service_name(&name);
+    let bundle = keystore::custody::read_bundle(&folder).map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    let mut line = String::new();
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut line)
+        .map_err(|e| format!("cannot read the recovery words: {e}"))?;
+    let typed = keystore::recovery::split_pasted(&line);
+    let recorded = keystore::custody::recorded_key_file(&folder);
+    let mut store: Box<dyn keystore::custody::OsKeyStore> = match recorded {
+        Some(path) => Box::new(keystore::custody::KeyFileStore::new(path)),
+        None => keystore::platform::platform_store(),
+    };
+    keystore::custody::restore_to_store(&bundle, &typed, store.as_mut(), &service)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    println!("The master key is back in this machine's key store.");
+    Ok(())
+}
+
 fn supply_module_secrets_from_args() {
     let args: Vec<String> = std::env::args().collect();
     let Some(position) = args.iter().position(|arg| arg == "--instance") else {
@@ -325,6 +402,20 @@ fn main() {
         }
         return;
     }
+    if std::env::args().nth(1).as_deref() == Some("migrate-keys") {
+        if let Err(error) = migrate_keys(std::env::args().skip(2).collect()) {
+            eprintln!("moss-server migrate-keys: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if std::env::args().nth(1).as_deref() == Some("restore-keys") {
+        if let Err(error) = restore_keys(std::env::args().skip(2).collect()) {
+            eprintln!("moss-server restore-keys: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("install-module") {
         supply_module_secrets_from_args();
         let runtime_free = module_install::run(std::env::args().skip(2).collect());
@@ -352,6 +443,11 @@ fn main() {
     });
     let prepared = runtime.block_on(async {
         let config = Config::read(&args.network)?;
+        if let Ok(raw) = moss_network::config::private_read(&config.credentials) {
+            if !moss_network::config::is_bundle(&raw) {
+                eprintln!("moss-server: this instance still keeps its keys in a plain file. Run moss-server migrate-keys --instance <folder> to move them into the key store.");
+            }
+        }
         let platform = config.platform().await?;
         // Module settings no longer hold their secrets after key custody.
         if let Ok((connector_key, ai_key, producer_url)) = config.module_secrets() {
