@@ -23,6 +23,40 @@ def user_sid():
     return next(csv.reader(result.stdout.decode(errors='replace').splitlines()))[-1]
 
 
+
+def registered_user_sid(identity):
+    """Task Scheduler may export a qualified account name instead of its SID."""
+    assert identity, 'Task Scheduler omitted the registered user'
+    if identity.startswith('S-1-'):
+        return identity
+    from ctypes import wintypes
+    api = ctypes.WinDLL('advapi32', use_last_error=True)
+    lookup = api.LookupAccountNameW
+    lookup.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.c_void_p,
+                       ctypes.POINTER(wintypes.DWORD), wintypes.LPWSTR,
+                       ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD)]
+    lookup.restype = wintypes.BOOL
+    size, domain_size, kind = wintypes.DWORD(), wintypes.DWORD(), wintypes.DWORD()
+    lookup(None, identity, None, ctypes.byref(size), None, ctypes.byref(domain_size), ctypes.byref(kind))
+    assert ctypes.get_last_error() == 122 and size.value, 'Cannot size the registered user SID'
+    sid = ctypes.create_string_buffer(size.value)
+    domain = ctypes.create_unicode_buffer(domain_size.value)
+    assert lookup(None, identity, sid, ctypes.byref(size), domain,
+                  ctypes.byref(domain_size), ctypes.byref(kind)), 'Cannot resolve the registered user SID'
+    convert = api.ConvertSidToStringSidW
+    convert.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.LPWSTR)]
+    convert.restype = wintypes.BOOL
+    text = wintypes.LPWSTR()
+    assert convert(sid, ctypes.byref(text)), 'Cannot format the registered user SID'
+    try:
+        return text.value
+    finally:
+        free = ctypes.windll.kernel32.LocalFree
+        free.argtypes = [ctypes.c_void_p]
+        free.restype = ctypes.c_void_p
+        free(text)
+
+
 def task_definition(name):
     result = run(['schtasks.exe', '/Query', '/TN', name, '/XML'])
     if result.returncode:
@@ -69,12 +103,12 @@ def read_back(name, launcher, folder, enabled=True):
         assert not ctypes.windll.shell32.IsUserAnAdmin(), 'Gate must run without admin rights'
         triggers = root.findall('t:Triggers/*', NS)
         assert len(triggers) == 1 and triggers[0].tag.endswith('}LogonTrigger')
-        assert triggers[0].findtext('t:UserId', namespaces=NS) == sid
+        assert registered_user_sid(triggers[0].findtext('t:UserId', namespaces=NS)) == sid, 'Logon trigger belongs to another user'
         assert triggers[0].findtext('t:Enabled', default='true', namespaces=NS) == 'true'
         principals = root.findall('t:Principals/t:Principal', NS)
         assert len(principals) == 1
         principal = principals[0]
-        assert principal.findtext('t:UserId', namespaces=NS) == sid
+        assert registered_user_sid(principal.findtext('t:UserId', namespaces=NS)) == sid, 'Task principal belongs to another user'
         assert principal.findtext('t:LogonType', namespaces=NS) == 'InteractiveToken'
         assert principal.findtext('t:RunLevel', namespaces=NS) == 'LeastPrivilege'
         assert root.findtext('t:Settings/t:Enabled', default='true', namespaces=NS) == str(enabled).lower()

@@ -1,0 +1,57 @@
+name: Rust phase7 Windows registration probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  registration_probe:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compare scheduler XML encodings and namespaces as an ordinary user
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $work = Join-Path $env:RUNNER_TEMP 'registration-probe'
+          New-Item -ItemType Directory $work | Out-Null
+          $script = Join-Path $work 'probe.py'
+          Copy-Item rust-spike/shell/tools/phase7_service_registration.py $work
+          @'
+          import csv, html, pathlib, subprocess, sys
+          import phase7_service_registration as registration
+          root = pathlib.Path(__file__).parent
+          sid = registration.user_sid()
+          template = '<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{sid}</UserId></LogonTrigger></Triggers><Principals><Principal id="Owner"><UserId>{sid}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Enabled>true</Enabled></Settings><Actions Context="Owner"><Exec><Command>{}</Command><Arguments>{arguments}</Arguments></Exec></Actions></Task>'
+          name = 'MossRegistrationProbe'
+          arguments = subprocess.list2cmdline(['service-run', str(root)])
+          xml = template.replace('{sid}', sid).replace('{arguments}', html.escape(arguments)).replace('{}', html.escape(sys.executable))
+          path = root / 'task.xml'
+          path.write_text(xml, encoding='utf-16')
+          subprocess.run(['schtasks.exe', '/Create', '/TN', name, '/XML', str(path), '/F'], check=True)
+          try:
+              definition = registration.task_definition(name)
+              trigger = definition.find('t:Triggers/t:LogonTrigger/t:UserId', registration.NS).text
+              principal = definition.find('t:Principals/t:Principal/t:UserId', registration.NS).text
+              print('NATIVE REGISTERED IDENTITIES:', repr(trigger), repr(principal), flush=True)
+              assert registration.read_back(name, pathlib.Path(sys.executable), root)
+              print('PASS: exact native task read-back resolves the current user SID', flush=True)
+          finally:
+              subprocess.run(['schtasks.exe', '/Delete', '/TN', name, '/F'], check=True)
+              registration.assert_removed(name)
+          '@ | Set-Content $script
+          $account = 'moss-registration'
+          $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
+          $user = New-LocalUser -Name $account -Password $password -AccountNeverExpires
+          try {
+              Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
+              & icacls $work /grant ('*' + $user.SID.Value + ':(OI)(CI)M') /Q
+              $credential = [pscredential]::new("$env:COMPUTERNAME\$account", $password)
+              $process = Start-Process (Get-Command python.exe).Source -Credential $credential -LoadUserProfile -WorkingDirectory $work -ArgumentList $script -RedirectStandardOutput "$work/out.txt" -RedirectStandardError "$work/err.txt" -PassThru
+              if (-not $process.WaitForExit(120000)) { $process.Kill($true); throw 'Probe timeout' }
+              Get-Content "$work/out.txt" -Tail 40
+              Get-Content "$work/err.txt" -Tail 20
+              if ($process.ExitCode -ne 0) { throw 'Probe failed' }
+          } finally {
+              Remove-LocalUser -Name $account
+          }
