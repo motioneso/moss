@@ -323,7 +323,9 @@ class World:
         else:
             # ALF recognizes code identity too. A copy of the probe has the same identity
             # and can alias its entry; plant a different executable at our unique path.
-            shutil.copy2('/usr/bin/true', self.other_program)
+            # Do not copy Apple's protected system file flags onto our fixture.
+            shutil.copyfile('/usr/bin/true', self.other_program)
+            self.other_program.chmod(0o755)
             sudo([SOCKET_FILTER, '--add', str(self.other_program)])
         self.planted_other = True
 
