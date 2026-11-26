@@ -45,6 +45,7 @@ const fixture = spawn(
     env: {
       ...process.env,
       LIFECYCLE_SCREENS: "1",
+      MOSS_TEST_REFRESH_DIAGNOSTICS: "1",
       CATALOG_HOLD: hold,
       CATALOG_WEB: join(target, "web"),
       JS43_APP_URL: urls.app,
@@ -153,15 +154,33 @@ try {
     await page.setViewportSize({ width: pixels, height: 1000 });
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
+    page.on("response", (response) => {
+      if (response.url().startsWith(`${origin}/api/modules/`) && response.status() >= 400) {
+        console.error(`Module API failure (${width}): ${response.status()} ${response.url()}`);
+      }
+    });
+    page.on("requestfailed", (request) => {
+      if (request.url().startsWith(`${origin}/api/modules/`)) {
+        console.error(`Module request failed (${width}): ${request.url()}`, request.failure());
+      }
+    });
     async function install() {
-      await page.goto(detail);
-      await page.getByRole("link", { name: `Install ${name}`, exact: true }).click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await page.getByRole("button", { name: `Install ${name}`, exact: true }).click();
-      await expect(
-        page.getByRole("heading", { name: `${name} is ready`, exact: true })
-      ).toBeVisible();
-      assert.equal((await saved(page)).stage, "succeeded");
+      try {
+        await page.goto(detail);
+        await page.getByRole("link", { name: `Install ${name}`, exact: true }).click();
+        await expect(page.getByRole("dialog")).toBeVisible();
+        await page.getByRole("button", { name: `Install ${name}`, exact: true }).click();
+        await expect(
+          page.getByRole("heading", { name: `${name} is ready`, exact: true })
+        ).toBeVisible();
+        assert.equal((await saved(page)).stage, "succeeded");
+      } catch (error) {
+        console.error(`Install diagnostics (${width}), browser errors:`, errors);
+        console.error(
+          readFileSync(join(instance, "server.log"), "utf8").split("\n").slice(-50).join("\n")
+        );
+        throw error;
+      }
     }
     await install();
     await command("plant", width);

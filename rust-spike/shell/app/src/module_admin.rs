@@ -173,11 +173,9 @@ fn run(
     let output = command
         .output()
         .map_err(|_| "Cannot start the installer".to_owned())?;
-    // The real-server fixture needs the full helper error chain, including successful
-    // refresh commands that report individual update failures. Never change the API error.
-    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some()
-        && extra.iter().any(|arg| arg == "--refresh-policy")
-    {
+    // Real-server fixtures need full helper errors, including successful refreshes
+    // reporting individual failures. This private stderr never changes the API error.
+    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
         eprint!("{}", String::from_utf8_lossy(&output.stderr));
     }
     if output.status.success() {
@@ -194,6 +192,13 @@ fn run(
         .chars()
         .take(300)
         .collect())
+}
+
+/// Opt-in private diagnostics for real-server fixtures; public errors stay generic.
+pub(crate) fn test_diagnostic(label: &str, error: impl std::fmt::Display) {
+    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+        eprintln!("{label}: {error:#}");
+    }
 }
 
 pub(crate) fn run_json(
