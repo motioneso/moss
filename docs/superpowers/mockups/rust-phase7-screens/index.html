@@ -521,8 +521,10 @@
                 </div>
               </div>
               <div class="entry">
-                <div><strong>Recovery key</strong></div>
-                <a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m2">Show</a>
+                <div>
+                  <strong>Recovery key</strong>
+                  <div class="meta">Desktop app only</div>
+                </div>
               </div>
             </div>
           </div>
@@ -728,7 +730,7 @@
               <div>
                 <h3>Error</h3>
                 <p role="alert" class="failure">Could not check for updates.</p>
-                <div class="actions">
+                <div class="actions desktop-only">
                   <a class="jds-btn jds-btn--primary" href="#m6">Retry</a>
                 </div>
                 <p role="alert" class="failure">This update is not signed by Moss.</p>
@@ -755,10 +757,15 @@
                   <div class="section-label">1 · Export</div>
                   <p>On the computer that runs Docker:</p>
                   <pre class="cmd"><code>moss-export --out moss.mossbak</code></pre>
-                  <label class="field"
-                    >Export file
-                    <input class="jds-input" type="file" />
-                  </label>
+                  <div class="entry">
+                    <div>
+                      <strong>Export file</strong>
+                      <div class="meta">moss.mossbak</div>
+                    </div>
+                    <button class="jds-btn jds-btn--secondary jds-btn--sm" type="button">
+                      Choose file
+                    </button>
+                  </div>
                   <label class="field"
                     >Export key
                     <textarea class="jds-input" aria-label="Export key words"></textarea>
@@ -794,8 +801,23 @@
                     <li>Checking</li>
                   </ol>
                   <div class="result">
-                    <p role="status">Moved 3 accounts.</p>
-                    <a class="jds-btn jds-btn--primary" href="#m7">Open Moss</a>
+                    <p role="status">Copied 3 accounts.</p>
+                    <dl class="facts">
+                      <dt>Data</dt>
+                      <dd>Matches</dd>
+                      <dt>Files</dt>
+                      <dd>Match</dd>
+                      <dt>Keys</dt>
+                      <dd>All open</dd>
+                      <dt>Inactive</dt>
+                      <dd>Workshop, Food</dd>
+                    </dl>
+                    <div class="actions">
+                      <a class="jds-btn jds-btn--quiet" href="#m7">Show report</a
+                      ><button class="jds-btn jds-btn--primary" type="button">
+                        Activate this Moss
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
