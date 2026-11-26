@@ -306,7 +306,7 @@ mod macos {
 mod windows {
     use super::*;
     use base64::{engine::general_purpose::STANDARD, Engine};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use windows_sys::Win32::Security::Cryptography::{
         CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
     };
