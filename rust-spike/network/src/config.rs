@@ -293,6 +293,10 @@ impl Config {
             module_worker_url: Option<String>,
             #[serde(default)]
             module_embeddings_key: Option<String>,
+            #[serde(default)]
+            module_producer_url: Option<String>,
+            #[serde(default)]
+            module_connector_key: Option<String>,
         }
         let raw = private_read(&self.credentials)?;
         let plain = if is_bundle(&raw) {
@@ -321,9 +325,11 @@ impl Config {
         let parsed: OnlyKeys =
             serde_json::from_slice(&plain).map_err(|_| "Invalid credential file")?;
         Ok(ModuleSecrets {
-            connector_key: parsed.connector_key,
+            // Module-specific values ride in the bundle when they differ
+            // from the credentials file's own values, and win here.
+            connector_key: parsed.module_connector_key.unwrap_or(parsed.connector_key),
             ai_key: parsed.module_ai_key,
-            producer_url: parsed.app_url,
+            producer_url: parsed.module_producer_url.unwrap_or(parsed.app_url),
             migrations_url: parsed.module_migrations_url,
             worker_url: parsed.module_worker_url,
             embeddings_api_key: parsed.module_embeddings_key,

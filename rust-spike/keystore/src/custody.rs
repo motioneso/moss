@@ -25,6 +25,8 @@ const KEY_FILE_KIND: &str = "moss-master-key-file";
 pub enum CustodyError {
     Locked,
     Unavailable(String),
+    /// The key store works, but holds no master key for this instance yet.
+    NoMaster,
     /// There is no keychain session at all, as on a headless server.
     NoSession,
     WrongWords,
@@ -45,6 +47,9 @@ impl CustodyError {
         match self {
             CustodyError::NoSession => {
                 "No key store found. Check your key store, then try again.".to_string()
+            }
+            CustodyError::NoMaster => {
+                "No key was found in your key store. Restore with your recovery words, then try again.".to_string()
             }
             CustodyError::Locked => {
                 "Your key store is locked. Unlock your key store, then try again.".to_string()
@@ -161,7 +166,7 @@ impl OsKeyStore for MemoryStore {
         self.gate()?;
         self.master
             .map(MasterKey::from_bytes)
-            .ok_or_else(|| CustodyError::Unavailable("no master key in the key store".into()))
+            .ok_or(CustodyError::NoMaster)
     }
     fn delete_master(&mut self, _service: &str) -> Result<(), CustodyError> {
         self.gate()?;
@@ -541,19 +546,26 @@ pub fn load_master(
 ) -> Result<MasterKey, CustodyError> {
     match store.load_master(service) {
         Ok(master) => Ok(master),
-        // Only a machine with no keychain session at all may use the file.
-        Err(CustodyError::NoSession) => match key_file {
+        // Only a machine with no keychain session, or a working store that
+        // holds no master yet, may use the recorded file. A locked or broken
+        // store still refuses.
+        Err(error @ (CustodyError::NoSession | CustodyError::NoMaster)) => match key_file {
             Some(path) => read_key_file(path),
-            None => Err(CustodyError::NoSession),
+            None => Err(error),
         },
         Err(error) => Err(error),
     }
 }
 
 /// Finds files under `root` that contain any of the secret byte strings.
+///
+/// The claim this proves covers the instance root outside the database
+/// program's own folder. That folder holds the database's per-role secret
+/// files and its data, which are the database's own store, kept apart from
+/// the credentials this migration moves. Copies anywhere else still count.
 pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
     let mut hits = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
+    let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = fs::read_dir(&dir) else {
             continue;
@@ -561,6 +573,10 @@ pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
+                // The database program's own folder stays out of the claim.
+                if dir == root && path.file_name().map(|n| n == "database").unwrap_or(false) {
+                    continue;
+                }
                 stack.push(path);
             } else {
                 match fs::read(&path) {
@@ -591,10 +607,46 @@ fn collect_leaves(value: &Value, out: &mut Vec<Vec<u8>>) {
     }
 }
 
+/// The password inside a connection string such as a database address,
+/// split out so a bare copy of it is caught by the search too.
+fn url_password(text: &str) -> Option<Vec<u8>> {
+    let rest = text.split_once("://")?.1;
+    let (authority, _) = rest.split_once(['/', '?', '#']).unwrap_or((rest, ""));
+    let userinfo = authority.rsplit_once('@')?.0;
+    let password = userinfo.split_once(':')?.1;
+    if password.len() < 4 {
+        return None;
+    }
+    // Connection strings percent-encode the password. A file holds it raw.
+    let mut raw = Vec::with_capacity(password.len());
+    let bytes = password.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok()?;
+            raw.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            raw.push(bytes[i]);
+            i += 1;
+        }
+    }
+    Some(raw)
+}
+
 fn secret_values(credentials: &[u8]) -> Vec<Vec<u8>> {
     let mut out = vec![credentials.to_vec()];
     if let Ok(value) = serde_json::from_slice::<Value>(credentials) {
-        collect_leaves(&value, &mut out);
+        let mut leaves = Vec::new();
+        collect_leaves(&value, &mut leaves);
+        for leaf in &leaves {
+            if let Ok(text) = std::str::from_utf8(leaf) {
+                if let Some(password) = url_password(text) {
+                    out.push(password);
+                }
+            }
+        }
+        out.extend(leaves);
     }
     out
 }
@@ -635,6 +687,8 @@ fn module_secret_values(instance_root: &Path, secrets: &mut Vec<Vec<u8>>) -> Mod
             .map(str::to_owned);
     }
     let text = |key: &str| object.get(key).and_then(Value::as_str).map(str::to_owned);
+    found.producer_url = text("producer_url");
+    found.connector_key = text("connector_key");
     found.ai_key = text("ai_key");
     found.migrations_url = text("migrations_url");
     found.worker_url = text("worker_url");
@@ -674,6 +728,8 @@ fn strip_module_secrets(instance_root: &Path) -> Result<(), CustodyError> {
 
 #[derive(Default)]
 struct ModuleSecrets {
+    producer_url: Option<String>,
+    connector_key: Option<String>,
     ai_key: Option<String>,
     migrations_url: Option<String>,
     worker_url: Option<String>,
@@ -722,7 +778,9 @@ impl Prepared {
         let on_disk = read_bundle(&self.instance_root)?;
         let loaded = store.load_master(service)?;
         let opened = unwrap_with_master(&on_disk, &loaded)?;
-        if opened != self.payload {
+        // The recovery half is verified too, before the last plain copy goes.
+        let recovered = unwrap_with_recovery(&on_disk, &self.recovery)?;
+        if opened != self.payload || recovered != self.payload {
             return Err(CustodyError::Damaged(
                 "the bundle read back does not hold the credentials".into(),
             ));
@@ -816,7 +874,51 @@ fn prepare(
             .as_ref()
             .and_then(|value| value.get(key).and_then(Value::as_str).map(str::to_owned))
     };
+    // Module values that differ from the credentials file ride along too,
+    // so stripping the settings file loses nothing the server used.
+    if let Some(object) = payload_value.as_object_mut() {
+        let app_url = object
+            .get("app_url")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let own_connector = object
+            .get("connector_key")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let credential_text = |key: &str| match key {
+            "app_url" => app_url.clone(),
+            "connector_key" => own_connector.clone(),
+            _ => None,
+        };
+        if let (Some(producer), app) = (&module_secrets.producer_url, credential_text("app_url")) {
+            if app.as_deref() != Some(producer.as_str()) {
+                object.insert(
+                    "module_producer_url".to_string(),
+                    Value::String(producer.clone()),
+                );
+            }
+        }
+        if let (Some(connector), own) = (
+            &module_secrets.connector_key,
+            credential_text("connector_key"),
+        ) {
+            if own.as_deref() != Some(connector.as_str()) {
+                object.insert(
+                    "module_connector_key".to_string(),
+                    Value::String(connector.clone()),
+                );
+            }
+        }
+    }
     let module_secrets = ModuleSecrets {
+        producer_url: module_secrets
+            .producer_url
+            .clone()
+            .or_else(|| recovered_text("module_producer_url")),
+        connector_key: module_secrets
+            .connector_key
+            .clone()
+            .or_else(|| recovered_text("module_connector_key")),
         ai_key: module_secrets
             .ai_key
             .clone()
@@ -855,7 +957,10 @@ fn prepare(
             );
         }
     }
-    let payload = if (ai_key.is_some()
+    let differing_module = payload_value.get("module_producer_url").is_some()
+        || payload_value.get("module_connector_key").is_some();
+    let payload = if (differing_module
+        || ai_key.is_some()
         || module_secrets.migrations_url.is_some()
         || module_secrets.worker_url.is_some()
         || module_secrets.embeddings_api_key.is_some())

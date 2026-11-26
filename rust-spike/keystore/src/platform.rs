@@ -226,9 +226,9 @@ mod linux {
 
         fn load_master(&self, service: &str) -> Result<MasterKey, CustodyError> {
             let (connection, session) = self.session()?;
-            let item = self.find(&connection, service)?.ok_or_else(|| {
-                CustodyError::Unavailable("no master key in the key store".into())
-            })?;
+            let item = self
+                .find(&connection, service)?
+                .ok_or_else(|| CustodyError::NoMaster)?;
             let reply = connection
                 .call_method(
                     Some(SERVICE),
@@ -282,7 +282,7 @@ mod macos {
         if code == -25308 || code == -25293 {
             CustodyError::Locked
         } else if code == -25300 {
-            CustodyError::Unavailable("no master key in the Keychain".into())
+            CustodyError::NoMaster
         } else {
             CustodyError::Unavailable(format!("Keychain error {code}"))
         }

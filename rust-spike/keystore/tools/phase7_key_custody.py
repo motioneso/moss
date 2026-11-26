@@ -152,7 +152,8 @@ def main():
     }))
     SECRETS.extend([b"test-module-ai-key-3456", b"test-migrations-secret-7890", b"test-worker-secret-2468"])
     extra = ["--leak-plaintext"] if args.negative_plaintext else []
-    done = cli("migrate", "--root", str(root), "--mode", "working", *extra, input_text="SAVED\n")
+    migrated = cli("migrate", "--root", str(root), "--mode", "working", *extra, input_text="SAVED\n")
+    done = migrated
     # With --negative-plaintext this assertion must fail, which is the control working.
     assert done.returncode == 0, done.stdout + done.stderr
     assert not (root / "credentials.json").exists(), "credentials.json must be removed"
@@ -161,9 +162,28 @@ def main():
     assert not hits, f"plaintext remains under instance root: {hits}"
     print("migration leaves no plaintext under the instance root: ok")
 
+    # A real instance folder: the database program keeps its own per-role
+    # secret files under database/. Those are its own store, outside the
+    # claimed area. The same password copied anywhere else must fail.
+    real = scratch / "real-shape"
+    (real / "database" / "secrets").mkdir(parents=True)
+    (real / "credentials.json").write_text(json.dumps(CREDS))
+    (real / "database" / "secrets" / "session-signing-secret").write_text(CREDS["auth_secret"])
+    (real / "database" / "secrets" / "jarvis_app_runtime").write_text("test-app-secret-1234")
+    done = cli("migrate", "--root", str(real), "--mode", "working", input_text="SAVED\n")
+    assert done.returncode == 0, done.stdout + done.stderr
+    stray = scratch / "stray-copy"
+    (stray / "database" / "secrets").mkdir(parents=True)
+    (stray / "credentials.json").write_text(json.dumps(CREDS))
+    (stray / "database" / "secrets" / "jarvis_app_runtime").write_text("test-app-secret-1234")
+    (stray / "password-copy.txt").write_text("test-app-secret-1234")
+    done = cli("migrate", "--root", str(stray), "--mode", "working", input_text="SAVED\n")
+    assert done.returncode == 3, done.stdout + done.stderr
+    print("real instance shape migrates, a stray password copy fails: ok")
+
     # 4. Recovery words restore the bundle. Wrong words are refused.
     words = ""
-    for line in done.stdout.splitlines():
+    for line in migrated.stdout.splitlines():
         if line.startswith("words="):
             words = line[len("words="):]
     assert len(words.split()) == 24, words
@@ -205,6 +225,15 @@ def main():
     for path in sorted(scratch.rglob("*")):
         # The locked fixture never migrated, so its untouched starting file stays.
         if locked_root in path.parents:
+            continue
+        # The stray-copy fixture failed migration on purpose; its starting
+        # file stands too, as the retry contract requires.
+        if (scratch / "stray-copy") in path.parents:
+            continue
+        # The database program's own folder is its own store, outside the
+        # claimed area, exactly as the migration search treats it.
+        rel = path.relative_to(scratch)
+        if len(rel.parts) > 1 and rel.parts[1] == "database":
             continue
         if path.is_file() and any(secret in path.read_bytes() for secret in SECRETS):
             hits.append(str(path))

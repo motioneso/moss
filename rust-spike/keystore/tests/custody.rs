@@ -205,7 +205,8 @@ fn failed_migration_keeps_everything_recoverable() {
     fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","ai_key":"test-module-ai-key-3456"}"#).unwrap();
     let mut store = MemoryStore::new(FakeMode::Working);
     // A leaked copy makes migration fail after the bundle is verified.
-    let result = migrate(dir.path(), &mut store, "svc", true);
+    let result = migrate(dir.path(), &mut store, "svc", true)
+        .and_then(|prepared| prepared.commit_with(&mut store, "svc"));
     assert!(result.is_err());
     // The settings still hold their secrets, so a clean retry loses nothing.
     let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
@@ -213,7 +214,8 @@ fn failed_migration_keeps_everything_recoverable() {
     assert!(dir.path().join("credentials.json").exists());
     // The owner removes the stray plain copy, then the retry loses nothing.
     fs::remove_file(dir.path().join("credentials-plaintext-copy.json")).unwrap();
-    let clean = migrate(dir.path(), &mut store, "svc", false);
+    let clean = migrate(dir.path(), &mut store, "svc", false)
+        .and_then(|prepared| prepared.commit_with(&mut store, "svc"));
     assert!(clean.is_ok());
 }
 
@@ -329,4 +331,66 @@ fn migration_moves_the_nested_embeddings_key_into_the_bundle() {
         .unwrap()
         .contains("test-embeddings-key-1357"));
     assert!(find_plaintext(dir.path(), &[b"test-embeddings-key-1357".to_vec()]).is_empty());
+}
+
+#[test]
+fn migration_with_database_folder_and_split_passwords() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join("database/secrets")).unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    // The database program's own secret files are its own store, outside the claim.
+    fs::write(
+        dir.path().join("database/secrets/session-signing-secret"),
+        "test-auth-secret-5678-abcd",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("database/secrets/jarvis_app_runtime"),
+        "test-app-secret-1234",
+    )
+    .unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
+    // The same role password copied outside the database folder is caught.
+    let stray = tempfile::tempdir().unwrap();
+    fs::write(stray.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(
+        stray.path().join("password-copy.txt"),
+        "test-app-secret-1234",
+    )
+    .unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    assert!(migrate(stray.path(), &mut store, "svc", false)
+        .and_then(|prepared| prepared.commit_with(&mut store, "svc"))
+        .is_err());
+}
+
+#[test]
+fn differing_module_values_ride_in_the_bundle() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","producer_url":"postgres://app:other-producer-9999@127.0.0.1/db","connector_key":"module-connector-key-7777"}"#).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
+    let master = start_gate(&store, "svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload =
+        String::from_utf8(keystore::custody::unwrap_with_master(&bundle, &master).unwrap())
+            .unwrap();
+    assert!(payload.contains("other-producer-9999"), "{payload}");
+    assert!(payload.contains("module-connector-key-7777"), "{payload}");
+    assert!(find_plaintext(
+        dir.path(),
+        &[
+            b"other-producer-9999".to_vec(),
+            b"module-connector-key-7777".to_vec()
+        ]
+    )
+    .is_empty());
 }
