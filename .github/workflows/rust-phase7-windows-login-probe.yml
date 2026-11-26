@@ -19,6 +19,7 @@ jobs:
           Copy-Item rust-spike/shell/tools/phase7_service_registration.py $work
           @'
           import csv, html, pathlib, subprocess, sys
+          import xml.etree.ElementTree as ET
           import phase7_service_registration as registration
           root = pathlib.Path(__file__).parent
           sid = registration.user_sid()
@@ -31,6 +32,7 @@ jobs:
           subprocess.run(['schtasks.exe', '/Create', '/TN', name, '/XML', str(path), '/F'], check=True)
           try:
               definition = registration.task_definition(name)
+              print('NATIVE REGISTERED TASK:', ET.tostring(definition, encoding='unicode'), flush=True)
               trigger = definition.find('t:Triggers/t:LogonTrigger/t:UserId', registration.NS).text
               principal = definition.find('t:Principals/t:Principal/t:UserId', registration.NS).text
               print('NATIVE REGISTERED IDENTITIES:', repr(trigger), repr(principal), flush=True)

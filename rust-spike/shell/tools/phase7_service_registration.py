@@ -110,7 +110,14 @@ def read_back(name, launcher, folder, enabled=True):
         principal = principals[0]
         assert registered_user_sid(principal.findtext('t:UserId', namespaces=NS)) == sid, 'Task principal belongs to another user'
         assert principal.findtext('t:LogonType', namespaces=NS) == 'InteractiveToken'
-        assert principal.findtext('t:RunLevel', namespaces=NS) == 'LeastPrivilege'
+        assert principal.findtext('t:RunLevel', default='LeastPrivilege', namespaces=NS) == 'LeastPrivilege'
+        # XML export omits schema defaults. Read the effective level from Scheduler's COM API.
+        quoted_name = name.replace("'", "''")
+        script = ("$s=New-Object -ComObject Schedule.Service; $s.Connect(); "
+                  f"$s.GetFolder('\\').GetTask('{quoted_name}').Definition.Principal.RunLevel")
+        level = run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script])
+        level.check_returncode()
+        assert int(level.stdout.decode().strip()) == 0, 'Task Scheduler requires elevated privileges'
         assert root.findtext('t:Settings/t:Enabled', default='true', namespaces=NS) == str(enabled).lower()
         actions = root.findall('t:Actions/*', NS)
         assert len(actions) == 1 and actions[0].tag.endswith('}Exec')
