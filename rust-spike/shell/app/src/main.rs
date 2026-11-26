@@ -321,24 +321,29 @@ fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
     let desktop_session = matches!(session_type.as_str(), "x11" | "wayland" | "mir")
         || std::env::var_os("XDG_CURRENT_DESKTOP").is_some()
         || std::env::var_os("DESKTOP_SESSION").is_some();
-    let prepared = match setup_route(desktop_session, platform.probe()) {
-        SetupRoute::OsStore => {
-            let mut store = keystore::platform::platform_store();
-            prepare_instance(&folder, store.as_mut(), &service)
-        }
+    let route = setup_route(desktop_session, platform.probe());
+    let mut store: Box<dyn keystore::custody::OsKeyStore> = match &route {
+        SetupRoute::OsStore => keystore::platform::platform_store(),
         SetupRoute::KeyFileChoice => {
             let path = key_file
+                .as_ref()
                 .ok_or("no keychain session here. Name the key file to create with --key-file")?;
             let path = keystore::custody::headless_key_file_path(&folder, &path)
                 .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
-            let mut store = KeyFileStore::new(path.clone());
-            let prepared = prepare_instance(&folder, &mut store, &service);
-            if prepared.is_ok() {
-                keystore::custody::record_key_file_choice(&folder, &path)
-                    .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
-            }
-            prepared
+            Box::new(KeyFileStore::new(path))
         }
+        SetupRoute::Stop(error) => return Err(format!("{}: {}", error.code(), error.reason())),
+    };
+    let prepared = prepare_instance(&folder, store.as_mut(), &service)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    // The route selected for this attempt owns its commit store. A stale
+    // record from an abandoned setup must never select a different store.
+    match route {
+        SetupRoute::OsStore => keystore::custody::clear_key_file_choice(&folder),
+        SetupRoute::KeyFileChoice => keystore::custody::record_key_file_choice(
+            &folder,
+            &key_file.expect("key-file route checked above"),
+        ),
         SetupRoute::Stop(error) => return Err(format!("{}: {}", error.code(), error.reason())),
     }
     .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
@@ -361,13 +366,6 @@ fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
                 .into(),
         );
     }
-    // The store used to prepare is gone by now in the key-file branch, so the
-    // finish goes through the recorded store choice again.
-    let mut store: Box<dyn keystore::custody::OsKeyStore> =
-        match keystore::custody::recorded_key_file(&folder) {
-            Some(path) => Box::new(keystore::custody::KeyFileStore::new(path)),
-            None => keystore::platform::platform_store(),
-        };
     if let Err(error) = prepared.commit_with(store.as_mut(), &service) {
         // The finish rolled the bundle back. Point the settings at the plain
         // file again, so the usual start path stays retryable.

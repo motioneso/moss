@@ -203,7 +203,7 @@ fn unseal(key: &[u8; 32], aad: &[u8], sealed: &Value) -> Option<Vec<u8>> {
         .ok()
 }
 
-fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyError> {
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| CustodyError::Io(e.to_string()))?;
     }
@@ -248,7 +248,7 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyError> {
 }
 
 /// Best-effort folder sync, so a rename or deletion survives a power loss.
-fn sync_folder(folder: &Path) {
+pub(crate) fn sync_folder(folder: &Path) {
     #[cfg(unix)]
     {
         if let Ok(file) = fs::File::open(folder) {
@@ -270,6 +270,18 @@ pub fn record_key_file_choice(instance_root: &Path, key_file: &Path) -> Result<(
         &instance_root.join("key-file-choice.json"),
         &serde_json::to_vec_pretty(&body).unwrap(),
     )
+}
+
+/// Clears a previous headless choice after preparing a new OS-store bundle.
+pub fn clear_key_file_choice(instance_root: &Path) -> Result<(), CustodyError> {
+    match fs::remove_file(instance_root.join("key-file-choice.json")) {
+        Ok(()) => {
+            sync_folder(instance_root);
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(CustodyError::Io(e.to_string())),
+    }
 }
 
 /// The recorded key file for this instance, if the owner chose one at setup.
@@ -590,11 +602,6 @@ pub fn load_master(
 }
 
 /// Finds files under `root` that contain any of the secret byte strings.
-///
-/// The claim this proves covers the instance root outside the database
-/// program's own folder. That folder holds the database's per-role secret
-/// files and its data, which are the database's own store, kept apart from
-/// the credentials this migration moves. Copies anywhere else still count.
 pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
     let mut hits = Vec::new();
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
@@ -627,21 +634,11 @@ pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
             // holding a plain copy still counts, and the visited set above
             // keeps the walk finite.
             if path.is_dir() {
-                // The database program's own folder stays out of the claim.
-                if dir == root && path.file_name().map(|n| n == "database").unwrap_or(false) {
-                    continue;
-                }
                 stack.push(path);
             } else {
-                match fs::read(&path) {
-                    Ok(bytes) => {
-                        if secrets.iter().any(|secret| {
-                            !secret.is_empty()
-                                && bytes.windows(secret.len()).any(|w| w == secret.as_slice())
-                        }) {
-                            hits.push(path);
-                        }
-                    }
+                match crate::plaintext_scan::contains(&path, secrets) {
+                    Ok(true) => hits.push(path),
+                    Ok(false) => {}
                     // A file that cannot be read cannot be cleared, so it counts.
                     Err(_) => hits.push(path),
                 }
@@ -835,6 +832,7 @@ pub struct Prepared {
     settings_original: Option<Vec<u8>>,
     secrets: Vec<Vec<u8>>,
     payload: Vec<u8>,
+    database_secrets: std::collections::BTreeMap<String, String>,
     /// The bundle and master this attempt replaced, if an earlier attempt
     /// left one. A rolled-back finish puts them back, not a deletion.
     previous: Option<(Vec<u8>, [u8; 32])>,
@@ -876,6 +874,7 @@ impl Prepared {
         let settings_path = self.instance_root.join("modules.json");
         let finish = (|| -> Result<(), CustodyError> {
             strip_module_secrets(&self.instance_root)?;
+            crate::database_secrets::remove(&self.instance_root, &self.database_secrets)?;
             let hits: Vec<PathBuf> = find_plaintext(&self.instance_root, &self.secrets)
                 .into_iter()
                 .filter(|path| path != &self.legacy)
@@ -889,9 +888,15 @@ impl Prepared {
                         .join(", ")
                 )));
             }
+            if self.legacy.exists() {
+                fs::remove_file(&self.legacy).map_err(|e| CustodyError::Io(e.to_string()))?;
+                sync_folder(&self.instance_root);
+            }
             Ok(())
         })();
         if let Err(error) = finish {
+            // A partial role-file removal must not lose the old database login.
+            crate::database_secrets::restore(&self.instance_root, &self.database_secrets)?;
             // Roll the whole attempt back, so the disk matches the retry advice.
             match &self.settings_original {
                 Some(bytes) => {
@@ -915,12 +920,6 @@ impl Prepared {
                 }
             }
             return Err(error);
-        }
-        if self.legacy.exists() {
-            fs::remove_file(&self.legacy).map_err(|e| CustodyError::Io(e.to_string()))?;
-            if let Some(parent) = self.legacy.parent() {
-                sync_folder(parent);
-            }
         }
         Ok(Migration {
             recovery: self.recovery,
@@ -968,6 +967,20 @@ fn prepare(
                 .and_then(|master| unwrap_with_master(&bundle, &master).ok())
         })
         .and_then(|payload| serde_json::from_slice::<Value>(&payload).ok());
+    let database_secrets =
+        crate::database_secrets::collect(instance_root, recovered_module.as_ref())?;
+    for value in database_secrets.values() {
+        secrets.push(value.as_bytes().to_vec());
+    }
+    if !database_secrets.is_empty() {
+        let object = payload_value
+            .as_object_mut()
+            .ok_or_else(|| CustodyError::Damaged("credentials must be an object".into()))?;
+        object.insert(
+            "database_secrets".into(),
+            serde_json::to_value(&database_secrets).unwrap(),
+        );
+    }
     let recovered_text = |key: &str| {
         recovered_module
             .as_ref()
@@ -1058,7 +1071,8 @@ fn prepare(
     }
     let differing_module = payload_value.get("module_producer_url").is_some()
         || payload_value.get("module_connector_key").is_some();
-    let payload = if (differing_module
+    let payload = if (!database_secrets.is_empty()
+        || differing_module
         || ai_key.is_some()
         || module_secrets.migrations_url.is_some()
         || module_secrets.worker_url.is_some()
@@ -1073,7 +1087,13 @@ fn prepare(
     // plaintext check runs first. A failure here touches nothing at all.
     let stray: Vec<PathBuf> = find_plaintext(instance_root, &secrets)
         .into_iter()
-        .filter(|path| path != &legacy && path != &instance_root.join("modules.json"))
+        .filter(|path| {
+            path != &legacy
+                && path != &instance_root.join("modules.json")
+                && !database_secrets
+                    .keys()
+                    .any(|name| path == &instance_root.join("database/secrets").join(name))
+        })
         .collect();
     if !stray.is_empty() {
         return Err(CustodyError::Damaged(format!(
@@ -1096,28 +1116,30 @@ fn prepare(
         || module_secrets.migrations_url.is_some()
         || module_secrets.worker_url.is_some()
         || module_secrets.embeddings_api_key.is_some();
-    let previous: Option<(Vec<u8>, [u8; 32])> =
-        match fs::read(&bundle_path) {
-            Ok(bytes) => {
-                let opened = store.load_master(service).ok().and_then(|master| {
-                    let previous_bundle: Value = serde_json::from_slice(&bytes).ok()?;
-                    unwrap_with_master(&previous_bundle, &master)
-                        .ok()
-                        .map(|_| (bytes.clone(), *master.bytes()))
-                });
-                match opened {
-                    Some(snapshot) => Some(snapshot),
-                    None if settings_hold_values => None,
-                    // The stripped settings make that bundle the only copy of
-                    // the module values, and it cannot be opened. Stop here.
-                    None => return Err(CustodyError::Damaged(
+    let previous: Option<(Vec<u8>, [u8; 32])> = match fs::read(&bundle_path) {
+        Ok(bytes) => {
+            let opened = store.load_master(service).ok().and_then(|master| {
+                let previous_bundle: Value = serde_json::from_slice(&bytes).ok()?;
+                unwrap_with_master(&previous_bundle, &master)
+                    .ok()
+                    .map(|_| (bytes.clone(), *master.bytes()))
+            });
+            match opened {
+                Some(snapshot) => Some(snapshot),
+                None if settings_hold_values && !instance_root.join("database").exists() => None,
+                // Stripped settings or partially removed database role files
+                // may leave this bundle as the only copy. Without its master,
+                // a different store cannot safely replace it.
+                None => {
+                    return Err(CustodyError::Damaged(
                         "an earlier key bundle cannot be opened, so setup cannot safely continue"
                             .into(),
-                    )),
+                    ))
                 }
             }
-            Err(_) => None,
-        };
+        }
+        Err(_) => None,
+    };
     let restore_previous = |store: &mut dyn OsKeyStore| match &previous {
         Some((bytes, master_bytes)) => {
             let _ = write_private(&bundle_path, bytes);
@@ -1158,7 +1180,13 @@ fn prepare(
     // fails the attempt, with the earlier bundle and master put back.
     let remaining: Vec<PathBuf> = find_plaintext(instance_root, &secrets)
         .into_iter()
-        .filter(|path| path != &legacy && path != &instance_root.join("modules.json"))
+        .filter(|path| {
+            path != &legacy
+                && path != &instance_root.join("modules.json")
+                && !database_secrets
+                    .keys()
+                    .any(|name| path == &instance_root.join("database/secrets").join(name))
+        })
         .collect();
     if !remaining.is_empty() {
         restore_previous(store);
@@ -1179,6 +1207,7 @@ fn prepare(
         settings_original: fs::read(instance_root.join("modules.json")).ok(),
         secrets,
         payload,
+        database_secrets,
         previous,
     })
 }

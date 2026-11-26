@@ -349,6 +349,7 @@ name = "bundled-db"
 version = "0.0.0"
 dependencies = [
  "hex",
+ "keystore",
  "libc",
  "portability",
  "postgres",

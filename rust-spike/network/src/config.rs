@@ -27,6 +27,15 @@ pub struct Config {
     pub credentials: PathBuf,
 }
 
+// Runtime consumes its own fields; module and database fields share the bundle.
+#[derive(Deserialize)]
+struct Credentials {
+    app_url: String,
+    auth_url: String,
+    auth_secret: String,
+    connector_key: String,
+}
+
 impl Config {
     pub fn read(path: &Path) -> Result<Self, String> {
         let bytes = private_read(path)?;
@@ -91,14 +100,6 @@ impl Config {
     }
 
     pub async fn platform(&self) -> Result<Arc<Platform>, String> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Credentials {
-            app_url: String,
-            auth_url: String,
-            auth_secret: String,
-            connector_key: String,
-        }
         let raw = private_read(&self.credentials)?;
         // A wrapped key bundle holds the same credentials with no plaintext. A locked
         // key store refuses to start with that reason.
@@ -347,6 +348,40 @@ mod custody_tests {
     use super::*;
     use keystore::custody::{wrap_bundle, FakeMode, MasterKey, MemoryStore, OsKeyStore};
     use keystore::recovery::RecoveryKey;
+
+    #[test]
+    fn custody_bundle_with_database_and_module_keys_opens_for_runtime() {
+        let root = tempfile::tempdir().unwrap();
+        let generated: String = MasterKey::generate()
+            .bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let role = root.path().join("database/secrets/moss_admin");
+        std::fs::create_dir_all(role.parent().unwrap()).unwrap();
+        std::fs::write(&role, &generated).unwrap();
+        let plain = serde_json::json!({"app_url":"postgres://runtime@localhost/db", "auth_url":"postgres://auth@localhost/db", "auth_secret":generated, "connector_key":generated});
+        std::fs::write(
+            root.path().join("credentials.json"),
+            serde_json::to_vec(&plain).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            root.path().join("modules.json"),
+            serde_json::to_vec(&serde_json::json!({"ai_key":generated})).unwrap(),
+        )
+        .unwrap();
+        let mut store = MemoryStore::new(FakeMode::Working);
+        keystore::custody::prepare_instance(root.path(), &mut store, "svc")
+            .unwrap()
+            .commit_with(&mut store, "svc")
+            .unwrap();
+        let raw = std::fs::read(root.path().join(keystore::custody::BUNDLE_FILE)).unwrap();
+        let opened = open_bundle_credentials(&raw, &store, "svc", None).unwrap();
+        let credentials: Credentials = serde_json::from_slice(&opened)
+            .expect("runtime must accept the real migrated bundle payload");
+        assert!(credentials.auth_secret == generated && credentials.connector_key == generated);
+    }
 
     #[test]
     fn bundle_is_recognised_and_locked_store_refuses() {

@@ -122,7 +122,16 @@ fn main() -> ExitCode {
     };
     let root = PathBuf::from(arg(&args, "--root").unwrap_or("."));
     let mode = arg(&args, "--mode").unwrap_or("working");
-    let service = service_name(arg(&args, "--instance").unwrap_or("default"));
+    // Fixtures must never replace a real instance's default master key.
+    let service = match arg(&args, "--instance") {
+        Some(instance) => service_name(instance),
+        None => {
+            use std::hash::{Hash, Hasher};
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            root.hash(&mut hash);
+            format!("moss-key-custody-fixture-{:x}", hash.finish())
+        }
+    };
     let desktop = arg(&args, "--session").unwrap_or("desktop") == "desktop";
 
     match command {

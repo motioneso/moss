@@ -1,5 +1,5 @@
-//! Database passwords. The spike keeps each one in an owner-only file under the install root.
-//! The product keeps them in the OS key store (Phase 0a, fact 4), never in a file beside the data.
+//! Database passwords. Setup initially writes owner-only role files. Custody migration
+//! moves them into the instance's wrapped bundle; Layout then reads through the key store.
 
 use std::fmt;
 use std::io::{self, Write};
@@ -72,5 +72,39 @@ mod tests {
         }
         assert!(password(&layout, "../escape").is_err());
         assert!(existing(&layout, "unknown").is_err());
+    }
+}
+
+#[cfg(test)]
+mod custody_tests {
+    use super::*;
+    use keystore::custody::{prepare_instance, record_key_file_choice, KeyFileStore};
+
+    #[test]
+    fn migrated_supervisor_reads_wrapped_role_credentials_without_recreating_files() {
+        let scratch = tempfile::tempdir().unwrap();
+        let instance = scratch.path().join("instance");
+        let layout = Layout::create(&instance.join("database")).unwrap();
+        let secret = password(&layout, crate::SUPERUSER).unwrap();
+        std::fs::write(instance.join("credentials.json"), b"{}").unwrap();
+        let key = scratch.path().join("headless.key");
+        let mut store = KeyFileStore::new(key.clone());
+        record_key_file_choice(&instance, &key).unwrap();
+        let service = keystore::platform::service_name("instance");
+        prepare_instance(&instance, &mut store, &service)
+            .unwrap()
+            .commit_with(&mut store, &service)
+            .unwrap();
+        assert!(!layout.secrets.join(crate::SUPERUSER).exists());
+        assert!(existing(&layout, crate::SUPERUSER).unwrap().expose() == secret.expose());
+        assert!(password(&layout, crate::SUPERUSER).unwrap().expose() == secret.expose());
+        assert!(keystore::custody::find_plaintext(
+            &instance,
+            &[secret.expose().as_bytes().to_vec()]
+        )
+        .is_empty());
+        std::fs::remove_file(key).unwrap();
+        assert!(password(&layout, crate::SUPERUSER).is_err());
+        assert!(!layout.secrets.join(crate::SUPERUSER).exists());
     }
 }

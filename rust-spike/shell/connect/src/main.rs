@@ -229,6 +229,11 @@ fn custody_setup(
             );
         }
     };
+    if let Err(error) = keystore::custody::clear_key_file_choice(folder) {
+        return Err(
+            json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
+        );
+    }
     // Point the server settings at the bundle before the old file is deleted.
     // The old file still stands until the owner checks the words, so quitting
     // here loses nothing and the next launch shows the words again.

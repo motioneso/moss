@@ -168,9 +168,8 @@ def main():
     assert not hits, f"plaintext remains under instance root: {hits}"
     print("migration leaves no plaintext under the instance root: ok")
 
-    # A real instance folder: the database program keeps its own per-role
-    # secret files under database/. Those are its own store, outside the
-    # claimed area. The same password copied anywhere else must fail.
+    # Database role files migrate into the same wrapped bundle. The whole
+    # instance scan includes database/, including copies outside secrets/.
     real = scratch / "real-shape"
     (real / "database" / "secrets").mkdir(parents=True)
     (real / "credentials.json").write_text(json.dumps(CREDS))
@@ -178,11 +177,13 @@ def main():
     (real / "database" / "secrets" / "jarvis_app_runtime").write_text("test-app-secret-1234")
     done = cli("migrate", "--root", str(real), "--mode", "working", input_text="SAVED\n")
     assert done.returncode == 0, done.stdout + done.stderr
+    assert not any((real / "database" / "secrets").iterdir()), "database role files must be removed"
+    assert not find_plaintext(real), "database folder must not retain plaintext credentials"
     stray = scratch / "stray-copy"
     (stray / "database" / "secrets").mkdir(parents=True)
     (stray / "credentials.json").write_text(json.dumps(CREDS))
     (stray / "database" / "secrets" / "jarvis_app_runtime").write_text("test-app-secret-1234")
-    (stray / "password-copy.txt").write_text("test-app-secret-1234")
+    (stray / "database" / "password-copy.txt").write_text("test-app-secret-1234")
     done = cli("migrate", "--root", str(stray), "--mode", "working", input_text="SAVED\n")
     assert done.returncode == 3, done.stdout + done.stderr
     print("real instance shape migrates, a stray password copy fails: ok")
@@ -251,11 +252,6 @@ def main():
         if (scratch / "stray-copy") in path.parents:
             continue
         if (scratch / "module-stray") in path.parents:
-            continue
-        # The database program's own folder is its own store, outside the
-        # claimed area, exactly as the migration search treats it.
-        rel = path.relative_to(scratch)
-        if len(rel.parts) > 1 and rel.parts[1] == "database":
             continue
         if path.is_file() and any(secret in path.read_bytes() for secret in SECRETS):
             hits.append(str(path))

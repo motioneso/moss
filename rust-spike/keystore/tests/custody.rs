@@ -338,7 +338,7 @@ fn migration_with_database_folder_and_split_passwords() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join("database/secrets")).unwrap();
     fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
-    // The database program's own secret files are its own store, outside the claim.
+    // Database role files must migrate with the other credentials.
     fs::write(
         dir.path().join("database/secrets/session-signing-secret"),
         "test-auth-secret-5678-abcd",
@@ -354,6 +354,23 @@ fn migration_with_database_folder_and_split_passwords() {
         .unwrap()
         .commit_with(&mut store, "svc")
         .unwrap();
+    assert!(!dir
+        .path()
+        .join("database/secrets/session-signing-secret")
+        .exists());
+    assert!(!dir
+        .path()
+        .join("database/secrets/jarvis_app_runtime")
+        .exists());
+    let master = store.load_master("svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload: serde_json::Value =
+        serde_json::from_slice(&keystore::custody::unwrap_with_master(&bundle, &master).unwrap())
+            .unwrap();
+    assert!(
+        payload["database_secrets"]["jarvis_app_runtime"].as_str() == Some("test-app-secret-1234")
+    );
+    assert!(find_plaintext(dir.path(), &[b"test-app-secret-1234".to_vec()]).is_empty());
     // The same role password copied outside the database folder is caught.
     let stray = tempfile::tempdir().unwrap();
     fs::write(stray.path().join("credentials.json"), CREDS).unwrap();
@@ -509,4 +526,93 @@ fn headless_key_choice_cannot_follow_a_link_into_the_instance() {
     std::os::unix::fs::symlink(&root, &alias).unwrap();
     let chosen = alias.join("master.key");
     assert!(keystore::custody::headless_key_file_path(&root, &chosen).is_err());
+}
+
+#[test]
+fn database_folder_is_in_plaintext_scan() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join("database/other")).unwrap();
+    let copy = dir.path().join("database/other/stray-copy");
+    fs::write(&copy, b"generated-test-secret").unwrap();
+    assert_eq!(
+        find_plaintext(dir.path(), &[b"generated-test-secret".to_vec()]),
+        vec![copy]
+    );
+}
+
+#[test]
+fn failed_finish_restores_removed_database_role_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let role = dir.path().join("database/secrets/moss_admin");
+    fs::create_dir_all(role.parent().unwrap()).unwrap();
+    fs::write(&role, "test-superuser-password-6789").unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    let prepared = migrate(dir.path(), &mut store, "svc", false).unwrap();
+    fs::write(
+        dir.path().join("database/new-copy"),
+        "test-superuser-password-6789",
+    )
+    .unwrap();
+    assert!(prepared.commit_with(&mut store, "svc").is_err());
+    assert!(fs::read_to_string(&role).unwrap() == "test-superuser-password-6789");
+    assert!(dir.path().join("credentials.json").exists());
+}
+
+#[test]
+fn retry_keeps_database_secrets_removed_by_interrupted_finish() {
+    let dir = tempfile::tempdir().unwrap();
+    let role = dir.path().join("database/secrets/moss_admin");
+    fs::create_dir_all(role.parent().unwrap()).unwrap();
+    fs::write(&role, "test-superuser-password-6789").unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    migrate(dir.path(), &mut store, "svc", false).unwrap();
+    fs::remove_file(&role).unwrap();
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let master = store.load_master("svc").unwrap();
+    let payload: serde_json::Value =
+        serde_json::from_slice(&keystore::custody::unwrap_with_master(&bundle, &master).unwrap())
+            .unwrap();
+    assert!(
+        payload["database_secrets"]["moss_admin"].as_str() == Some("test-superuser-password-6789")
+    );
+    assert!(find_plaintext(dir.path(), &[b"test-superuser-password-6789".to_vec()]).is_empty());
+}
+
+#[test]
+fn whole_root_scan_finds_secrets_across_read_boundaries() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("large-file");
+    let mut contents = vec![0u8; 64 * 1024 - 3];
+    let secret = b"generated-test-secret".to_vec();
+    contents.extend_from_slice(&secret);
+    contents.extend_from_slice(&vec![0u8; 64 * 1024]);
+    fs::write(&path, contents).unwrap();
+    assert_eq!(find_plaintext(dir.path(), &[secret]), vec![path]);
+}
+
+#[test]
+fn different_store_retry_cannot_replace_unreadable_database_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let role = dir.path().join("database/secrets/moss_admin");
+    fs::create_dir_all(role.parent().unwrap()).unwrap();
+    fs::write(&role, "test-superuser-password-6789").unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(
+        dir.path().join("modules.json"),
+        br#"{"ai_key":"test-module-key-6789"}"#,
+    )
+    .unwrap();
+    let mut first = MemoryStore::new(FakeMode::Working);
+    migrate(dir.path(), &mut first, "svc", false).unwrap();
+    fs::remove_file(&role).unwrap();
+    let old_bundle = fs::read(dir.path().join("key-bundle.json")).unwrap();
+    let mut second = MemoryStore::new(FakeMode::Working);
+    assert!(migrate(dir.path(), &mut second, "svc", false).is_err());
+    assert!(fs::read(dir.path().join("key-bundle.json")).unwrap() == old_bundle);
 }

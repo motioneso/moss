@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "rust-spike/keystore/**"
+      - "rust-spike/bundled-db/**"
       - "rust-spike/shell/app/**"
       - "packages/shared/src/app-map-desktop.ts"
       - "tests/unit/app-map-integrity.test.ts"
@@ -45,6 +46,8 @@ jobs:
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Key custody unit tests
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p keystore --test custody -- --test-threads=1
+      - name: Database supervisor custody tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib custody_tests -- --test-threads=1
       - name: Server bundle unlock tests
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml -p moss-network --lib custody -- --test-threads=1
       - name: Build key custody driver
