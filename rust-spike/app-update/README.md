@@ -55,11 +55,11 @@ moss-app-update release INPUT_JSON NEW_OUTPUT_DIR SERIAL
 By default a fresh throwaway key is generated in memory. Only `index.json`,
 `index.json.sig` and `public-key.txt` are written. `--configured-key` instead reads
 `MOSS_APP_UPDATE_SIGNING_KEY_ID` and `MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY`
-(base64 Ed25519 PKCS#8), and fails if either is missing. Never put a real key in a
+(base64 Ed25519 PKCS#8 v2, including the public key; ordinary OpenSSL v1 output is not accepted), and fails if either is missing. Never put a real key in a
 file or command argument. Ben provisions the named GitHub secrets in part 17b.
 
 `.github/workflows/rust-phase7-update-feed.yml` runs the refusal runner and seven
-refusal guard-removal controls and a private-output control natively on Linux, macOS and Windows. Branch pushes and
+refusal guard-removal controls and a private-output control natively on Linux, macOS and Windows. Main pushes and
 manual dispatches assemble the native artifacts into an immutable prerelease
 `rust-app-updates-test-<run>-<attempt>` in this repository. PR jobs have read-only
 permissions and do not publish. Manual main dispatch can opt into the named

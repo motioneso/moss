@@ -20,8 +20,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   phase7_update_feed:
     strategy:
@@ -36,6 +36,8 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-update-target
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - run: rustup toolchain install 1.95.0 --profile minimal
       - name: Signed feed and every refusal through the real client
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/app-update/Cargo.toml --test phase7_update_feed -- --nocapture --test-threads=1
@@ -66,9 +68,10 @@ jobs:
       CARGO_BUILD_JOBS: "1"
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-update-target
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - run: rustup toolchain install 1.95.0 --profile minimal
       - uses: actions/download-artifact@v4
         with:
@@ -103,12 +106,18 @@ jobs:
           fi
           "$CARGO_TARGET_DIR/debug/moss-app-update" release release-input.json feed "$((GITHUB_RUN_ID * 1000 + GITHUB_RUN_ATTEMPT))" "${options[@]}"
       - name: Publish a test feed, never overwrite the production channel
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: gh release create "$UPDATE_TAG" native/* feed/index.json feed/index.json.sig feed/public-key.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --prerelease --title "App update test feed $GITHUB_RUN_ID" --notes "Phase 7 preflight tool artifacts only. Not an installer. The public key is test evidence, never client trust."
       - name: Make the complete test release visible
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: gh release edit "$UPDATE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
       - name: Read the published feed with the client and verify the native bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           gh release download "$UPDATE_TAG" --repo "$GITHUB_REPOSITORY" --dir published

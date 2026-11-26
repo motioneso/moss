@@ -242,6 +242,20 @@ fn phase7_update_feed_server_continuity() {
         }
         let output = run(&index, case == "unsigned");
         assert!(!output.status.success(), "{case}: accepted invalid update");
+        let expected = match case {
+            "unsigned" => "The signature does not match",
+            "older-serial" => "Older app update serial",
+            "expired" => "App update index expired",
+            "wrong-hash" => "App update artifact hash mismatch",
+            "wrong-os" | "wrong-arch" => "No app update for this OS and architecture",
+            "wrong-schema" => "App update cannot read this schema",
+            _ => unreachable!(),
+        };
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            error.contains(expected),
+            "{case}: unexpected refusal: {error}"
+        );
         assert_eq!(
             fs::read(&state).unwrap(),
             saved,
