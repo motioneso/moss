@@ -75,6 +75,29 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+### JS-429: Windows login proof ruling — 2026-11-26
+
+[PR #4501](https://github.com/motioneso/moss/pull/4501) has the program layout,
+per-instance services, status and Stop controls. Linux and macOS passed the full native
+service lifecycle and app-only negative control at product commit `1453bb574`.
+Windows started the real server and private database, and proved both shut down, but
+`runonce.exe /AlternateShellStartup` returned zero without replaying its saved login entry.
+The runner correctly failed the server-return assertion; it has not been relaxed.
+
+Evidence: [full native run](https://github.com/motioneso/moss/actions/runs/45789165652),
+[minimal command replay probe](https://github.com/motioneso/moss/actions/runs/45793674135),
+[user-specific task probe](https://github.com/motioneso/moss/actions/runs/45795069737),
+[actual logon attempt](https://github.com/motioneso/moss/actions/runs/45796901334).
+Both ordinary and canonical saved commands executed directly under the standard user.
+An interactive scheduled task registered but lacked an interactive session; password-free
+background registration was denied. Local RDP did not establish another user session.
+Temporary probe workflows have been removed. Product code is unchanged since the full run.
+
+Decision needed: keep the required native login proof and provide an interactive Windows
+CI runner (recommended), or explicitly allow CI to replay the exact saved Windows login
+command after verified shutdown, leaving actual Windows logon to the later fresh-machine gate.
+Independent review and Ready remain blocked until the required three-platform proof passes.
+
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
