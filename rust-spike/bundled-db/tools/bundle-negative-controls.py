@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from native_negative_controls import outside_dependency
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -41,6 +43,7 @@ def main():
         env = dict(os.environ)
         env["PATH"] = str(args.runner_bin) + os.pathsep + env["PATH"]
         refuses("runner PostgreSQL on PATH", "Windows PATH selects a runner copy", env)
+    outside_dependency(args.postgres.resolve(), args.scratch.resolve(), refuses)
 
 
 if __name__ == "__main__":

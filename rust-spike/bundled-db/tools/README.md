@@ -34,6 +34,11 @@ cluster on loopback, checks ICU initialization and both extension/server version
 creates a vector row, dumps it with `pg_dump` using both gzip and zstd, restores into
 fresh databases with `pg_restore`, and checks the row. Linux also checks that the
 runtime library closure from every executable resolves inside the bundle apart from glibc.
+On macOS, `otool -L` checks every Mach-O file (including modules) and refuses
+absolute dependencies outside `/usr/lib/` and `/System/`. On Windows, the gate
+reads normal and delay-loaded PE imports from every EXE/DLL; each DLL must be
+beside the importing file, in the bundle's `bin`, or supplied by Windows System32
+(including OS API-set contracts). PATH is never used to satisfy a DLL import.
 Inherited libpq settings are discarded.
 It stops its own server and removes its own cluster even after a failed assertion.
 It never connects to the developer's database.
@@ -45,6 +50,13 @@ with the missing-tool error. Windows additionally puts the runner's real Postgre
 first on PATH and requires the gate to reject that selection. Pass its bin folder
 as `--runner-bin` to the negative-control script on Windows. The positive Windows
 run requires PATH to select the bundle for every tool.
+
+The same negative-control runner builds an extra native library on macOS and
+Windows, linked to a real library outside the bundle. It requires the gate to
+refuse that dependency and then removes the extra library. The Windows outside
+DLL is put on PATH to prove that a runner-provided DLL cannot satisfy the audit.
+These are real linked artifacts on each CI OS; the small PE parser/policy unit
+fixtures are separate tests and are not claimed as native platform proof.
 
 `stage-install.py` also refuses a bundle missing either backup tool. Native
 installer layout, services, backup commands and real signing belong to later parts.

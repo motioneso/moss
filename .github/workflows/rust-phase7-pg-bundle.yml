@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Native dependency parser and policy tests
+        run: python -m unittest discover -s rust-spike/bundled-db/tools -p test_bundle_libraries.py
       - uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/phase7-pg/downloads

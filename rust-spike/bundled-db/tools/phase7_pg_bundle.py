@@ -11,6 +11,8 @@ import socket
 import subprocess
 import tempfile
 
+from bundle_libraries import validate_mac, validate_windows
+
 HERE = Path(__file__).resolve().parent
 SOURCES = json.loads((HERE / "sources.json").read_text())
 TOOLS = ("postgres", "initdb", "pg_ctl", "psql", "pg_dump", "pg_restore", "pg_config")
@@ -41,7 +43,11 @@ def validate(bundle):
 
 
 def validate_libraries(bundle, tools, env):
-    if platform.system() != "Linux":
+    if platform.system() == "Darwin":
+        validate_mac(bundle)
+        return
+    if platform.system() == "Windows":
+        validate_windows(bundle)
         return
     # ldd on an executable follows its full inherited RPATH closure. Running
     # it on a copied ICU library alone discards that loader context and reports
