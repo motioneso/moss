@@ -239,7 +239,7 @@ try {
     );
   }
   console.log("PASS signed-out API, chat, private page and app files refused");
-  assert.equal((await request(second, "/sign-in")).status, 403);
+  await assert.rejects(request(second, "/sign-in"), /ECONNREFUSED/);
   console.log("PASS second network address refused while sharing is off");
   const signup = await request(local, "/api/auth/sign-up/email", {
     method: "POST",
@@ -486,7 +486,7 @@ try {
       ).status,
       200
     );
-    assert.equal((await request(second, "/api/me", { cookie: localCookie })).status, 403);
+    await assert.rejects(request(second, "/api/me", { cookie: localCookie }), /ECONNREFUSED/);
     console.log(
       "PASS cross-site writes refused, sign-out revoked the session, disabling sharing cut off remote reads"
     );

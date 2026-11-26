@@ -203,7 +203,7 @@ class World:
         self.folder, self.binary, self.port = folder, binary, port
         self.plant_marker = "moss-runner-" + uuid.uuid4().hex
         self.other_name = self.plant_marker + "-other"
-        self.other_program = binary.with_name("foreign-probe" + binary.suffix)
+        self.other_program = binary.with_name("foreign-probe-" + uuid.uuid4().hex + binary.suffix)
         self.rule_name = f'moss-{folder.name}'
         self.cleanup_record = None
         self.namespace = None
@@ -417,6 +417,7 @@ def firewalld_services(binary, scratch, port, negative):
         probe.send('answer approve-add-only' if negative else 'answer approve')
         expect(probe.send('on') == 'Ok(())', 'loaded service can be assigned after approval')
         expect(probe.send('restart-check') == 'true', 'restart silently confirms live firewalld token and port')
+        expect(probe.send('restart-check-other-port') == 'false', 'firewalld restart refuses a changed current port')
         expect(world.second_client() == 'ANSWERED', 'loaded firewalld service admits the second client')
         expect(probe.send('off') == 'Ok(())', 'firewalld sharing turns off')
         expect(world.second_client() != 'ANSWERED', 'firewalld off binds loopback only')
@@ -541,6 +542,7 @@ def main():
             expect(not world.moss_record()['paused'], 'confirmed Resume clears paused state')
         else:
             expect(probe.send('restart-check') == 'true', 'sharing on: a silent restart finds the live marker and may share')
+        expect(probe.send('restart-check-other-port') == 'false', 'a restart on a changed port refuses the old live rule')
         expect(world.second_client() == 'ANSWERED', 'sharing on: the second client is answered')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'sharing on: this computer is answered')
 
