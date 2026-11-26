@@ -56,9 +56,13 @@ def trusted_ca(folder, env):
             run(["security", "add-trusted-cert", "-r", "trustRoot", "-k", keychain, ca])
             yield
         finally:
-            run(["security", "remove-trusted-cert", ca])
-            run(["security", "list-keychains", "-d", "user", "-s", *previous])
-            run(["security", "delete-keychain", keychain])
+            try:
+                run(["security", "remove-trusted-cert", ca])
+            finally:
+                try:
+                    run(["security", "list-keychains", "-d", "user", "-s", *previous])
+                finally:
+                    run(["security", "delete-keychain", keychain])
     elif os.name == "nt":
         der = subprocess.check_output(["openssl", "x509", "-in", str(ca), "-outform", "DER"])
         thumbprint = hashlib.sha1(der).hexdigest()
@@ -108,16 +112,21 @@ def main():
                 source.write_text(text.replace(marker, 'return Err(rustls::Error::General("OS trust disabled by negative control".into()));'))
             with trusted_ca(folder, env):
                 print("COMMAND:", shlex.join(command), flush=True)
-                result = subprocess.run(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                print(result.stdout, end="", flush=True)
-                print(f"CARGO_EXIT={result.returncode}", flush=True)
+                process = subprocess.Popen(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                output = []
+                for line in process.stdout:
+                    output.append(line)
+                    print(line, end="", flush=True)
+                code = process.wait()
+                output = "".join(output)
+                print(f"CARGO_EXIT={code}", flush=True)
                 if args.negative_control:
                     # A compile/tool failure does not count: the successful-connection assertion must fail.
-                    if result.returncode == 0 or "OS-trusted CA connects WITHOUT a pin" not in result.stdout or "test result: FAILED" not in result.stdout:
+                    if code == 0 or "OS-trusted CA connects WITHOUT a pin" not in output or "test result: FAILED" not in output:
                         raise RuntimeError("negative control did not fail at the public CA connection assertion")
                     print("PASS: disabled OS trust made the public-CA connection fail", flush=True)
-                elif result.returncode:
-                    return result.returncode
+                elif code:
+                    return code
         finally:
             if args.negative_control:
                 source.write_bytes(original)

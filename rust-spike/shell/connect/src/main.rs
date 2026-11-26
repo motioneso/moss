@@ -772,7 +772,7 @@ impl App {
         let first = self.servers.last.is_none();
         let (proxy, turn) = (self.proxy.clone(), self.turn);
         self.runtime.spawn(async move {
-            if reach::hello(&origin, "").await.is_ok() {
+            if reach::has_os_trust(&origin).await {
                 let _ = proxy.send_event(UserEvent::Later(turn, Box::new(UserEvent::PublicServer(origin))));
                 return;
             }

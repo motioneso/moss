@@ -29,6 +29,30 @@ async fn phase7_os_trust() {
         .await
         .expect("OS-trusted CA connects WITHOUT a pin");
     assert_eq!(hello, instance::hello());
+    assert!(
+        has_os_trust(&origin).await,
+        "public discovery chooses OS trust"
+    );
+    let fixtures = PathBuf::from(std::env::var_os("MOSS_OS_TRUST_FIXTURES").unwrap());
+    let store = crate::store::Store::new(fixtures.join("saved-profile"));
+    let public = crate::store::Remote {
+        id: "public".into(),
+        name: "public".into(),
+        origin: origin.clone(),
+        pin: String::new(),
+    };
+    store
+        .save(&crate::store::Servers {
+            last: Some(public.id.clone()),
+            remotes: vec![public],
+        })
+        .unwrap();
+    let saved = store.load().unwrap().remotes.remove(0);
+    assert!(
+        saved.pin.is_empty(),
+        "public profiles must not acquire a leaf pin"
+    );
+    assert!(super::hello(&saved.origin, &saved.pin).await.is_ok());
     // Notifier requests must use the same OS trust policy, rather than pinning the first leaf.
     assert_eq!(
         request(&origin, "", "GET", "/api/hello", "fixture", None)
@@ -46,6 +70,7 @@ async fn phase7_os_trust() {
 
     for name in ["wrong-host", "expired", "untrusted"] {
         let origin = server(name).await;
+        assert!(!has_os_trust(&origin).await);
         assert!(
             super::hello(&origin, "").await.is_err(),
             "invalid {name} certificate was accepted"

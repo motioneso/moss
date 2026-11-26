@@ -271,6 +271,12 @@ pub async fn request(
     Ok((status, body.to_vec()))
 }
 
+/// Checks OS trust before choosing the add-server flow. No API response (sharing, product or
+/// version) may turn a valid public certificate into a pin-comparison prompt.
+pub async fn has_os_trust(origin: &str) -> bool {
+    open(origin, Some("")).await.is_ok()
+}
+
 /// Reads the certificate without trusting it, so the user can compare its code. No request is
 /// sent over the connection.
 pub async fn peek_certificate(origin: &str) -> Result<String, Problem> {
