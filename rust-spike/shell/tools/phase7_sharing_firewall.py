@@ -385,6 +385,7 @@ def firewalld_services(binary, scratch, port, negative):
     destination = Path('/etc/firewalld/services') / source.name
     probe = None
     planted = False
+    cleanup_rule = None
     world = World(folder, binary, port)
     try:
         # A real lookup, not a prompt stand-in. Do not overwrite any preexisting definition.
@@ -398,6 +399,8 @@ def firewalld_services(binary, scratch, port, negative):
         world.set_up_client()
         probe = Probe(binary, folder, cert, key, port, 'approve')
         reply = probe.send('on')
+        record = world.moss_record()
+        cleanup_rule = record['rule'] if record else None
         expect('ServiceUnavailable' in reply, 'a missing runtime service reports the reinstall remedy')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'missing runtime service keeps local access')
         expect(world.second_client() != 'ANSWERED', 'missing runtime service keeps sharing loopback only')
@@ -440,9 +443,18 @@ def firewalld_services(binary, scratch, port, negative):
             probe.stop()
         world.tear_down_client()
         if planted:
-            # The same marker-checked application cleanup also repairs the negative control.
-            env = dict(os.environ, MOSS_FIREWALL_STAND_IN=str(binary), PROBE_STAND_IN='approve')
-            run([binary, 'firewall-close', '--instance', folder], env=env)
+            # Off's negative control may have erased the record. Use its saved identity, but
+            # still require live file/runtime marker checks in the real privileged helper.
+            assigned = [service in sudo(['firewall-cmd', *permanent, '--list-services']).stdout.split()
+                        for permanent in [[], ['--permanent']]]
+            if any(assigned):
+                expect(cleanup_rule is not None, 'cleanup has the rule identity captured before off')
+                sudo([binary, 'firewall-rule', 'remove', '--name', cleanup_rule['name'],
+                      '--port', str(port), '--program', binary, '--zone', cleanup_rule['zone'],
+                      '--token', token, '--manager', 'firewalld', '--service', service])
+                for permanent in [[], ['--permanent']]:
+                    expect(service not in sudo(['firewall-cmd', *permanent, '--list-services']).stdout.split(),
+                           'marker-checked cleanup removed the runner assignment')
             # This runner owns only the exact file it planted, never an installer/foreign file.
             expect(sudo(['cat', destination]).stdout == xml, 'the service file still has the runner marker and port')
             sudo(['rm', destination])
