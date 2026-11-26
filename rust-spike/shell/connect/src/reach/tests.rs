@@ -25,10 +25,10 @@ fn local_start_lock_errors_are_not_reported_as_a_busy_app() {
 #[test]
 fn server_program_uses_the_platform_executable_suffix() {
     let install = Path::new("installation with spaces");
-    let command = crate::launch::command(install, "moss-shell");
+    let command = crate::launch::command(install, "moss-server");
     let program = Path::new(command.get_program());
     assert_eq!(program.parent(), Some(install));
-    assert_eq!(program.file_stem().unwrap(), "moss-shell");
+    assert_eq!(program.file_stem().unwrap(), "moss-server");
     #[cfg(windows)]
     assert_eq!(program.extension().unwrap(), "exe");
     #[cfg(unix)]
@@ -248,7 +248,7 @@ async fn a_server_is_started_once_and_a_stopped_start_fails_fast() {
     let dir = scratch("start");
     let install = dir.join("install");
     crate::store::private_dir(&install).unwrap();
-    let shell = install.join("moss-shell");
+    let shell = install.join("moss-server");
     std::fs::write(
         &shell,
         "#!/bin/sh\necho started >> \"$3/starts\"\nsleep 1\n",

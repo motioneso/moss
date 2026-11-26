@@ -288,7 +288,7 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some("lifecycle-module") {
         if module_lifecycle_service::run(std::env::args().skip(2).collect()).is_err() {
             eprintln!(
-                "moss-shell: The module lifecycle service stopped; read the operation result"
+                "moss-server: The module lifecycle service stopped; read the operation result"
             );
             std::process::exit(1);
         }
@@ -304,7 +304,7 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some("install-module") {
         let runtime_free = module_install::run(std::env::args().skip(2).collect());
         if let Err(error) = runtime_free {
-            eprintln!("moss-shell: {error:#}");
+            eprintln!("moss-server: {error:#}");
             std::process::exit(1);
         }
         return;
@@ -312,7 +312,7 @@ fn main() {
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("moss-shell: {e}");
+            eprintln!("moss-server: {e}");
             std::process::exit(2);
         }
     };
@@ -345,7 +345,7 @@ fn main() {
         // device lookup before loading modules or accepting a pairing request.
         if companion_startup::prepare(&platform.auth, modules_path.as_deref(), args.instance.as_deref())
             .await.is_err() {
-            eprintln!("moss-shell: device lookup is unavailable; linking stays disabled until module installation or a successful restart");
+            eprintln!("moss-server: device lookup is unavailable; linking stays disabled until module installation or a successful restart");
         }
         // The host opens in the background, last: errors above must not drop its runtimes on
         // this executor, and a module installed later is picked up without a restart.
@@ -426,13 +426,13 @@ fn main() {
         Ok(parts) => parts,
         Err(reason) => {
             // The reasons are fixed messages that never carry secrets.
-            eprintln!("moss-shell: could not start secure HTTPS ({reason}); check private configuration, certificates and runtime database roles");
+            eprintln!("moss-server: could not start secure HTTPS ({reason}); check private configuration, certificates and runtime database roles");
             std::process::exit(1);
         }
     };
     if let (Some(folder), Some(running)) = (&args.instance, &running) {
         if running.write(folder).is_err() {
-            eprintln!("moss-shell: could not write the instance running file");
+            eprintln!("moss-server: could not write the instance running file");
             std::process::exit(1);
         }
     }

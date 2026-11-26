@@ -11,7 +11,7 @@ is a separate program that connects to a server on this or another computer. Rep
 | ---------- | -------------------------------------------------------------------------------------------------------------- |
 | `contract` | JSON shapes the UI reads, the `ShellData` trait the server calls, and `StubShellData` (feature `stub`)         |
 | `ui`       | Leptos client-side app compiled to wasm: frame and navigation, Today, chat drawer                              |
-| `app`      | `moss-shell`: the server; axum routes for the UI and its `/api/*` calls behind `moss-network`                  |
+| `app`      | `moss-server`: the server; axum routes for the UI and its `/api/*` calls behind `moss-network`                  |
 | `connect`  | `moss-app`: the desktop app; server list, certificate pins, local start, tao + wry window                      |
 | `assets`   | `index.html` and the script that copies the current app's CSS, fonts, textures and theme boot script unchanged |
 
@@ -35,8 +35,8 @@ The server requires the authenticated HTTPS network configuration described in
 `rust-spike/network/README.md`. There is no plaintext or anonymous mode.
 
 ```bash
-moss-shell serve --instance <data>/servers/default
-moss-shell serve --network <private-configuration>
+moss-server serve --instance <data>/servers/default
+moss-server serve --network <private-configuration>
 ```
 
 With `--instance`, the server reads `network.json` from that folder and writes an owner-only
@@ -91,7 +91,7 @@ not the This computer UI or a clean desktop root.
 
 Add `--linux-server-runtime` to include the build machine's app and headless server linked ELF dependencies
 (including PostgreSQL's loadable extensions), OpenSSL executable, public CA bundle and C.UTF-8
-locale data. Run `install/moss-run moss-app ...`, `install/moss-run moss-shell serve ...` or `install/moss-run moss-db ...` to
+locale data. Run `install/moss-run moss-app ...`, `install/moss-run moss-server serve ...` or `install/moss-run moss-db ...` to
 select those files. The launcher preserves real executable names for supervisor ownership
 checks. It requires a POSIX shell and the build platform's ELF interpreter ABI; this is not a
 cross-distribution compatibility promise. Inputs must be trusted: closure discovery uses `ldd`.
@@ -169,12 +169,12 @@ certificate generation, HTTPS hello, Stop and data-preserving uninstall. It does
 ### Automatic module bootstrap (slice 20)
 
 An instance the app creates now carries a private `modules.json` (database addresses, connector
-key, module data and notes folders; no owner yet). `moss-shell serve --instance <folder>` uses it
+key, module data and notes folders; no owner yet). `moss-server serve --instance <folder>` uses it
 without a flag and keeps retrying in the background until a module is installed, answering 503
 on module routes meanwhile. The installer is
 
 ```bash
-moss-shell install-module --instance <folder> --registry-id ID \
+moss-server install-module --instance <folder> --registry-id ID \
   (--registry-folder DIR | --registry-url URL) --root-key KEY --first-party-key KEY [--approve] MODULE...
 ```
 
@@ -191,7 +191,7 @@ server's shutdown waits at most five seconds for the background loader. Gate: `p
 
 ### Explicit module-host assembly checkpoint (slice 18)
 
-`moss-shell --modules <private-modules.json>` opts into the existing extended module
+`moss-server --modules <private-modules.json>` opts into the existing extended module
 application and its server-owned worker. Normal launches without this argument keep the
 previous behavior. The file must pass the same private-file checks as network credentials:
 

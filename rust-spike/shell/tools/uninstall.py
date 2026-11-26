@@ -34,7 +34,7 @@ def running_from(process: Path, root: Path) -> bool:
         program = Path(os.fsdecode(bytes(first)))
         if program.is_absolute():
             return program.resolve().is_relative_to(root)
-        if program.name not in {"moss-app", "moss-shell", "moss-db", "postgres", "initdb", "pg_ctl"}:
+        if program.name not in {"moss-app", "moss-server", "moss-db", "postgres", "initdb", "pg_ctl"}:
             return False
         status = (process / "status").read_text()
         uid = next(line.split()[1] for line in status.splitlines() if line.startswith("Uid:"))
@@ -72,7 +72,7 @@ def uninstall(root: Path) -> list[str]:
         relative = PurePosixPath(name)
         # Fixed install namespaces; a manifest can never inventory servers/ or app/ data.
         allowed = relative.parts and relative.parts[0] in {
-            "moss-app", "moss-shell", "moss-db", "moss-run", "uninstall.py",
+            "moss-app", "moss-server", "moss-db", "moss-run", "uninstall.py",
             "postgres", "schema", "web", "runtime",
         }
         if not allowed or relative.is_absolute() or ".." in relative.parts or "\\" in name:

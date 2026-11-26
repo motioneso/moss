@@ -90,7 +90,7 @@ async function request(path: string, cookie?: string, body?: unknown, wrongOrigi
 }
 async function start() {
   const fd = openSync(join(scratch, "server.log"), "a", 0o600);
-  server = spawn(join(target, "debug/moss-shell"), ["serve", "--network", config, "--web", web], {
+  server = spawn(join(target, "debug/moss-server"), ["serve", "--network", config, "--web", web], {
     stdio: ["ignore", fd, fd],
     env: { PATH: process.env.PATH }
   });

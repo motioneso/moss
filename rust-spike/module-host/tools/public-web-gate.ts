@@ -12,7 +12,7 @@ function run(args: string[], extra: Record<string, string> = {}) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 for (const [manifest, pkg] of [
-  ["rust-spike/shell/Cargo.toml", "moss-shell"],
+  ["rust-spike/shell/Cargo.toml", "moss-server"],
   ["rust-spike/network/Cargo.toml", "moss-network"]
 ]) {
   run(["build", "--offline", "--locked", "--manifest-path", manifest, "-p", pkg]);
@@ -35,7 +35,7 @@ run(
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,
     JS170_AUTH_URL: urls.auth,
-    JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
+    JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-server"),
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
   }
 );

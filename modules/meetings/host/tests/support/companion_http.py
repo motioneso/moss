@@ -47,7 +47,7 @@ try:
         context = ssl.create_default_context(cafile=str(root / "tls/certificate.pem"))
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
         with open(root / "server.log", "w") as log:
-            server = subprocess.Popen([str(target / "moss-shell"), "--network", str(root / "network.json"), "--modules", str(root / "modules.json"), "--web", str(root / "web")], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log)
+            server = subprocess.Popen([str(target / "moss-server"), "--network", str(root / "network.json"), "--modules", str(root / "modules.json"), "--web", str(root / "web")], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log)
             deadline = time.monotonic() + 60
             while True:
                 assert server.poll() is None, f"server exited before health (exit {server.returncode})"

@@ -439,7 +439,7 @@ fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
             .open(folder.join("server.log"))
             .map_err(|_| Problem::DidNotStart)?
     };
-    let mut command = crate::launch::command(install, "moss-shell");
+    let mut command = crate::launch::command(install, "moss-server");
     command
         .arg("serve")
         .arg("--instance")

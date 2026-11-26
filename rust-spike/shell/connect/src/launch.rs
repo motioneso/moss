@@ -73,7 +73,7 @@ mod tests {
     fn staged_commands_require_launcher_and_keep_arguments_separate() {
         let root = std::env::temp_dir().join(format!("moss launch {}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(root.join("runtime")).unwrap();
-        for name in ["moss-app", "moss-shell", "moss-db", "openssl"] {
+        for name in ["moss-app", "moss-server", "moss-db", "openssl"] {
             let mut cmd = command(&root, name);
             assert_eq!(cmd.get_program(), root.join("moss-run"));
             assert_eq!(cmd.get_args().collect::<Vec<_>>(), [name]);

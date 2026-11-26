@@ -15,7 +15,7 @@ const env = {
   JS43_APP_URL: urls.app,
   JS43_BOOTSTRAP_URL: urls.bootstrap,
   JS170_AUTH_URL: urls.auth,
-  JS170_SERVER: join(process.env.CARGO_TARGET_DIR, "debug/moss-shell"),
+  JS170_SERVER: join(process.env.CARGO_TARGET_DIR, "debug/moss-server"),
   JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR, "debug/moss-network"),
   JS408_MOSS: join(process.env.CARGO_TARGET_DIR, "debug/moss")
 };
@@ -30,7 +30,7 @@ cargo([
   "--manifest-path",
   "rust-spike/shell/Cargo.toml",
   "-p",
-  "moss-shell"
+  "moss-server"
 ]);
 cargo([
   "build",

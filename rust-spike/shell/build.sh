@@ -1,7 +1,7 @@
 #!/bin/bash
 # Usage: build.sh [out-dir]
 # Builds the Leptos UI to wasm, runs wasm-bindgen through rust-spike/ui/bindgen, copies the
-# current app's CSS, fonts and boot script, then builds the server (moss-shell) and the desktop
+# current app's CSS, fonts and boot script, then builds the server (moss-server) and the desktop
 # app (moss-app). The web build lands in <out-dir>/web next to both programs, where they look
 # for it by default.
 set -euo pipefail
@@ -20,8 +20,8 @@ cargo build --release --quiet -p moss-shell-ui --target wasm32-unknown-unknown
 python3 assets/build-assets.py "$web"
 python3 ../module-ui/build-assets.py "$web/module-shared"
 cp assets/index.html "$web/index.html"
-cargo build --release --quiet -p moss-shell -p moss-app
-cp "$CARGO_TARGET_DIR/release/moss-shell" "$CARGO_TARGET_DIR/release/moss-app" "$out/"
+cargo build --release --quiet -p moss-server -p moss-app
+cp "$CARGO_TARGET_DIR/release/moss-server" "$CARGO_TARGET_DIR/release/moss-app" "$out/"
 # The database supervisor the app uses to set up a local server (unix only).
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*) ;;
@@ -31,4 +31,4 @@ case "$(uname -s)" in
       || cp "$CARGO_TARGET_DIR/release/moss-db" "$out/"
     ;;
 esac
-echo "built $out/moss-shell, $out/moss-app and $web"
+echo "built $out/moss-server, $out/moss-app and $web"

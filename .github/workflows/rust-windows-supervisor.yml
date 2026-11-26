@@ -68,7 +68,7 @@ jobs:
           ./rust-spike/bundled-db/proof/windows/at-rest.ps1 -MossDb "$env:CARGO_TARGET_DIR\debug\moss-db.exe"
       - name: Build the server and the app's proof program
         run: |
-          cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell -p moss-app
+          cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-server -p moss-app
           cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app --no-run --message-format=json > $env:RUNNER_TEMP/app-build.jsonl
       - name: App sets up, starts, stops and restarts the whole local server as a standard user
         shell: pwsh

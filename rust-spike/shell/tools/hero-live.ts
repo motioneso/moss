@@ -52,7 +52,7 @@ const test = spawn(
       JS43_WORKER_URL: urls.worker,
       JS43_BOOTSTRAP_URL: urls.bootstrap,
       JS170_AUTH_URL: urls.auth,
-      JS170_SERVER: join(target, "debug/moss-shell"),
+      JS170_SERVER: join(target, "debug/moss-server"),
       JS170_CERTIFICATE: join(target, "debug/moss-network")
     }
   }

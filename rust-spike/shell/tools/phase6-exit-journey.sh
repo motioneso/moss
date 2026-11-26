@@ -11,6 +11,6 @@ cargo +1.95.0 build --offline --locked --manifest-path rust-spike/ui/bindgen/Car
 python3 rust-spike/shell/assets/build-assets.py "$CARGO_TARGET_DIR/web"
 python3 rust-spike/module-ui/build-assets.py "$CARGO_TARGET_DIR/web/module-shared"
 cp rust-spike/shell/assets/index.html "$CARGO_TARGET_DIR/web/index.html"
-cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
+cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-server
 cargo +1.95.0 build --offline --locked --manifest-path rust-spike/network/Cargo.toml --bin moss-network
 pnpm exec tsx rust-spike/shell/tools/phase6-exit-journey.ts

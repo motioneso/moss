@@ -16,7 +16,7 @@ panic = "abort"
 strip = true
 
 # The server and desktop app favour speed over size.
-[profile.release.package.moss-shell]
+[profile.release.package.moss-server]
 opt-level = 3
 
 [profile.release.package.moss-app]

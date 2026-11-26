@@ -1,5 +1,5 @@
 [package]
-name = "moss-shell"
+name = "moss-server"
 version = "0.0.0"
 edition.workspace = true
 publish.workspace = true

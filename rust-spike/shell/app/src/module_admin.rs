@@ -183,7 +183,7 @@ fn run(
         .find(|l| !l.trim().is_empty() && !l.contains("postgres://"))
         .unwrap_or("The installer failed");
     Err(line
-        .trim_start_matches("moss-shell: ")
+        .trim_start_matches("moss-server: ")
         .chars()
         .take(300)
         .collect())

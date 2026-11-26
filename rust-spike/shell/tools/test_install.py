@@ -35,25 +35,25 @@ class InstallTests(unittest.TestCase):
         for folder in (self.install / "servers/default", self.root / "data/servers/default"):
             folder.mkdir(parents=True)
             (folder / "keep").write_bytes(b"user instance")
-        (self.install / "moss-shell").write_bytes(b"program")
+        (self.install / "moss-server").write_bytes(b"program")
         (self.install / "web").mkdir()
         (self.install / "web/index.html").write_bytes(b"page")
         (self.install / "web/user-note").write_bytes(b"keep this too")
-        self.inventory(["moss-shell", "web/index.html"])
+        self.inventory(["moss-server", "web/index.html"])
         self.assertEqual(len(uninstall(self.install)), 2)
         for file in (self.install / "servers/default/keep", self.root / "data/servers/default/keep"):
             self.assertEqual(file.read_bytes(), b"user instance")
         self.assertEqual((self.install / "web/user-note").read_bytes(), b"keep this too")
-        self.assertFalse((self.install / "moss-shell").exists())
+        self.assertFalse((self.install / "moss-server").exists())
 
     def test_changed_file_refuses_before_removing_anything(self):
-        for name in ("moss-shell", "moss-db"):
+        for name in ("moss-server", "moss-db"):
             (self.install / name).write_bytes(b"program")
-        self.inventory(["moss-shell", "moss-db"])
+        self.inventory(["moss-server", "moss-db"])
         (self.install / "moss-db").write_bytes(b"changed")
         with self.assertRaisesRegex(ValueError, "changed"):
             uninstall(self.install)
-        self.assertTrue((self.install / "moss-shell").exists())
+        self.assertTrue((self.install / "moss-server").exists())
 
     def test_redirected_directory_refuses_without_touching_target(self):
         (self.install / "web").mkdir()
@@ -72,9 +72,9 @@ class InstallTests(unittest.TestCase):
                 uninstall(self.install)
 
     def test_running_real_executable_refuses(self):
-        shutil.copy2("/bin/sleep", self.install / "moss-shell")
-        self.inventory(["moss-shell"])
-        process = subprocess.Popen([str(self.install / "moss-shell"), "30"])
+        shutil.copy2("/bin/sleep", self.install / "moss-server")
+        self.inventory(["moss-server"])
+        process = subprocess.Popen([str(self.install / "moss-server"), "30"])
         try:
             with self.assertRaisesRegex(ValueError, "Quit Moss"):
                 uninstall(self.install)
@@ -106,7 +106,7 @@ class InstallTests(unittest.TestCase):
     def test_stage_rejects_escaping_postgres_link_atomically(self):
         dist = self.root / "dist"
         pg = self.root / "pg"
-        for name in ("moss-app", "moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-server", "moss-db"):
             dist.mkdir(exist_ok=True)
             shutil.copy2("/bin/true", dist / name)
         (dist / "web").mkdir()
@@ -125,7 +125,7 @@ class InstallTests(unittest.TestCase):
     def test_stage_refuses_each_missing_backup_tool(self):
         dist, pg = self.root / "dist", self.root / "pg"
         dist.mkdir()
-        for name in ("moss-app", "moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-server", "moss-db"):
             shutil.copy2("/bin/true", dist / name)
         (dist / "web").mkdir()
         (dist / "web/index.html").write_text("page")
@@ -145,7 +145,7 @@ class InstallTests(unittest.TestCase):
                 (pg / "bin" / name).write_text("fixture")
 
     def test_runtime_executes_real_openssl_with_its_configuration(self):
-        for name in ("moss-app", "moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-server", "moss-db"):
             shutil.copy2("/bin/true", self.install / name)
         (self.install / "postgres").mkdir()
         stage_runtime(self.install, Path("/usr/bin/openssl"), Path("/etc/ssl/certs/ca-certificates.crt"))
@@ -157,7 +157,7 @@ class InstallTests(unittest.TestCase):
         mixed.write_bytes((self.root / "cert.pem").read_bytes() + (self.root / "key.pem").read_bytes())
         unsafe = self.root / "unsafe"
         unsafe.mkdir()
-        for name in ("moss-app", "moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-server", "moss-db"):
             shutil.copy2("/bin/true", unsafe / name)
         (unsafe / "postgres").mkdir()
         with self.assertRaisesRegex(ValueError, "public certificate bundle"):
@@ -180,11 +180,11 @@ class InstallTests(unittest.TestCase):
         source = self.root / "environment.c"
         source.write_text('#include <stdio.h>\n#include <stdlib.h>\nint main(int argc, char **argv) { puts(getenv("LD_LIBRARY_PATH")); puts(getenv("OPENSSL_CONF")); for (int i=1; i<argc; ++i) puts(argv[i]); return 0; }')
         subprocess.run(["cc", str(source), "-o", str(self.install / "moss-app")], check=True)
-        for name in ("moss-shell", "moss-db"):
+        for name in ("moss-server", "moss-db"):
             shutil.copy2(self.install / "moss-app", self.install / name)
         (self.install / "postgres").mkdir()
         stage_runtime(self.install, Path("/usr/bin/openssl"), Path("/etc/ssl/certs/ca-certificates.crt"))
-        for name in ("moss-app", "moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-server", "moss-db"):
             result = subprocess.run([str(self.install / "moss-run"), name, "--data", "folder with spaces", "$literal"], text=True, capture_output=True, check=True)
             self.assertEqual(result.stdout.splitlines(), [
                 f"{self.install}/runtime/lib:{self.install}/postgres/lib",
@@ -210,7 +210,7 @@ class InstallTests(unittest.TestCase):
         source.write_text('#include <stdio.h>\n#include <stdlib.h>\nint main(void) {\n' +
                           ''.join(f'puts(getenv("{name}"));\n' for name in variables) + 'return 0; }')
         subprocess.run(["cc", str(source), "-o", str(self.install / "moss-app")], check=True)
-        for name in ("moss-shell", "moss-db"):
+        for name in ("moss-server", "moss-db"):
             shutil.copy2("/bin/true", self.install / name)
         (self.install / "postgres").mkdir()
         stage_runtime(self.install, Path("/usr/bin/openssl"),
