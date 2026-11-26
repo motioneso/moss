@@ -428,6 +428,8 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 _ => Err(UNREADABLE),
             }
         }
+        // A record from before ownership tokens proves nothing, so it never deletes.
+        _ if rule.token.is_none() => Err(UNREADABLE),
         (Os::Linux, Linux::Firewalld) if rule.manager.is_none() => Err(UNREADABLE),
         _ => Ok(true),
     }
@@ -672,6 +674,11 @@ impl Firewall {
         // A rule is only removed when Moss added it. A record written before the owner's answer
         // proves nothing, because the rule under that name may belong to someone else.
         if !record.preexisting && (record.confirmed || record.added) {
+            // An old record without a token never deletes. The record stays and the owner is
+            // told to remove the old rule by hand.
+            if record.rule.token.is_none() {
+                return Err(Refusal::Stuck);
+            }
             self.run(Action::Remove, record.rule).await?;
         }
         std::fs::remove_file(self.record_path()).map_err(|_| Refusal::Failed)
