@@ -207,6 +207,20 @@ approval in this plan before parts 6, 10, 11 and 16c start.
 
 ## Rulings ledger
 
+- 2026-11-25, Ben: mockups M1 to M7 approved as drawn. Screen parts 6, 10, 11 and 16c may start
+  when their dependencies merge.
+- 2026-11-25, Ben: all decisions as recommended.
+  - D1: individual Apple Developer account in Ben's name, enrolled early for part 17a.
+  - D2: Microsoft Artifact Signing if Ben is eligible; otherwise unsigned Windows for first testers,
+    then decide again.
+  - D3: installers and the update feed on GitHub Releases in this repository.
+  - D4: Ben generates the module registry key and the app update key in one sitting, stores both
+    as GitHub secrets and keeps an offline backup.
+  - D5: virtual machines on the build box (QEMU). Installing the VM tool is approved. Never the
+    work laptop.
+  - D6: a macOS virtual machine on the MacBook from a clean snapshot, run by Ben from written
+    steps; a fresh user account first as a rehearsal.
+  - D7: Ubuntu 24.04 and current Fedora on x86-64, with an unpromised AppImage.
 - 2026-11-25: the server and app split is final (split design); Phase 7 packages both programs.
 - 2026-11-25: no updater code exists; `reach.rs:66-67` only tells the user to update.
 - 2026-11-25: `lxc` on the box is a stub that tries to install a snap and fails; there is no VM
