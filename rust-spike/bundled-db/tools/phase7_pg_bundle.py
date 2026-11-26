@@ -81,11 +81,18 @@ def proof(bundle, scratch):
         sock.bind(("127.0.0.1", 0))
         env["PGPORT"] = str(sock.getsockname()[1])
     def run(name, *args):
-        result = subprocess.run([str(tools[name]), *map(str, args)], env=env,
-                                capture_output=True, text=True, timeout=120)
+        command = [str(tools[name]), *map(str, args)]
+        print("+", subprocess.list2cmdline(command), flush=True)
+        # A Windows background postgres can inherit pg_ctl's capture pipes.
+        # File-backed output lets pg_ctl return without waiting for server EOF.
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as output:
+            result = subprocess.run(command, env=env, stdout=output,
+                                    stderr=subprocess.STDOUT, timeout=120)
+            output.seek(0)
+            captured = output.read()
         if result.returncode:
-            raise RuntimeError(f"{name} exit {result.returncode}: {result.stdout}\n{result.stderr}")
-        return result.stdout.strip()
+            raise RuntimeError(f"{name} exit {result.returncode}: {captured}")
+        return captured.strip()
 
     with tempfile.TemporaryDirectory(prefix="phase7-pg-", dir=scratch) as root:
         root = Path(root)
