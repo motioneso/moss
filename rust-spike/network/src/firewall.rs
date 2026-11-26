@@ -768,9 +768,9 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 ServiceMark::Ours => service_loaded(rule).map(|_| true),
                 ServiceMark::Foreign => Ok(false),
                 ServiceMark::Missing => match firewalld_halves(rule) {
-                    // Assigned with no Moss file is someone else's rule. It stays.
-                    Some(_) => Ok(false),
-                    None => Err(UNREADABLE),
+                    Some((false, false)) => Ok(false),
+                    // Without the file's marker an assignment cannot be deleted or forgotten.
+                    Some(_) | None => Err(UNREADABLE),
                 },
                 ServiceMark::Unreadable => Err(UNREADABLE),
             }
@@ -1166,10 +1166,19 @@ impl Firewall {
 
     async fn run(&self, action: Action, rule: Rule) -> Result<bool, Refusal> {
         let command = elevated(self.stand_in.as_deref(), action, &rule)?;
-        let expected = (action != Action::Remove).then(|| confirmation(&rule));
-        tokio::task::spawn_blocking(move || wait(command, expected))
-            .await
-            .map_err(|_| Refusal::Failed)?
+        // RunAs starts a separate Windows console, so its stdout is not a receipt.
+        // Windows permits a silent, unprivileged query of the exact live marker instead.
+        let verify_windows = cfg!(windows) && self.stand_in.is_none() && action != Action::Remove;
+        let expected = (!verify_windows && action != Action::Remove).then(|| confirmation(&rule));
+        tokio::task::spawn_blocking(move || {
+            let preexisting = wait(command, expected)?;
+            if verify_windows && owned(Os::Windows, Linux::Nothing, &rule) != Ok(true) {
+                return Err(Refusal::Stuck);
+            }
+            Ok(preexisting)
+        })
+        .await
+        .map_err(|_| Refusal::Failed)?
     }
 }
 
