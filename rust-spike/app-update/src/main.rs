@@ -83,7 +83,7 @@ fn release(args: &[String]) -> Result<()> {
         let id = std::env::var("MOSS_APP_UPDATE_SIGNING_KEY_ID")
             .context("Missing app update signing key ID")?;
         let encoded = std::env::var("MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY")
-            .context("Missing app update signing key")?;
+            .map_err(|_| anyhow::anyhow!("Missing or invalid app update signing key"))?;
         let bytes = STANDARD
             .decode(encoded.trim())
             .map_err(|_| anyhow::anyhow!("Invalid app update key encoding"))?;

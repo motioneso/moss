@@ -59,7 +59,7 @@ By default a fresh throwaway key is generated in memory. Only `index.json`,
 file or command argument. Ben provisions the named GitHub secrets in part 17b.
 
 `.github/workflows/rust-phase7-update-feed.yml` runs the refusal runner and seven
-guard-removal controls natively on Linux, macOS and Windows. Branch pushes and
+refusal guard-removal controls and a private-output control natively on Linux, macOS and Windows. Branch pushes and
 manual dispatches assemble the native artifacts into an immutable prerelease
 `rust-app-updates-test-<run>-<attempt>` in this repository. PR jobs have read-only
 permissions and do not publish. Manual main dispatch can opt into the named
@@ -78,7 +78,9 @@ python3 rust-spike/app-update/tools/negative-controls.py
 ```
 
 The negative controls copy the sources to a temporary tree, remove each guard,
-and require exit 101 at its named refusal assertion. They never alter the working
+and require exit 101 at its named refusal assertion. Another control deliberately
+writes a generated test private key into configured release output and requires
+the output scan to fail. They never alter the working
 tree. CI logs retain the exact unpiped command and its failing exit code.
 
 The separate `test:rust-phase7-update-feed` gate builds the real Moss server,

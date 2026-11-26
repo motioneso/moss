@@ -239,8 +239,22 @@ fn release_output_verifies_and_contains_only_public_material() {
         fs::read_to_string(configured.join("public-key.txt")).unwrap(),
         STANDARD.encode(configured_key.public_key().as_ref())
     );
-    assert!(!result
-        .stdout
-        .windows(pkcs8.as_ref().len())
-        .any(|w| w == pkcs8.as_ref()));
+    let encoded = STANDARD.encode(pkcs8.as_ref());
+    let mut public_output = result.stdout;
+    public_output.extend(result.stderr);
+    for file in fs::read_dir(&configured).unwrap() {
+        public_output.extend(fs::read(file.unwrap().path()).unwrap());
+    }
+    assert!(
+        !public_output
+            .windows(encoded.len())
+            .any(|w| w == encoded.as_bytes()),
+        "private key escaped configured signing"
+    );
+    assert!(
+        !public_output
+            .windows(pkcs8.as_ref().len())
+            .any(|w| w == pkcs8.as_ref()),
+        "private key bytes escaped configured signing"
+    );
 }

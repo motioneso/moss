@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--guard', choices=['signature', 'serial', 'expiry', 'hash', 'os', 'arch', 'schema'])
+parser.add_argument('--guard', choices=['signature', 'serial', 'expiry', 'hash', 'os', 'arch', 'schema', 'private-output'])
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
 source = root / 'rust-spike/app-update'
@@ -20,6 +20,7 @@ mutations = {
     'os': ('a.os == self.os && a.arch == self.arch', 'a.arch == self.arch', 'WRONG-OS-GUARD'),
     'arch': ('a.os == self.os && a.arch == self.arch', 'a.os == self.os', 'WRONG-ARCH-GUARD'),
     'schema': ('(artifact.schema_min..=artifact.schema_max).contains(&self.schema)', 'true', 'WRONG-SCHEMA-GUARD'),
+    'private-output': ('fs::write(out.join("public-key.txt"), public)?;', 'fs::write(out.join("public-key.txt"), public)?; if configured { fs::write(out.join("private-key.txt"), STANDARD.decode(std::env::var("MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY").unwrap()).unwrap())?; }', 'private key bytes escaped configured signing'),
 }
 for guard, (old, new, marker) in mutations.items():
     if args.guard and args.guard != guard:
@@ -29,15 +30,16 @@ for guard, (old, new, marker) in mutations.items():
         shutil.copytree(source, scratch / 'app-update', ignore=shutil.ignore_patterns('target', '__pycache__'))
         (scratch / 'module-host/src').mkdir(parents=True)
         shutil.copyfile(root / 'rust-spike/module-host/src/trust_crypto.rs', scratch / 'module-host/src/trust_crypto.rs')
-        path = scratch / 'app-update/src/lib.rs'
+        path = scratch / ('app-update/src/main.rs' if guard == 'private-output' else 'app-update/src/lib.rs')
         text = path.read_text()
         if text.count(old) != 1:
             raise SystemExit(f'{guard}: guard source changed; update the negative control')
         path.write_text(text.replace(old, new))
-        cmd = ['cargo', '+1.95.0', 'test', '--locked', '--manifest-path', str(scratch / 'app-update/Cargo.toml'), '--test', 'phase7_update_feed', 'phase7_update_feed', '--', '--exact', '--nocapture', '--test-threads=1']
+        test = 'release_output_verifies_and_contains_only_public_material' if guard == 'private-output' else 'phase7_update_feed'
+        cmd = ['cargo', '+1.95.0', 'test', '--locked', '--manifest-path', str(scratch / 'app-update/Cargo.toml'), '--test', 'phase7_update_feed', test, '--', '--exact', '--nocapture', '--test-threads=1']
         result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        print(f'guard removed: {guard}; command: {" ".join(cmd)}; exit={result.returncode}', flush=True)
-        if result.returncode == 0 or marker not in result.stdout:
+        print(f'control: {guard}; command: {" ".join(cmd)}; exit={result.returncode}', flush=True)
+        if result.returncode != 101 or marker not in result.stdout:
             print(result.stdout[-10000:])
             raise SystemExit(f'{guard}: did not fail at {marker}')
         print(f'Observed expected failing assertion: {marker}', flush=True)
