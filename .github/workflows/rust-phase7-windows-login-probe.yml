@@ -17,46 +17,25 @@ jobs:
           New-Item -ItemType Directory $work | Out-Null
           $script = Join-Path $work 'probe.py'
           @'
-          import os, pathlib, subprocess, sys, time, winreg
+          import csv, html, pathlib, subprocess, sys, time
           root = pathlib.Path(__file__).parent
           if len(sys.argv) > 1:
               (root / sys.argv[1]).write_text('started')
               raise SystemExit(0)
-          key = r'Software\Microsoft\Windows\CurrentVersion\Run'
-          for variant in ('ordinary', 'canonical'):
-              exe = sys.executable
-              if variant == 'canonical':
-                  exe = '\\\\?\\' + exe
-              args = [exe, str(pathlib.Path(__file__)), variant]
-              entry = subprocess.list2cmdline(args)
-              with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as registry:
-                  winreg.SetValueEx(registry, 'MossLoginProbe', 0, winreg.REG_SZ, entry)
-              result = subprocess.run(['runonce.exe', '/AlternateShellStartup'])
-              time.sleep(15)
-              print('PROBE:', variant, 'runonce exit', result.returncode, 'started', (root / variant).exists(), flush=True)
-              # Compare the exact registry command with direct CreateProcess execution.
-              if not (root / variant).exists():
-                  result = subprocess.run(entry)
-                  print('PROBE:', variant, 'direct exit', result.returncode, 'started', (root / variant).exists(), flush=True)
-              with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as registry:
-                  winreg.DeleteValue(registry, 'MossLoginProbe')
-          entry = subprocess.list2cmdline([sys.executable, str(pathlib.Path(__file__)), 'shell'])
-          with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as registry:
-              winreg.SetValueEx(registry, 'MossLoginProbe', 0, winreg.REG_SZ, entry)
-          subprocess.Popen(['userinit.exe'])
-          time.sleep(20)
-          print('PROBE: native userinit shell started', (root / 'shell').exists(), flush=True)
-          with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as registry:
-              winreg.DeleteValue(registry, 'MossLoginProbe')
-          for mode in ('/it', '/np'):
-              marker = mode[1:]
-              entry = subprocess.list2cmdline([sys.executable, str(pathlib.Path(__file__)), marker])
-              result = subprocess.run(['schtasks.exe', '/Create', '/TN', 'MossLoginProbe', '/SC', 'ONLOGON', '/TR', entry, mode, '/F'], stdin=subprocess.DEVNULL, capture_output=True, text=True)
-              print('PROBE: scheduler', mode, 'create exit', result.returncode, result.stdout.strip(), result.stderr.strip(), flush=True)
+          identity = subprocess.check_output(['whoami.exe', '/user', '/fo', 'csv', '/nh'], text=True)
+          sid = next(csv.reader(identity.splitlines()))[1]
+          for mode in ('InteractiveToken', 'S4U'):
+              arguments = subprocess.list2cmdline([str(pathlib.Path(__file__)), mode])
+              xml = f'''<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{sid}</UserId></LogonTrigger></Triggers><Principals><Principal id="Author"><UserId>{sid}</UserId><LogonType>{mode}</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit></Settings><Actions Context="Author"><Exec><Command>{html.escape(sys.executable)}</Command><Arguments>{html.escape(arguments)}</Arguments></Exec></Actions></Task>'''
+              definition = root / 'task.xml'
+              definition.write_text(xml, encoding='utf-16')
+              result = subprocess.run(['schtasks.exe', '/Create', '/TN', 'MossLoginProbe', '/XML', str(definition), '/F'], stdin=subprocess.DEVNULL, capture_output=True, text=True)
+              print('PROBE: own-user scheduler', mode, 'create exit', result.returncode, result.stdout.strip(), result.stderr.strip(), flush=True)
               if result.returncode == 0:
                   result = subprocess.run(['schtasks.exe', '/Run', '/TN', 'MossLoginProbe'])
                   time.sleep(15)
-                  print('PROBE: scheduler', mode, 'run exit', result.returncode, 'started', (root / marker).exists(), flush=True)
+                  print('PROBE: own-user scheduler', mode, 'run exit', result.returncode, 'started', (root / mode).exists(), flush=True)
+                  subprocess.run(['schtasks.exe', '/Query', '/TN', 'MossLoginProbe', '/V', '/FO', 'LIST'])
                   subprocess.run(['schtasks.exe', '/Delete', '/TN', 'MossLoginProbe', '/F'], check=True)
           '@ | Set-Content $script
           $account = 'moss-login-probe'
