@@ -48,7 +48,8 @@ def database_failure_summary(folder):
     stages = ('crash-dump protection', 'Postgres bundle', 'lock file', 'initdb failed',
               'initdb:', 'superuser password', 'first-run marker', 'start postgres',
               'postgres exited during start', 'migrations:', 'private', 'elevated',
-              'access', 'Access', 'denied', 'reparse', 'DACL', 'unambiguous')
+              'access', 'Access', 'denied', 'reparse', 'DACL', 'unambiguous',
+              'backfill', 'not the version', 'row-level security policy', 'checksum')
     log = folder / 'database.log'
     if log.exists():
         for line in log.read_text(errors='replace').splitlines():
@@ -59,7 +60,9 @@ def database_failure_summary(folder):
             error = value.get('error', '')
             if isinstance(error, str):
                 print('DATABASE ERROR LABELS:', [stage for stage in stages if stage in error],
-                      'OS codes:', re.findall(r'os error (\d+)', error), flush=True)
+                      'OS codes:', re.findall(r'os error (\d+)', error),
+                      'migration files:', re.findall(r'\b[0-9]{4}_[a-z0-9_]+\.(?:sql|backfill\.mjs)\b', error),
+                      flush=True)
     # initdb has not run schema SQL. Match fixed phrases only, never its arbitrary output.
     log = folder / 'database/logs/initdb.log'
     if log.exists():
