@@ -20,9 +20,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     env:
-      CARGO_HOME: ${{ runner.temp }}/rust-sup/cargo
-      RUSTUP_HOME: ${{ runner.temp }}/rust-sup/rustup
-      CARGO_TARGET_DIR: ${{ runner.temp }}/rust-sup/target
       CARGO_BUILD_JOBS: "1"
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -31,6 +28,12 @@ jobs:
       - name: Keep file contents byte-exact on checkout
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
+      - name: Keep Rust build folders in runner scratch
+        shell: pwsh
+        run: |
+          "CARGO_HOME=$env:RUNNER_TEMP/rust-sup/cargo" >> $env:GITHUB_ENV
+          "RUSTUP_HOME=$env:RUNNER_TEMP/rust-sup/rustup" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$env:RUNNER_TEMP/rust-sup/target" >> $env:GITHUB_ENV
       - name: Provision the declared Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Build the database supervisor
