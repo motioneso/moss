@@ -76,9 +76,6 @@ async fn pass(admin: &Admin, slot: &modules::Slot, access: AccessContext) -> Res
                 anyhow::ensure!(result["failed"].as_u64() == Some(0), "Some updates need attention");
                 Ok(())
             })();
-            if std::env::var_os("JS426_REFRESH_DIAGNOSTICS").is_some() {
-                eprintln!("[JS426] refresh result: {result:?}");
-            }
             report.sources.push(SourceResult { id: source.id, error: result.err().map(|_| "The registry or its updates could not be refreshed; saved installed modules remain available. Check the source and try again") });
         }
         Ok(report)
