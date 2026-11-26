@@ -31,6 +31,28 @@ class InstallTests(unittest.TestCase):
         files = {name: hashlib.sha256((self.install / name).read_bytes()).hexdigest() for name in names}
         (self.install / "install-manifest.json").write_text(json.dumps({"format": 1, "files": files}))
 
+    def test_version_switch_retains_old_programs_and_keeps_data_apart(self):
+        spec = importlib.util.spec_from_file_location("install_version", Path(__file__).with_name("install-version.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        staged = self.root / "staged"
+        staged.mkdir()
+        for name in ("moss-app", "moss-server", "moss-db", "moss-launcher"):
+            (staged / name).write_bytes(b"old program")
+        programs = self.root / "programs"
+        old = module.install_version(staged, programs, "7.0.0")
+        (staged / "moss-server").write_bytes(b"new server")
+        new = module.install_version(staged, programs, "7.1.0")
+        self.assertEqual((programs / "current").read_text().strip(), "7.1.0")
+        self.assertEqual((old / "moss-server").read_bytes(), b"old program")
+        self.assertEqual((new / "moss-server").read_bytes(), b"new server")
+        self.assertFalse((programs / "servers").exists())
+        self.assertEqual((programs / "moss-launcher").read_bytes(), b"old program")
+        for bad in ("../data", "7.1.0"):
+            with self.assertRaises(ValueError):
+                module.install_version(staged, programs, bad)
+            self.assertEqual((programs / "current").read_text().strip(), "7.1.0")
+
     def test_uninstall_retains_instances_inside_and_outside_install(self):
         for folder in (self.install / "servers/default", self.root / "data/servers/default"):
             folder.mkdir(parents=True)

@@ -275,12 +275,12 @@ const screens = {
             server.removable
               ? button("Remove", "quiet", () => post({ do: "remove", id: server.id }))
               : "",
-            server.stoppable
-              ? button("Stop", "quiet", () => post({ do: "stop", id: server.id }))
-              : "",
             server.local && server.state === "Stopped"
               ? button("Start", "secondary", () => post({ do: "start", id: server.id }))
-              : button("Open", "primary", () => post({ do: "open", id: server.id }))
+              : button("Open", "primary", () => post({ do: "open", id: server.id })),
+            server.stoppable
+              ? button("Stop", "secondary", () => post({ do: "stop", id: server.id }))
+              : ""
           )
         )
       )

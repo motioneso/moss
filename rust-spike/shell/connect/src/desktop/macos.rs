@@ -535,7 +535,7 @@ pub fn set_login(
         format!("<string>{}</string><string>--data</string><string>{}</string><string>--install</string><string>{}</string>", args[0], args[1], args[2])
     };
     let label = format!("app.moss.desktop.{:016x}", install_id(data));
-    let plist = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>Label</key><string>{label}</string><key>ProgramArguments</key><array>{program}</array><key>RunAtLoad</key><true/><key>LimitLoadToSessionType</key><string>Aqua</string></dict></plist>", );
+    let plist = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>Label</key><string>{label}</string><key>ProgramArguments</key><array>{program}</array><key>RunAtLoad</key><true/><key>LimitLoadToSessionType</key><string>Aqua</string></dict></plist>");
     std::fs::create_dir_all(path.parent().ok_or("No login settings folder")?)
         .map_err(|_| "Cannot create login settings")?;
     write(&path, plist.as_bytes())
