@@ -96,6 +96,10 @@ mod linux {
                     CustodyError::Unavailable(e.to_string())
                 }
             })?;
+            // The "plain" session sends the secret without extra encryption.
+            // The session bus is private to this user account: only
+            // processes running as the same user can connect to it, and the
+            // keyring itself encrypts what it stores at rest.
             let reply = connection
                 .call_method(
                     Some(SERVICE),
@@ -308,7 +312,12 @@ mod macos {
             Ok(MasterKey::from_bytes(bytes))
         }
         fn delete_master(&mut self, service: &str) -> Result<(), CustodyError> {
-            delete_generic_password(service, service).map_err(map)
+            match delete_generic_password(service, service) {
+                Ok(()) => Ok(()),
+                // Deleting an item that is already gone is success.
+                Err(error) if error.code() == -25300 => Ok(()),
+                Err(error) => Err(map(error)),
+            }
         }
     }
 }
@@ -406,7 +415,7 @@ mod windows {
         }
         fn load_master(&self, service: &str) -> Result<MasterKey, CustodyError> {
             let text = std::fs::read_to_string(blob_path(&self.dir, service))
-                .map_err(|_| CustodyError::Unavailable("no master key in DPAPI storage".into()))?;
+                .map_err(|_| CustodyError::NoMaster)?;
             let protected = STANDARD
                 .decode(text.trim())
                 .map_err(|_| CustodyError::Damaged("DPAPI blob not readable".into()))?;

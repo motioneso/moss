@@ -360,18 +360,6 @@ pub fn set_module_secrets(secrets: ModuleSecrets) {
     let _ = MODULE_SECRETS.set(secrets);
 }
 
-/// Supplies only the connector key from the wrapped credential bundle.
-pub fn set_connector_key_override(key: String) {
-    set_module_secrets(ModuleSecrets {
-        connector_key: key,
-        ai_key: None,
-        embeddings_api_key: None,
-        producer_url: String::new(),
-        migrations_url: None,
-        worker_url: None,
-    });
-}
-
 pub fn read_settings(path: &Path) -> Result<Settings> {
     let mut settings: Settings = serde_json::from_slice(
         &moss_network::config::private_read(path).map_err(anyhow::Error::msg)?,

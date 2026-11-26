@@ -409,7 +409,8 @@ impl OsKeyStore for KeyFileStore {
         Ok(())
     }
     fn probe(&self) -> Result<(), CustodyError> {
-        Ok(())
+        // A recorded file that is missing or damaged is not a working store.
+        read_key_file(&self.path).map(|_| ())
     }
 }
 
@@ -634,19 +635,25 @@ fn url_password(text: &str) -> Option<Vec<u8>> {
     Some(raw)
 }
 
+/// Adds one collected value, plus the password split out of it when the
+/// value is a connection string, so a bare password copy is searched for too.
+fn push_secret(out: &mut Vec<Vec<u8>>, value: &Value) {
+    let mut leaves = Vec::new();
+    collect_leaves(value, &mut leaves);
+    for leaf in &leaves {
+        if let Ok(text) = std::str::from_utf8(leaf) {
+            if let Some(password) = url_password(text) {
+                out.push(password);
+            }
+        }
+    }
+    out.extend(leaves);
+}
+
 fn secret_values(credentials: &[u8]) -> Vec<Vec<u8>> {
     let mut out = vec![credentials.to_vec()];
     if let Ok(value) = serde_json::from_slice::<Value>(credentials) {
-        let mut leaves = Vec::new();
-        collect_leaves(&value, &mut leaves);
-        for leaf in &leaves {
-            if let Ok(text) = std::str::from_utf8(leaf) {
-                if let Some(password) = url_password(text) {
-                    out.push(password);
-                }
-            }
-        }
-        out.extend(leaves);
+        push_secret(&mut out, &value);
     }
     out
 }
@@ -673,13 +680,13 @@ fn module_secret_values(instance_root: &Path, secrets: &mut Vec<Vec<u8>>) -> Mod
         "worker_url",
     ] {
         if let Some(removed) = object.get(key).cloned() {
-            collect_leaves(&removed, secrets);
+            push_secret(secrets, &removed);
         }
     }
     if let Some(embeddings) = object.get("embeddings") {
         // Only the key is a secret. The endpoint and model stay plain.
         if let Some(key) = embeddings.get("api_key").cloned() {
-            collect_leaves(&key, secrets);
+            push_secret(secrets, &key);
         }
         found.embeddings_api_key = embeddings
             .get("api_key")
@@ -750,6 +757,9 @@ pub struct Prepared {
     settings_original: Option<Vec<u8>>,
     secrets: Vec<Vec<u8>>,
     payload: Vec<u8>,
+    /// The bundle and master this attempt replaced, if an earlier attempt
+    /// left one. A rolled-back finish puts them back, not a deletion.
+    previous: Option<(Vec<u8>, [u8; 32])>,
 }
 
 impl Prepared {
@@ -813,8 +823,19 @@ impl Prepared {
                     let _ = fs::remove_file(&settings_path);
                 }
             }
-            let _ = fs::remove_file(&self.bundle_path);
-            let _ = store.delete_master(service);
+            // Put the earlier bundle and master back. They may hold module
+            // values recovered from an interrupted attempt; deleting them
+            // would lose the only copy.
+            match &self.previous {
+                Some((bytes, master_bytes)) => {
+                    let _ = write_private(&self.bundle_path, bytes);
+                    let _ = store.store_master(service, &MasterKey::from_bytes(*master_bytes));
+                }
+                None => {
+                    let _ = fs::remove_file(&self.bundle_path);
+                    let _ = store.delete_master(service);
+                }
+            }
             return Err(error);
         }
         if self.legacy.exists() {
@@ -970,10 +991,68 @@ fn prepare(
     } else {
         plaintext.to_vec()
     };
+    // The secret list is complete before anything on disk changes, so the
+    // plaintext check runs first. A failure here touches nothing at all.
+    let stray: Vec<PathBuf> = find_plaintext(instance_root, &secrets)
+        .into_iter()
+        .filter(|path| path != &legacy && path != &instance_root.join("modules.json"))
+        .collect();
+    if !stray.is_empty() {
+        return Err(CustodyError::Damaged(format!(
+            "plaintext remains in {}",
+            stray
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )));
+    }
+    // Snapshot the bundle and master an earlier interrupted attempt left, so
+    // any failure below can put that only copy back instead of deleting it.
+    let bundle_path = instance_root.join(BUNDLE_FILE);
+    // Do the settings still hold module values themselves? While they do,
+    // the earlier bundle is not the only copy of anything, and a retry
+    // through any store can safely replace it without opening it.
+    let settings_hold_values = module_secrets.ai_key.is_some()
+        || module_secrets.connector_key.is_some()
+        || module_secrets.migrations_url.is_some()
+        || module_secrets.worker_url.is_some()
+        || module_secrets.embeddings_api_key.is_some();
+    let previous: Option<(Vec<u8>, [u8; 32])> =
+        match fs::read(&bundle_path) {
+            Ok(bytes) => {
+                let opened = store.load_master(service).ok().and_then(|master| {
+                    let previous_bundle: Value = serde_json::from_slice(&bytes).ok()?;
+                    unwrap_with_master(&previous_bundle, &master)
+                        .ok()
+                        .map(|_| (bytes.clone(), *master.bytes()))
+                });
+                match opened {
+                    Some(snapshot) => Some(snapshot),
+                    None if settings_hold_values => None,
+                    // The stripped settings make that bundle the only copy of
+                    // the module values, and it cannot be opened. Stop here.
+                    None => return Err(CustodyError::Damaged(
+                        "an earlier key bundle cannot be opened, so setup cannot safely continue"
+                            .into(),
+                    )),
+                }
+            }
+            Err(_) => None,
+        };
+    let restore_previous = |store: &mut dyn OsKeyStore| match &previous {
+        Some((bytes, master_bytes)) => {
+            let _ = write_private(&bundle_path, bytes);
+            let _ = store.store_master(service, &MasterKey::from_bytes(*master_bytes));
+        }
+        None => {
+            let _ = fs::remove_file(&bundle_path);
+            let _ = store.delete_master(service);
+        }
+    };
     let master = MasterKey::generate();
     let recovery = RecoveryKey::generate();
     let bundle = wrap_bundle(&master, &recovery, &payload);
-    let bundle_path = instance_root.join(BUNDLE_FILE);
     write_private(&bundle_path, &serde_json::to_vec_pretty(&bundle).unwrap())?;
     if leak_plaintext {
         // Negative control only. The runner must catch this copy.
@@ -986,21 +1065,25 @@ fn prepare(
     // be retried and loses nothing.
     let opened = unwrap_with_master(&bundle, &master)?;
     if opened != payload {
-        let _ = fs::remove_file(&bundle_path);
+        restore_previous(store);
         return Err(CustodyError::Damaged(
             "the new bundle does not hold the credentials".into(),
         ));
     }
     // Only now, with the new bundle verified on disk, does its master
     // replace the old one in the store.
-    store.store_master(service, &master)?;
+    if let Err(error) = store.store_master(service, &master) {
+        restore_previous(store);
+        return Err(error);
+    }
+    // The written leak copy, or a copy written since the first check, still
+    // fails the attempt, with the earlier bundle and master put back.
     let remaining: Vec<PathBuf> = find_plaintext(instance_root, &secrets)
         .into_iter()
         .filter(|path| path != &legacy && path != &instance_root.join("modules.json"))
         .collect();
     if !remaining.is_empty() {
-        let _ = fs::remove_file(&bundle_path);
-        let _ = store.delete_master(service);
+        restore_previous(store);
         return Err(CustodyError::Damaged(format!(
             "plaintext remains in {}",
             remaining
@@ -1018,6 +1101,7 @@ fn prepare(
         settings_original: fs::read(instance_root.join("modules.json")).ok(),
         secrets,
         payload,
+        previous,
     })
 }
 

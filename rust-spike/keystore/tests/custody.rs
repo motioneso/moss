@@ -394,3 +394,60 @@ fn differing_module_values_ride_in_the_bundle() {
     )
     .is_empty());
 }
+
+#[test]
+fn bare_module_passwords_in_a_stray_file_fail_migration() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","migrations_url":"postgres://m:module-only-pass-9999@127.0.0.1/db","worker_url":"postgres://w:worker-only-pass-8888@127.0.0.1/db"}"#).unwrap();
+    fs::write(
+        dir.path().join("stray.txt"),
+        "module-only-pass-9999 and worker-only-pass-8888",
+    )
+    .unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    let result = migrate(dir.path(), &mut store, "svc", false)
+        .and_then(|prepared| prepared.commit_with(&mut store, "svc"));
+    assert!(
+        result.is_err(),
+        "bare module passwords outside the settings file must fail"
+    );
+    assert!(
+        dir.path().join("credentials.json").exists(),
+        "nothing was deleted"
+    );
+}
+
+#[test]
+fn kill_after_strip_then_failed_retry_keeps_the_ai_key() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","ai_key":"test-module-ai-key-3456"}"#).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    // Kill after the finish stripped the settings, before the legacy delete:
+    // commit's strip is simulated by preparing and committing, then putting
+    // the plain file back beside the finished bundle and stripped settings.
+    let prepared = keystore::custody::prepare_instance(dir.path(), &mut store, "svc").unwrap();
+    prepared.commit_with(&mut store, "svc").unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
+    assert!(
+        !modules.contains("test-module-ai-key-3456"),
+        "settings really are stripped: {modules}"
+    );
+    // A retry that fails on a stray copy must not destroy the AI key's home.
+    fs::write(dir.path().join("stray.txt"), "test-auth-secret-5678-abcd").unwrap();
+    let failed = keystore::custody::prepare_instance(dir.path(), &mut store, "svc")
+        .and_then(|prepared| prepared.commit_with(&mut store, "svc"));
+    assert!(failed.is_err());
+    fs::remove_file(dir.path().join("stray.txt")).unwrap();
+    // The clean retry succeeds and the AI key still opens from the bundle.
+    let prepared = keystore::custody::prepare_instance(dir.path(), &mut store, "svc").unwrap();
+    prepared.commit_with(&mut store, "svc").unwrap();
+    let master = start_gate(&store, "svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
+    assert!(String::from_utf8(payload)
+        .unwrap()
+        .contains("test-module-ai-key-3456"));
+}

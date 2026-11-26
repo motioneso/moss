@@ -411,33 +411,52 @@ fn restore_keys(raw: Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
-fn supply_module_secrets_from_args() {
+/// Loads the replacement module secrets from the wrapped bundle for a child
+/// process. A store that cannot open the bundle stops the child here, with
+/// the custody error itself, instead of a misleading settings complaint.
+fn supply_module_secrets_from_args() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
     let Some(position) = args.iter().position(|arg| arg == "--instance") else {
-        return;
+        return Ok(());
     };
     let Some(instance) = args.get(position + 1) else {
-        return;
+        return Ok(());
     };
     let folder = std::path::PathBuf::from(instance);
+    // No instance settings means the child is not running against a set-up
+    // instance; its own entry point reports that as before.
     let Ok(config) = moss_network::config::Config::read(&folder.join("network.json")) else {
-        return;
+        return Ok(());
     };
-    if let Ok(secrets) = config.module_secrets() {
-        modules::set_module_secrets(modules::ModuleSecrets {
-            connector_key: secrets.connector_key,
-            ai_key: secrets.ai_key,
-            producer_url: secrets.producer_url,
-            migrations_url: secrets.migrations_url,
-            worker_url: secrets.worker_url,
-            embeddings_api_key: secrets.embeddings_api_key,
-        });
+    // Only a wrapped bundle needs the key store. A plain credentials file
+    // carries its own values and the settings file still holds the rest.
+    let credentials = folder.join("credentials.json");
+    if credentials.exists() && !folder.join(keystore::custody::BUNDLE_FILE).exists() {
+        return Ok(());
+    }
+    let secrets = config.module_secrets()?;
+    modules::set_module_secrets(modules::ModuleSecrets {
+        connector_key: secrets.connector_key,
+        ai_key: secrets.ai_key,
+        producer_url: secrets.producer_url,
+        migrations_url: secrets.migrations_url,
+        worker_url: secrets.worker_url,
+        embeddings_api_key: secrets.embeddings_api_key,
+    });
+    Ok(())
+}
+
+/// Runs the secret supply for a child process, stopping it on failure.
+fn supply_or_stop() {
+    if let Err(error) = supply_module_secrets_from_args() {
+        eprintln!("moss-server: {error}");
+        std::process::exit(1);
     }
 }
 
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("lifecycle-module") {
-        supply_module_secrets_from_args();
+        supply_or_stop();
         if module_lifecycle_service::run(std::env::args().skip(2).collect()).is_err() {
             eprintln!(
                 "moss-server: The module lifecycle service stopped; read the operation result"
@@ -447,7 +466,7 @@ fn main() {
         return;
     }
     if std::env::args().nth(1).as_deref() == Some("apply-module-package") {
-        supply_module_secrets_from_args();
+        supply_or_stop();
         if module_package_apply::run(std::env::args().skip(2).collect()).is_err() {
             eprintln!("Package activation failed");
             std::process::exit(1);
@@ -469,7 +488,7 @@ fn main() {
         return;
     }
     if std::env::args().nth(1).as_deref() == Some("install-module") {
-        supply_module_secrets_from_args();
+        supply_or_stop();
         let runtime_free = module_install::run(std::env::args().skip(2).collect());
         if let Err(error) = runtime_free {
             eprintln!("moss-server: {error:#}");

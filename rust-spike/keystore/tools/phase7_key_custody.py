@@ -180,6 +180,20 @@ def main():
     done = cli("migrate", "--root", str(stray), "--mode", "working", input_text="SAVED\n")
     assert done.returncode == 3, done.stdout + done.stderr
     print("real instance shape migrates, a stray password copy fails: ok")
+    # Bare passwords from module-only addresses in a stray file must fail too.
+    modstray = scratch / "module-stray"
+    modstray.mkdir()
+    (modstray / "credentials.json").write_text(json.dumps(CREDS))
+    (modstray / "modules.json").write_text(json.dumps({
+        "data": "/tmp/data",
+        "migrations_url": "postgres://m:module-only-pass-9999@127.0.0.1/db",
+        "worker_url": "postgres://w:worker-only-pass-8888@127.0.0.1/db",
+    }))
+    (modstray / "stray.txt").write_text("module-only-pass-9999 worker-only-pass-8888")
+    done = cli("migrate", "--root", str(modstray), "--mode", "working", input_text="SAVED\n")
+    assert done.returncode == 3, done.stdout + done.stderr
+    print("bare module passwords in a stray file fail migration: ok")
+
 
     # 4. Recovery words restore the bundle. Wrong words are refused.
     words = ""
@@ -229,6 +243,8 @@ def main():
         # The stray-copy fixture failed migration on purpose; its starting
         # file stands too, as the retry contract requires.
         if (scratch / "stray-copy") in path.parents:
+            continue
+        if (scratch / "module-stray") in path.parents:
             continue
         # The database program's own folder is its own store, outside the
         # claimed area, exactly as the migration search treats it.
