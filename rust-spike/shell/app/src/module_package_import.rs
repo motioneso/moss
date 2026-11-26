@@ -92,6 +92,7 @@ async fn import(
     .await
     {
         Ok(Ok(view)) => ([(CACHE_CONTROL, "no-store")], Json(view)).into_response(),
+        Ok(Err(error)) => module_admin::custody_response(&error).unwrap_or_else(refused),
         _ => refused(),
     }
 }

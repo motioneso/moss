@@ -469,3 +469,44 @@ fn an_unreadable_folder_cannot_hide_a_secret_copy() {
     assert!(result.is_err(), "an unreadable folder must count as a hit");
     assert!(dir.path().join("credentials.json").exists());
 }
+
+#[test]
+fn headless_recording_refuses_a_key_inside_the_instance() {
+    let dir = tempfile::tempdir().unwrap();
+    let result =
+        keystore::custody::record_key_file_choice(dir.path(), &dir.path().join("master.key"));
+    assert!(
+        result.is_err(),
+        "recording must enforce the same location rule as setup"
+    );
+    assert!(!dir.path().join("key-file-choice.json").exists());
+}
+
+#[test]
+fn headless_relative_key_choice_is_recorded_as_absolute() {
+    let cwd = std::env::current_dir().unwrap();
+    let dir = tempfile::tempdir_in(&cwd).unwrap();
+    let root = dir.path().join("instance");
+    fs::create_dir(&root).unwrap();
+    let chosen = dir.path().join("master.key");
+    let relative = chosen.strip_prefix(&cwd).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Missing);
+    let pending = keystore::custody::set_up_headless(&root, CREDS, relative, &mut store).unwrap();
+    pending.commit().unwrap();
+    let recorded =
+        keystore::custody::recorded_key_file(&root).expect("choice must survive restart");
+    assert_eq!(recorded, fs::canonicalize(&chosen).unwrap());
+    assert!(read_key_file(&recorded).is_ok());
+}
+
+#[cfg(unix)]
+#[test]
+fn headless_key_choice_cannot_follow_a_link_into_the_instance() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("instance");
+    fs::create_dir(&root).unwrap();
+    let alias = dir.path().join("alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    let chosen = alias.join("master.key");
+    assert!(keystore::custody::headless_key_file_path(&root, &chosen).is_err());
+}

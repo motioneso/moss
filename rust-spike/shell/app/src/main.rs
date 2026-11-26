@@ -329,6 +329,8 @@ fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
         SetupRoute::KeyFileChoice => {
             let path = key_file
                 .ok_or("no keychain session here. Name the key file to create with --key-file")?;
+            let path = keystore::custody::headless_key_file_path(&folder, &path)
+                .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
             let mut store = KeyFileStore::new(path.clone());
             let prepared = prepare_instance(&folder, &mut store, &service);
             if prepared.is_ok() {

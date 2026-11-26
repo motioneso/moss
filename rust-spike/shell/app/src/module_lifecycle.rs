@@ -81,11 +81,8 @@ fn child(instance: &FilePath, actor: &str, operation: Option<&str>) -> anyhow::R
         .output()?;
     if !output.status.success() {
         // A key store failure in the child names itself and its remedy.
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        for line in stderr.lines() {
-            if line.contains("app_keystore_") {
-                anyhow::bail!("{line}");
-            }
+        if let Some(error) = module_admin::custody_child_error(&output.stderr) {
+            return Err(error.into());
         }
         anyhow::bail!("The lifecycle child stopped");
     }
@@ -187,6 +184,7 @@ async fn snapshots(
     let actor = access.actor_user_id().to_string();
     match tokio::task::spawn_blocking(move || child(&instance, &actor, None)).await {
         Ok(Ok(value)) => Json(value).into_response(),
+        Ok(Err(error)) => module_admin::custody_response(&error).unwrap_or_else(unavailable),
         _ => unavailable(),
     }
 }
@@ -208,8 +206,13 @@ pub(crate) fn launch(admin: Arc<Admin>, access: AccessContext, id: String) {
             let task_id = id.clone();
             // A killed child leaves its stage readable and recoverable. Do not replace it
             // with a guessed failure before the migration service has recovered its journal.
-            let _ =
-                tokio::task::spawn_blocking(move || child(&instance, &actor, Some(&task_id))).await;
+            if let Ok(Err(error)) =
+                tokio::task::spawn_blocking(move || child(&instance, &actor, Some(&task_id))).await
+            {
+                if let Some(error) = error.downcast_ref::<keystore::custody::CustodyError>() {
+                    eprintln!("moss-server: {error}");
+                }
+            }
         } else if let Ok(file) = module_operation::operation_lock(&admin.instance, &id) {
             if file.try_lock().is_ok() {
                 if let Ok(mut record) = Record::read(&admin.instance, &id) {

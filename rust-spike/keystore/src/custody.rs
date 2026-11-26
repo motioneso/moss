@@ -264,6 +264,7 @@ fn sync_folder(folder: &Path) {
 /// Records the owner's headless key-file choice beside the bundle. The file itself
 /// lives outside the instance root, where setup chose it.
 pub fn record_key_file_choice(instance_root: &Path, key_file: &Path) -> Result<(), CustodyError> {
+    let key_file = headless_key_file_path(instance_root, key_file)?;
     let body = json!({ "kind": "moss-key-file-choice", "path": key_file.display().to_string() });
     write_private(
         &instance_root.join("key-file-choice.json"),
@@ -424,13 +425,7 @@ pub fn set_up_headless(
     session: &mut dyn OsKeyStore,
 ) -> Result<HeadlessPrepared, CustodyError> {
     // A key file inside the instance root would travel with the bundle it opens.
-    let root = absolute_lexical(instance_root);
-    let chosen = absolute_lexical(key_file);
-    if chosen == root || chosen.starts_with(&root) {
-        return Err(CustodyError::Damaged(
-            "choose a key file outside the server folder".into(),
-        ));
-    }
+    let chosen = headless_key_file_path(instance_root, key_file)?;
     // The route comes from the caller's real session store. A working store,
     // a locked one and a broken one all stop this path.
     match setup_route(false, session.probe()) {
@@ -442,9 +437,9 @@ pub fn set_up_headless(
         }
         SetupRoute::Stop(error) => return Err(error),
     }
-    let mut store = KeyFileStore::new(key_file.to_path_buf());
+    let mut store = KeyFileStore::new(chosen.clone());
     let prepared = prepare(instance_root, credentials, &mut store, "headless", false)?;
-    record_key_file_choice(instance_root, key_file)?;
+    record_key_file_choice(instance_root, &chosen)?;
     Ok(HeadlessPrepared { prepared, store })
 }
 
@@ -464,6 +459,42 @@ impl HeadlessPrepared {
     pub fn commit(mut self) -> Result<Migration, CustodyError> {
         self.prepared.commit_with(&mut self.store, "headless")
     }
+}
+
+/// Resolve the chosen path before creating a key, including existing parent
+/// symlinks. Both setup and migration use this guard before writing the master.
+pub fn headless_key_file_path(
+    instance_root: &Path,
+    key_file: &Path,
+) -> Result<PathBuf, CustodyError> {
+    let root = fs::canonicalize(instance_root).map_err(|e| CustodyError::Io(e.to_string()))?;
+    let mut ancestor = absolute_lexical(key_file);
+    let mut missing = Vec::new();
+    let chosen = loop {
+        match fs::canonicalize(&ancestor) {
+            Ok(mut resolved) => {
+                for name in missing.iter().rev() {
+                    resolved.push(name);
+                }
+                break resolved;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let name = ancestor
+                    .file_name()
+                    .ok_or_else(|| CustodyError::Io(error.to_string()))?
+                    .to_os_string();
+                missing.push(name);
+                ancestor.pop();
+            }
+            Err(error) => return Err(CustodyError::Io(error.to_string())),
+        }
+    };
+    if chosen.starts_with(&root) {
+        return Err(CustodyError::Damaged(
+            "choose a key file outside the server folder".into(),
+        ));
+    }
+    Ok(chosen)
 }
 
 fn absolute_lexical(path: &Path) -> PathBuf {

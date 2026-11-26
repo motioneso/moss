@@ -184,6 +184,7 @@ mod local {
                 Json(serde_json::json!({"installed":true})),
             )
                 .into_response(),
+            Ok(Err(error)) => module_admin::custody_response(&error).unwrap_or_else(unavailable),
             _ => unavailable(),
         }
     }

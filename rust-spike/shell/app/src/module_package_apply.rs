@@ -41,18 +41,18 @@ pub fn apply(instance: &Path, access: &AccessContext, input: Input) -> Result<()
         .write_all(&payload);
     if written.is_err() {
         let _ = child.kill();
-        let _ = child.wait();
+        let output = child.wait_with_output()?;
+        if let Some(error) = module_admin::custody_child_error(&output.stderr) {
+            return Err(error.into());
+        }
         anyhow::bail!("Package transfer failed");
     }
     let output = child.wait_with_output()?;
     if !output.status.success() {
         // A key store failure in the child names itself and its remedy.
         // Surface that line instead of the generic failure.
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        for line in stderr.lines() {
-            if line.contains("app_keystore_") {
-                anyhow::bail!("{line}");
-            }
+        if let Some(error) = module_admin::custody_child_error(&output.stderr) {
+            return Err(error.into());
         }
         anyhow::bail!("Package activation failed");
     }
