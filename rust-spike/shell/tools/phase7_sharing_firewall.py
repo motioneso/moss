@@ -385,7 +385,20 @@ def main():
         expect(probe.send('on') == 'Ok(())', 'prompt approved: sharing turns on')
         expect(world.rule_present(), 'prompt approved: the operating system lists the rule')
         expect(world.record_present(), 'prompt approved: the instance records the rule')
-        expect(probe.send('restart-check') == 'true', 'sharing on: a restart finds the live marker and may share')
+        if SYSTEM == 'Linux' and os.geteuid() != 0:
+            expect(probe.send('restart') == 'paused', 'unprivileged ufw restart pauses without an authorization prompt')
+            before = world.moss_record()
+            expect(before['paused'] and world.rule_present(), 'paused restart keeps the live rule and its token')
+            expect(world.second_client() != 'ANSWERED', 'paused restart binds loopback only')
+            probe.send('answer decline')
+            expect('Declined' in probe.send('on'), 'declined Resume stays paused')
+            expect(world.moss_record() == before, 'declined Resume preserves the whole record')
+            expect(world.second_client() != 'ANSWERED', 'declined Resume does not open the listener')
+            probe.send('answer approve-add-only' if args.negative_swallow_remove else 'answer approve')
+            expect(probe.send('on') == 'Ok(())', 'Resume verifies the real live marker through the authorized helper')
+            expect(not world.moss_record()['paused'], 'confirmed Resume clears paused state')
+        else:
+            expect(probe.send('restart-check') == 'true', 'sharing on: a silent restart finds the live marker and may share')
         expect(world.second_client() == 'ANSWERED', 'sharing on: the second client is answered')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'sharing on: this computer is answered')
 

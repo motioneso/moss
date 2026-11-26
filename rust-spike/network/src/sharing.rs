@@ -5,7 +5,7 @@
 //! only, and then the firewall rule is removed.
 
 use crate::{
-    firewall::{Firewall, Refusal},
+    firewall::{Firewall, Refusal, State},
     policy::Policy,
     tls::ListenSwitch,
 };
@@ -35,6 +35,23 @@ impl Control {
         save: impl Fn(bool) -> Result<(), ()>,
     ) -> Result<(), Failure> {
         if on {
+            if self.firewall.state() == State::Paused {
+                self.firewall
+                    .resume(self.port)
+                    .await
+                    .map_err(Failure::Firewall)?;
+                if save(true).is_err() {
+                    let _ = self.firewall.pause();
+                    return Err(Failure::Save);
+                }
+                if self.switch.set(true).await.is_err() {
+                    let _ = self.firewall.pause();
+                    let _ = save(previous);
+                    return Err(Failure::Switch);
+                }
+                policy.set_sharing(true);
+                return Ok(());
+            }
             if !previous {
                 // A record left by a removal that was refused is cleared first, so a rule that
                 // replaced Moss's is met by the add's own ownership check.

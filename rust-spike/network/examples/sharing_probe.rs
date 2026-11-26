@@ -114,6 +114,14 @@ async fn serve(args: Vec<String>) {
             }
             // What a restart checks before it may listen beyond loopback.
             "restart-check" => format!("{:?}", control.firewall.rule_intact(control.port)),
+            "restart" => {
+                control.switch.set(false).await.unwrap();
+                policy.set_sharing(false);
+                sharing = control.firewall.startup(true, control.port).unwrap();
+                control.switch.set(sharing).await.unwrap();
+                policy.set_sharing(sharing);
+                control.firewall.state().word().to_owned()
+            }
             "listener-on" => format!("{:?}", control.switch.set(true).await),
             "listener-off" => format!("{:?}", control.switch.set(false).await),
             other if other.starts_with("answer ") => {

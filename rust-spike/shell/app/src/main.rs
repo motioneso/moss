@@ -345,11 +345,10 @@ fn main() {
         // Saved sharing reopens the network only when the live rule still carries Moss's
         // marker for the current port. That check runs against the real rule, with no
         // stand-in shortcut, and the record is kept when it fails.
-        if config.sharing && !firewall.rule_intact(config.listen.port()) {
-            eprintln!("moss-server: the firewall check failed, so sharing is turned off");
-            config.sharing = false;
-            let _ = config.write(&args.network);
-        }
+        // No prompt at startup. Keep the saved intent and rule token; the local app offers
+        // Resume when verifying the live marker needs authorization or cannot succeed.
+        config.sharing = firewall.startup(config.sharing, config.listen.port())
+            .map_err(|_| "Cannot record the sharing startup state")?;
         let platform = config.platform().await?;
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
         // Sharing off binds loopback only. The switch rebinds when the owner changes it.

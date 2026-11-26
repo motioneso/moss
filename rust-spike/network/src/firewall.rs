@@ -42,6 +42,7 @@ const PROMPT_LIMIT: Duration = Duration::from_secs(600);
 pub enum Action {
     Add,
     Remove,
+    Check,
 }
 
 impl Action {
@@ -49,6 +50,7 @@ impl Action {
         match self {
             Action::Add => "add",
             Action::Remove => "remove",
+            Action::Check => "check",
         }
     }
 }
@@ -216,10 +218,14 @@ fn cmd(parts: &[&str]) -> Vec<String> {
 /// The operating system commands that change the rule. Each inner list is one command. Delete
 /// commands may fail when no rule exists, so the read-back decides.
 pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String>> {
+    if action == Action::Check {
+        return Vec::new();
+    }
     let port = rule.port.to_string();
     let program = rule.program.display().to_string();
     match os {
         Os::Windows => match action {
+            Action::Check => Vec::new(),
             // A rule already holding this name is refused before this runs, so add never
             // replaces one it did not create.
             Action::Add => vec![cmd(&[
@@ -251,6 +257,7 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
             ])],
         },
         Os::Mac => match action {
+            Action::Check => Vec::new(),
             Action::Add => vec![
                 cmd(&[SOCKET_FILTER, "--add", &program]),
                 cmd(&[SOCKET_FILTER, "--unblockapp", &program]),
@@ -258,6 +265,7 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
             Action::Remove => vec![cmd(&[SOCKET_FILTER, "--remove", &program])],
         },
         Os::Linux => match (linux, action) {
+            (_, Action::Check) => Vec::new(),
             (Linux::Firewalld, Action::Add) => {
                 vec![firewalld(rule, true, "add"), firewalld(rule, false, "add")]
             }
@@ -463,6 +471,13 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
     }
     let present = exists(os, linux, rule);
     match action {
+        Action::Check => {
+            if present == Some(true) && owned(os, linux, rule)? {
+                Ok(false)
+            } else {
+                Err("The firewall could not be confirmed")
+            }
+        }
         Action::Add if present != Some(true) => {
             rolled_back(os, linux, rule, "The firewall did not keep the change")
         }
@@ -643,6 +658,7 @@ fn rolled_back(
 pub enum State {
     NotAsked,
     Allowed,
+    Paused,
 }
 
 impl State {
@@ -650,6 +666,7 @@ impl State {
         match self {
             State::NotAsked => "not_asked",
             State::Allowed => "allowed",
+            State::Paused => "paused",
         }
     }
 }
@@ -689,6 +706,8 @@ impl Refusal {
 #[serde(deny_unknown_fields)]
 struct Record {
     rule: Rule,
+    #[serde(default)]
+    paused: bool,
     confirmed: bool,
     /// The rule was open before Moss added it, so removal leaves it alone.
     #[serde(default)]
@@ -762,7 +781,12 @@ impl Firewall {
             return false;
         };
         let rule = &record.rule;
-        if !record.confirmed || record.preexisting || rule.token.is_none() || rule.port != port {
+        if !record.confirmed
+            || record.preexisting
+            || rule.token.is_none()
+            || rule.port != port
+            || rule.program != self.program
+        {
             return false;
         }
         let (os, linux) = match this_os() {
@@ -778,8 +802,51 @@ impl Firewall {
             && (linux != Linux::Firewalld || exists(os, linux, rule) == Some(true))
     }
 
+    /// Startup never authorizes. Preserve intent and the token while accepting loopback only.
+    pub fn pause(&self) -> Result<(), Refusal> {
+        let Some(mut record) = self.recorded()? else {
+            return Ok(());
+        };
+        record.paused = true;
+        self.write_record(&record)
+    }
+
+    pub fn startup(&self, intended: bool, port: u16) -> Result<bool, Refusal> {
+        if !intended {
+            return Ok(false);
+        }
+        let active = self.rule_intact(port);
+        if let Some(mut record) = self.recorded()? {
+            record.paused = !active;
+            self.write_record(&record)?;
+        }
+        Ok(active)
+    }
+
+    pub async fn resume(&self, port: u16) -> Result<(), Refusal> {
+        let Some(mut record) = self.recorded()? else {
+            return Err(Refusal::Failed);
+        };
+        if record.rule.token.is_none() {
+            return Err(Refusal::Legacy);
+        }
+        if !record.paused
+            || !record.confirmed
+            || record.preexisting
+            || record.rule.port != port
+            || record.rule.program != self.program
+        {
+            return Err(Refusal::Failed);
+        }
+        // This verb reads only. It never recreates a missing rule or changes a foreign rule.
+        self.run(Action::Check, record.rule.clone()).await?;
+        record.paused = false;
+        self.write_record(&record)
+    }
+
     pub fn state(&self) -> State {
         match self.recorded() {
+            Ok(Some(record)) if record.paused => State::Paused,
             Ok(Some(record)) if record.confirmed && record.rule.token.is_some() => State::Allowed,
             _ => State::NotAsked,
         }
@@ -852,40 +919,22 @@ impl Firewall {
         };
         self.write_record(&Record {
             rule: rule.clone(),
+            paused: false,
             confirmed: false,
             preexisting: false,
             added,
         })?;
         match self.run(Action::Add, rule.clone()).await {
             Ok(preexisting) => {
-                if !preexisting {
-                    // Confirm the marker on the live rule before calling this allowed.
-                    let linux = match rule.manager.as_deref() {
-                        Some("ufw") => Linux::Ufw,
-                        Some("firewalld") => Linux::Firewalld,
-                        _ => Linux::Nothing,
-                    };
-                    let marked = if this_os() == Os::Mac {
-                        exists(Os::Mac, Linux::Nothing, &rule) == Some(true)
-                    } else {
-                        owned(this_os(), linux, &rule) == Ok(true)
-                    };
-                    if !marked {
-                        let _ = self.write_record(&Record {
-                            rule: rule.clone(),
-                            confirmed: false,
-                            preexisting: false,
-                            added: true,
-                        });
-                        return Err(Refusal::Stuck);
-                    }
-                }
+                // The elevated helper confirms the live marker before returning its receipt.
+                // The unprivileged process cannot re-read ufw's root-only configuration.
                 let mut stored = rule.clone();
                 if this_os() == Os::Mac {
                     stored.entry_added = Some(!preexisting);
                 }
                 self.write_record(&Record {
                     rule: stored,
+                    paused: false,
                     confirmed: true,
                     preexisting,
                     added: !preexisting,
@@ -895,6 +944,7 @@ impl Firewall {
             Err(Refusal::Stuck) => {
                 let _ = self.write_record(&Record {
                     rule,
+                    paused: false,
                     confirmed: false,
                     preexisting: false,
                     added: true,
@@ -902,7 +952,11 @@ impl Firewall {
                 Err(Refusal::Stuck)
             }
             Err(other) => {
-                let _ = std::fs::remove_file(self.record_path());
+                // Only a refused prompt proves that the helper did not run. Lookup errors
+                // and failed commands keep intent for a later verified cleanup.
+                if other == Refusal::Declined {
+                    let _ = std::fs::remove_file(self.record_path());
+                }
                 Err(other)
             }
         }
@@ -914,7 +968,7 @@ impl Firewall {
             return Ok(());
         };
         // A record from before ownership tokens never deletes and is never quietly cleared.
-        if record.rule.token.is_none() && (record.confirmed || record.added) {
+        if record.rule.token.is_none() {
             return Err(Refusal::Legacy);
         }
         // A rule is only removed when Moss added it. A record written before the owner's answer
@@ -932,19 +986,20 @@ impl Firewall {
 
     async fn run(&self, action: Action, rule: Rule) -> Result<bool, Refusal> {
         let command = elevated(self.stand_in.as_deref(), action, &rule)?;
-        tokio::task::spawn_blocking(move || wait(command))
+        let expected = (action != Action::Remove).then(|| confirmation(&rule));
+        tokio::task::spawn_blocking(move || wait(command, expected))
             .await
             .map_err(|_| Refusal::Failed)?
     }
 }
 
-/// An unguessable-enough marker for one rule, from the clock and the process id.
+fn confirmation(rule: &Rule) -> String {
+    format!("moss-firewall-confirmed:{}:{}", rule.name, rule.port)
+}
+
+/// A fresh marker for one rule.
 fn new_token() -> String {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
-    let mixed = (nanos >> 64) as u64 ^ nanos as u64 ^ (u64::from(std::process::id()) << 32);
-    format!("{mixed:016x}")
+    uuid::Uuid::new_v4().simple().to_string()
 }
 
 fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
@@ -1033,10 +1088,10 @@ fn elevated(stand_in: Option<&Path>, action: Action, rule: &Rule) -> Result<Comm
     Ok(command)
 }
 
-fn wait(mut command: Command) -> Result<bool, Refusal> {
+fn wait(mut command: Command, expected: Option<String>) -> Result<bool, Refusal> {
     let mut child = command
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|_| Refusal::Declined)?;
@@ -1056,6 +1111,16 @@ fn wait(mut command: Command) -> Result<bool, Refusal> {
         }
     };
     if status.success() {
+        if let Some(expected) = expected {
+            use std::io::Read;
+            let mut text = String::new();
+            if let Some(mut stdout) = child.stdout.take() {
+                let _ = stdout.read_to_string(&mut text);
+            }
+            if !text.lines().any(|line| line == expected) {
+                return Err(Refusal::Stuck);
+            }
+        }
         return Ok(false);
     }
     let mut note = String::new();
@@ -1179,6 +1244,7 @@ mod tests {
         let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
         let record = Record {
             rule: rule(),
+            paused: false,
             confirmed: false,
             preexisting: false,
             added: false,
@@ -1194,6 +1260,7 @@ mod tests {
         firewall
             .write_record(&Record {
                 rule: rule(),
+                paused: false,
                 confirmed: false,
                 preexisting: false,
                 added: false,
@@ -1391,6 +1458,7 @@ mod tests {
         firewall
             .write_record(&Record {
                 rule: legacy,
+                paused: false,
                 confirmed: true,
                 preexisting: false,
                 added: true,
@@ -1411,6 +1479,7 @@ mod tests {
         firewall
             .write_record(&Record {
                 rule: current,
+                paused: false,
                 confirmed: true,
                 preexisting: false,
                 added: true,
@@ -1457,6 +1526,49 @@ mod tests {
         let handed = std::fs::read_to_string(&seen).unwrap();
         assert!(handed.contains("add") && handed.contains("moss-"));
         assert_eq!(firewall.state(), State::NotAsked);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn startup_never_prompts_and_resume_only_checks_the_preserved_rule() {
+        let folder = scratch();
+        let seen = folder.path().join("seen");
+        let script = stand_in(
+            &folder,
+            &format!("echo \"$*\" >> '{}'\nexit 126", seen.display()),
+        );
+        let firewall = Firewall::with_stand_in(
+            folder.path(),
+            std::env::current_exe().unwrap(),
+            Some(script),
+        );
+        let mut rule = rule();
+        rule.manager = Some("ufw".into());
+        firewall
+            .write_record(&Record {
+                rule: rule.clone(),
+                paused: false,
+                confirmed: true,
+                preexisting: false,
+                added: true,
+            })
+            .unwrap();
+        assert_eq!(firewall.startup(true, 6000), Ok(false));
+        assert_eq!(firewall.state(), State::Paused);
+        assert!(
+            !seen.exists(),
+            "startup must never invoke authorization, including a stand-in"
+        );
+        let before = std::fs::read(firewall.record_path()).unwrap();
+        assert_eq!(firewall.resume(6000).await, Err(Refusal::Failed));
+        assert!(!seen.exists(), "wrong current port cannot prompt or resume");
+        assert_eq!(firewall.resume(5198).await, Err(Refusal::Declined));
+        assert_eq!(std::fs::read(firewall.record_path()).unwrap(), before);
+        let args = std::fs::read_to_string(seen).unwrap();
+        assert!(args.contains("firewall-rule check "));
+        assert!(!args.contains("firewall-rule add ") && !args.contains("firewall-rule remove "));
+        assert!(args.contains(&rule.name));
+        assert_eq!(firewall.recorded().unwrap().unwrap().rule.token, rule.token);
     }
 
     #[cfg(unix)]
@@ -1520,6 +1632,7 @@ pub fn command(args: &[String]) -> i32 {
     let action = match args.get(1).map(String::as_str) {
         Some("add") => Action::Add,
         Some("remove") => Action::Remove,
+        Some("check") => Action::Check,
         _ => return 2,
     };
     let (mut name, mut port, mut program, mut zone) = (None, None, None, None);
@@ -1546,21 +1659,40 @@ pub fn command(args: &[String]) -> i32 {
     if std::env::current_exe().ok().as_deref() != Some(program.as_path()) {
         return 2;
     }
-    match apply(
-        action,
-        &Rule {
-            name,
-            port,
-            program,
-            zone,
-            token,
-            manager,
-            service,
-            entry_added,
-        },
-    ) {
+    let rule = Rule {
+        name,
+        port,
+        program,
+        zone,
+        token,
+        manager,
+        service,
+        entry_added,
+    };
+    let result = if action == Action::Check {
+        rule.check().and_then(|_| {
+            let linux = match rule.manager.as_deref() {
+                Some("ufw") => Linux::Ufw,
+                Some("firewalld") => Linux::Firewalld,
+                _ => Linux::Nothing,
+            };
+            if owned(this_os(), linux, &rule)? && exists(this_os(), linux, &rule) == Some(true) {
+                Ok(false)
+            } else {
+                Err("The firewall could not be confirmed")
+            }
+        })
+    } else {
+        apply(action, &rule)
+    };
+    match result {
         Ok(true) => EXIT_ALREADY,
-        Ok(false) => 0,
+        Ok(false) => {
+            if action != Action::Remove {
+                println!("{}", confirmation(&rule));
+            }
+            0
+        }
         Err(reason) => {
             eprintln!("moss-server: {reason}");
             match reason {

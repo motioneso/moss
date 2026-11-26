@@ -211,6 +211,13 @@ approval in this plan before parts 6, 10, 11 and 16c start.
 
 ## Rulings ledger
 
+- 2026-11-26, coordinator ruling for JS-435: never prompt for authorization at startup. If a
+  live firewall-marker check needs root or cannot succeed silently, listen on loopback only and
+  preserve the rule/token as paused. Settings > Sharing shows Paused and one Resume button.
+  Resume authorizes a read-only check of the live marker on the current port; only a confirmed
+  check resumes network listening. Refusal or failure stays paused. Keep silent checks where
+  they work without root (firewalld, Windows and macOS).
+
 - 2026-11-26, coordinator ruling for JS-429: CI may replay the exact registered Windows
   task action read back from Task Scheduler. Assert an own-user logon trigger, least privilege,
   real server health and native task removal. Linux and macOS also read back from their native

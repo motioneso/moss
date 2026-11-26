@@ -99,13 +99,26 @@ if (sharing) {
   const box = document.getElementById("sharing-enabled");
   const confirmBox = document.getElementById("confirm");
   const retry = document.getElementById("retry");
+  const pausedPanel = document.getElementById("paused-sharing");
+  const resume = document.getElementById("resume-sharing");
+  let paused = false;
   const paint = (result) => {
-    box.checked = result.sharing;
+    paused = result.firewall === "paused";
+    pausedPanel.hidden = !paused;
+    resume.disabled = false;
+    box.checked = result.sharing || paused;
     box.disabled = false;
-    document.getElementById("firewall").textContent =
-      result.firewall === "allowed" ? "Allowed" : "Not asked yet";
+    document.getElementById("firewall").textContent = paused
+      ? "Paused"
+      : result.firewall === "allowed"
+        ? "Allowed"
+        : "Not asked yet";
     document.getElementById("address").textContent = result.origins[0] || "No network found.";
-    document.getElementById("address-state").textContent = result.sharing ? "On" : "Off";
+    document.getElementById("address-state").textContent = paused
+      ? "Paused"
+      : result.sharing
+        ? "On"
+        : "Off";
     document.getElementById("fingerprint").textContent = result.fingerprint;
     const list = document.getElementById("origins");
     list.replaceChildren(
@@ -121,15 +134,16 @@ if (sharing) {
     target = on;
     box.disabled = true;
     retry.hidden = true;
+    resume.disabled = true;
     say(on ? "Waiting for your firewall…" : "Turning sharing off…");
     try {
       await call("/api/network", "PUT", { sharing: on });
       // The change reply carries no address list, so the screen reads the full state again.
       paint(await call("/api/network"));
-      say(on ? "Sharing is on. Other devices must sign in." : "Sharing is off.");
+      say(on ? "Sharing is on." : "Sharing is off.");
     } catch (error) {
       say(error.message);
-      retry.hidden = false;
+      retry.hidden = paused;
       // A failed read leaves the screen as it was, since it cannot say what is true now.
       await call("/api/network")
         .then(paint)
@@ -139,13 +153,10 @@ if (sharing) {
   call("/api/network")
     .then((result) => {
       paint(result);
-      say(
-        result.sharing
-          ? "Sharing is on. Other devices must sign in."
-          : "Sharing is off. Moss is available on this computer only."
-      );
+      say(paused ? "Sharing is paused." : result.sharing ? "Sharing is on." : "Sharing is off.");
     })
     .catch((error) => say(error.message));
+  resume.addEventListener("click", () => put(true));
   box.addEventListener("change", () => {
     if (box.checked) {
       box.checked = false;
