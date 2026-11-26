@@ -75,6 +75,18 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+### JS-435: live firewall check at restart — 2026-11-26
+
+The sharing handover requires a live ownership-marker check before listening beyond loopback
+on restart. The per-instance user service cannot run `ufw show added` without root. The current
+Ubuntu CI failure also comes from that unprivileged read after the elevated add succeeded.
+
+Decision requested in task chat: allow one graphical polkit prompt for a read-only live check
+when restarting with sharing enabled, keeping loopback if declined? This preserves live proof
+but adds restart authorization beyond the enabling prompt. Alternatives are requiring the owner
+to re-enable sharing after restart, or separately designing a persistent privileged reader.
+No cached-record or metadata-only proof has been substituted for the required live check.
+
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
