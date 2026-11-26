@@ -56,6 +56,7 @@ class LibraryTests(unittest.TestCase):
             (bundle / "bin/postgres.exe").write_bytes(pe_fixture([]))
             validate_windows(bundle, system)
 
+    @unittest.skipIf(os.name == "nt", "Mach-O dependency paths use POSIX syntax")
     def test_mac_copies_loader_relative_sibling_from_original_directory(self):
         spec = importlib.util.spec_from_file_location("builder", Path(__file__).with_name("build-pg-bundle.py"))
         builder = importlib.util.module_from_spec(spec)
