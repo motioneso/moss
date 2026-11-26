@@ -21,7 +21,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -35,11 +35,11 @@ jobs:
           key: phase7-pg-sources-${{ runner.os }}-${{ hashFiles('rust-spike/bundled-db/tools/sources.json') }}
       - name: Linux build dependencies already declared by the database proof
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y bison flex libicu-dev
+        run: sudo apt-get update && sudo apt-get install -y bison flex libicu-dev zlib1g-dev libzstd-dev
       - name: macOS build dependencies already declared by the database proof
         if: runner.os == 'macOS'
         run: |
-          brew list bison flex icu4c >/dev/null || brew install bison flex icu4c
+          brew list bison flex icu4c zstd >/dev/null || brew install bison flex icu4c zstd
           echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
           echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig" >> "$GITHUB_ENV"
@@ -51,7 +51,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Hash-locked tool install failed' }
           & C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed bison flex
           if ($LASTEXITCODE -ne 0) { throw 'Declared parser build dependencies unavailable' }
-          'C:\msys64\usr\bin' >> $env:GITHUB_PATH
           $runnerPg = (Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory | Sort-Object Name | Select-Object -Last 1).FullName
           if (-not $runnerPg) { throw 'Runner Postgres needed for the negative control' }
           "MOSS_RUNNER_PG_BIN=$runnerPg\bin" >> $env:GITHUB_ENV
@@ -64,6 +63,7 @@ jobs:
         shell: pwsh
         run: |
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $env:PATH += ';C:\msys64\usr\bin'
           cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" && python rust-spike/bundled-db/tools/build-pg-bundle.py --scratch `"$env:RUNNER_TEMP\phase7-pg`" --out `"$env:RUNNER_TEMP\pg-built`""
           if ($LASTEXITCODE -ne 0) { throw 'Pinned database build failed' }
       - name: Relocate bundle and remove source build trees

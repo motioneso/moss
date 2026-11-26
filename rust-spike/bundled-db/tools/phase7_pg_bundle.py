@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import socket
 import subprocess
@@ -39,11 +40,32 @@ def validate(bundle):
     return tools
 
 
+def validate_libraries(bundle, tools, env):
+    if platform.system() != "Linux":
+        return
+    for file in [*tools.values(), *(bundle / "lib").rglob("*.so*")]:
+        result = subprocess.run(["ldd", str(file)], env=env, capture_output=True, text=True, check=True)
+        for line in result.stdout.splitlines():
+            if "=>" not in line:
+                continue
+            library, location = line.split("=>", 1)
+            library = library.strip()
+            location = location.rsplit(" (", 1)[0].strip()
+            if not location.startswith("/"):
+                raise ValueError(f"Missing runtime library for {file.name}: {library}")
+            if library.startswith(("libc.so", "libm.so", "libpthread.so", "libdl.so", "librt.so")):
+                continue
+            if not Path(location).resolve().is_relative_to(bundle):
+                raise ValueError(f"Runtime library outside bundle for {file.name}: {library}")
+
+
 def proof(bundle, scratch):
     tools = validate(bundle)
     # Discard inherited libpq settings, so a developer's PGHOST/PGSERVICE cannot
     # redirect even a maintenance command to another database.
-    env = {k: v for k, v in os.environ.items() if not k.upper().startswith("PG")}
+    env = {k: v for k, v in os.environ.items()
+           if not k.upper().startswith("PG") and k not in ("LD_LIBRARY_PATH", "LD_PRELOAD")}
+    validate_libraries(bundle, tools, env)
     env.update(PGHOST="127.0.0.1", PGUSER="bundle_proof", PGDATABASE="postgres",
                PGCONNECT_TIMEOUT="10")
     with socket.socket() as sock:
@@ -76,14 +98,16 @@ def proof(bundle, scratch):
             vector = run("psql", "-XAt", "-c", "SELECT extversion FROM pg_extension WHERE extname='vector'")
             if vector != SOURCES["pgvector"]["version"]:
                 raise AssertionError(f"Unexpected vector version: {vector}")
-            archive = root / "planted.dump"
-            run("pg_dump", "--format=custom", "--compress=0", "--file", archive, "postgres")
-            run("psql", "-X", "-v", "ON_ERROR_STOP=1", "-c", "CREATE DATABASE restored")
-            run("pg_restore", "--exit-on-error", "--dbname=restored", archive)
-            row = run("psql", "-XAt", "--dbname=restored", "-c", "SELECT id, embedding FROM planted")
-            if row != "428|[1,2,3]":
-                raise AssertionError(f"Restored row differs: {row}")
-            print(f"phase7_pg_bundle PASS: PostgreSQL {version}; vector {vector}; restored {row}")
+            for compression in ("gzip", "zstd"):
+                archive = root / f"planted-{compression}.dump"
+                database = f"restored_{compression}"
+                run("pg_dump", "--format=custom", f"--compress={compression}:3", "--file", archive, "postgres")
+                run("psql", "-X", "-v", "ON_ERROR_STOP=1", "-c", f"CREATE DATABASE {database}")
+                run("pg_restore", "--exit-on-error", f"--dbname={database}", archive)
+                row = run("psql", "-XAt", f"--dbname={database}", "-c", "SELECT id, embedding FROM planted")
+                if row != "428|[1,2,3]":
+                    raise AssertionError(f"Restored {compression} row differs: {row}")
+                print(f"phase7_pg_bundle PASS: PostgreSQL {version}; vector {vector}; {compression} restored {row}")
         except Exception:
             if log.exists():
                 print(log.read_text(errors="replace")[-8000:])

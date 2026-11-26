@@ -61,11 +61,11 @@ def source(name, cache, build):
 
 def unix_build(pg, vector, out, jobs):
     env = dict(os.environ, CFLAGS="-O2 -g0", CXXFLAGS="-O2 -g0")
-    if platform.system() == "Linux":
-        env["LDFLAGS"] = "-Wl,--disable-new-dtags"
     run(pg / "configure", f"--prefix={out}", "--without-readline", "--with-icu",
-        "--without-openssl", "--without-zlib", cwd=pg, env=env)
-    flags = ["rpathdir=$$ORIGIN/../lib"] if platform.system() == "Linux" else []
+        "--without-openssl", "--with-zlib", "--with-zstd", cwd=pg, env=env)
+    # DT_RPATH is inherited by ICU's indirect dependencies. DT_RUNPATH would
+    # silently borrow libicudata/libstdc++ from the build machine instead.
+    flags = ["rpath=-Wl,-rpath,'$$ORIGIN/../lib',--disable-new-dtags"] if platform.system() == "Linux" else []
     run("make", f"-j{jobs}", *flags, cwd=pg, env=env)
     run("make", "install", *flags, cwd=pg, env=env)
     run("make", f"-j{jobs}", f"PG_CONFIG={out / 'bin/pg_config'}", "OPTFLAGS=", cwd=vector)
@@ -82,10 +82,12 @@ def unix_build(pg, vector, out, jobs):
         while pending:
             result = subprocess.check_output(["ldd", str(pending.pop())], text=True)
             for line in result.splitlines():
-                parts = line.split()
-                if len(parts) < 3 or parts[1] != "=>" or not parts[2].startswith("/"):
+                if "=>" not in line:
                     continue
-                path = Path(parts[2])
+                location = line.split("=>", 1)[1].rsplit(" (", 1)[0].strip()
+                if not location.startswith("/"):
+                    raise ValueError(f"Unresolved runtime dependency: {line}")
+                path = Path(location)
                 if path.name.startswith(("libc.so", "libm.so", "libpthread.so", "libdl.so", "librt.so")):
                     continue
                 if path.name not in copied and not path.is_relative_to(out):
@@ -114,6 +116,7 @@ def relocate_mac(out):
             target = out / "lib" / Path(dep).name
             if not target.exists():
                 shutil.copy2(dep, target)
+                target.chmod(target.stat().st_mode | 0o200)
                 pending.append(target)
             relative = os.path.relpath(target, file.parent)
             run("install_name_tool", "-change", dep, f"@loader_path/{relative}", file)
@@ -126,21 +129,44 @@ def relocate_mac(out):
 
 
 def windows_build(pg, vector, out, build, cache, jobs):
+    deps = build / "dependencies"
+    for name, subdir, options in [
+        ("zlib_windows", "", []),
+        ("zstd_windows", "build/cmake", ["-DZSTD_BUILD_PROGRAMS=OFF", "-DZSTD_BUILD_TESTS=OFF",
+                                          "-DZSTD_BUILD_STATIC=OFF", "-DZSTD_BUILD_SHARED=ON"]),
+    ]:
+        src = source(name, cache, build)
+        directory = build / (name + "-build")
+        run("cmake", "-S", src / subdir, "-B", directory, "-G", "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release", f"-DCMAKE_INSTALL_PREFIX={deps}", *options)
+        run("cmake", "--build", directory, "--parallel", str(jobs))
+        run("cmake", "--install", directory)
     icu = source("icu_windows", cache, build)
     run("msbuild", icu / "source/allinone/allinone.sln", "/m:1", "/p:Configuration=Release",
         "/p:Platform=x64", "/p:SkipUWP=true")
     # CMake FindICU recognises ICU_ROOT's include/, lib64/ and bin64/ layout.
-    env = dict(os.environ, ICU_ROOT=str(icu), PGROOT=str(out))
-    env["PATH"] = str(icu / "bin64") + os.pathsep + env["PATH"]
-    run("meson", "setup", build / "pg-build", pg, f"--prefix={out}",
+    # PG's layout changes with the prefix name. Always install to a prefix
+    # containing 'postgres', matching pgvector's fixed MSVC include/lib/share layout.
+    prefix = build / "postgres-install"
+    env = dict(os.environ, ICU_ROOT=str(icu), ZLIB_ROOT=str(deps), PGROOT=str(prefix),
+               CC="cl", CXX="cl", PKG_CONFIG_PATH="", PKG_CONFIG_LIBDIR=str(build / "no-pkgconfig"))
+    env["PATH"] = os.pathsep.join((str(icu / "bin64"), str(deps / "bin"), env["PATH"]))
+    run("meson", "setup", build / "pg-build", pg, f"--prefix={prefix}",
         "--buildtype=release", "--auto-features=disabled", "-Dicu=enabled", "-Dssl=none",
+        "-Dzlib=enabled", "-Dzstd=enabled", f"--cmake-prefix-path={deps}", "--wrap-mode=nodownload",
         cwd=build, env=env)
     run("meson", "compile", "-C", build / "pg-build", f"-j{jobs}", env=env)
     run("meson", "install", "-C", build / "pg-build", env=env)
-    for dll in (icu / "bin64").glob("*.dll"):
-        shutil.copy2(dll, out / "bin" / dll.name)
+    for name in ("icudt76.dll", "icuuc76.dll", "icuin76.dll"):
+        shutil.copy2(icu / "bin64" / name, prefix / "bin" / name)
+    for dll in (deps / "bin").glob("*.dll"):
+        shutil.copy2(dll, prefix / "bin" / dll.name)
     run("nmake", "/NOLOGO", "/F", "Makefile.win", cwd=vector, env=env)
     run("nmake", "/NOLOGO", "/F", "Makefile.win", "install", cwd=vector, env=env)
+    for name in ("lib/vector.dll", "share/extension/vector.control", "share/extension/vector--0.8.7.sql"):
+        if not (prefix / name).is_file():
+            raise ValueError(f"Incomplete Windows vector installation: {name}")
+    shutil.move(prefix, out)
 
 
 def main():

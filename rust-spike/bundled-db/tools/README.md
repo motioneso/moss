@@ -1,7 +1,7 @@
 # Phase 7 pinned database bundle
 
 `sources.json` pins PostgreSQL 17.11 and pgvector 0.8.7 source archives by SHA-256.
-Windows also builds ICU from pinned source; Unix uses the ICU development files
+Windows also builds ICU, zlib and zstd from pinned source; Unix uses the ICU development files
 already required by the Phase 1 proof and copies the runtime library closure.
 The Windows supervisor workflow uses this builder instead of runner Postgres.
 
@@ -13,8 +13,8 @@ macOS applies only the ad-hoc signatures needed to run modified arm64 Mach-O fil
 
 ## Build and prove
 
-Linux needs the C toolchain, make, bison, flex, Perl and ICU development files.
-macOS needs Xcode tools and the existing Homebrew bison, flex and ICU dependencies.
+Linux needs the C toolchain, make, bison, flex, Perl, ICU, zlib and zstd development files.
+macOS needs Xcode tools and the existing Homebrew bison, flex, ICU and zstd dependencies.
 Windows needs a VS developer shell, CMake, Perl and MSYS bison/flex; ICU is compiled
 by MSBuild. CI installs Meson and Ninja with `pip --require-hashes` from
 `requirements-ci.txt`. These two tools are approved for CI only, not the local box.
@@ -31,8 +31,9 @@ python3 rust-spike/bundled-db/tools/bundle-negative-controls.py --postgres "$MOS
 The named runner is `phase7_pg_bundle`. It uses only absolute bundled tool paths,
 checks their recorded digests and the source lock, starts an isolated throwaway
 cluster on loopback, checks ICU initialization and both extension/server versions,
-creates a vector row, dumps it with `pg_dump`, restores into a second database
-with `pg_restore`, and checks the row. Inherited libpq settings are discarded.
+creates a vector row, dumps it with `pg_dump` using both gzip and zstd, restores into
+fresh databases with `pg_restore`, and checks the row. Linux also checks that the
+runtime library closure resolves inside the bundle apart from glibc. Inherited libpq settings are discarded.
 It stops its own server and removes its own cluster even after a failed assertion.
 It never connects to the developer's database.
 
