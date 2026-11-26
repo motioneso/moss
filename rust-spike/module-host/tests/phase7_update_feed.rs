@@ -149,6 +149,16 @@ fn phase7_update_feed_server_continuity() {
         .next()
         .unwrap()
         .to_owned();
+    let baseline = client
+        .get(format!("{origin}/api/me"))
+        .header("cookie", &cookie)
+        .send()
+        .unwrap();
+    assert_eq!(baseline.status(), 200, "baseline account read");
+    assert_eq!(
+        baseline.json::<Value>().unwrap()["user"]["name"],
+        "Bootstrap owner"
+    );
     let feed = root.join("app-feed");
     fs::create_dir(&feed).unwrap();
     let keys = common::Keys::new();
@@ -212,8 +222,20 @@ fn phase7_update_feed_server_continuity() {
                     json!((chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339())
             }
             "wrong-hash" => index["artifacts"][0]["digest"] = json!("0".repeat(64)),
-            "wrong-os" => index["artifacts"][0]["os"] = json!("windows"),
-            "wrong-arch" => index["artifacts"][0]["arch"] = json!("aarch64"),
+            "wrong-os" => {
+                index["artifacts"][0]["os"] = json!(if std::env::consts::OS == "linux" {
+                    "windows"
+                } else {
+                    "linux"
+                })
+            }
+            "wrong-arch" => {
+                index["artifacts"][0]["arch"] = json!(if std::env::consts::ARCH == "x86_64" {
+                    "aarch64"
+                } else {
+                    "x86_64"
+                })
+            }
             "wrong-schema" => index["artifacts"][0]["schemaMin"] = json!(43),
             "unsigned" => {}
             _ => unreachable!(),
@@ -230,7 +252,7 @@ fn phase7_update_feed_server_continuity() {
             "{case}: stopped the old server"
         );
         let response = client
-            .get(format!("{origin}/api/auth/get-session"))
+            .get(format!("{origin}/api/me"))
             .header("cookie", &cookie)
             .send()
             .unwrap();
