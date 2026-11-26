@@ -1525,6 +1525,9 @@ mod tests {
         ));
 
         let mut mac = owned.clone();
+        // This fixture models macOS even when the parser tests run on Windows.
+        mac.program = PathBuf::from("/Applications/Moss.app/Contents/MacOS/moss-server");
+        let program = mac.program.display().to_string();
         mac.entry_added = Some(true);
         assert!(mac_marker(
             &format!("ALF: total number of apps = 1\n1 : {program}\n"),

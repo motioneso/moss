@@ -13,8 +13,19 @@
 }
 .sharing-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   justify-items: start;
+  align-items: center;
+}
+.sharing-row > strong,
+.sharing-row > p {
+  grid-column: 1;
+}
+.sharing-row > .jds-switch,
+.sharing-row > .jds-badge {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 .sharing-settings p,
 .sharing-settings ul {
