@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Native service lifecycle gate. A real server and private bundled database, no app launch."""
 import argparse
+import csv
 import importlib.util
 import json
 import os
@@ -15,11 +16,12 @@ import urllib.request
 import html
 
 
-def command(args, **kwargs):
+def command(args, check=True, **kwargs):
     print('COMMAND:', subprocess.list2cmdline([str(a) for a in args]), flush=True)
     result = subprocess.run([str(a) for a in args], **kwargs)
     print('EXIT:', result.returncode, flush=True)
-    result.check_returncode()
+    if check:
+        result.check_returncode()
     return result
 
 
@@ -158,8 +160,16 @@ def main():
         else:
             if not (stopped() and database_down()):
                 pid = (folder / 'service.pid').read_text().strip()
-                command(['taskkill.exe', '/PID', pid, '/T', '/F'])
-                wait_for(database_down, 'logout ends private database')
+                # Killing the supervisor closes its database job, racing taskkill's walk of
+                # those descendants. taskkill can report 128 after the whole tree is gone.
+                # Keep that exit visible, then prove shutdown before replaying login.
+                command(['taskkill.exe', '/PID', pid, '/T', '/F'], check=False)
+                def action_down():
+                    result = subprocess.run(['tasklist.exe', '/FI', f'PID eq {int(pid)}', '/FO', 'CSV', '/NH'],
+                                            capture_output=True, text=True, check=True)
+                    return not any(len(row) > 1 and row[1] == pid for row in csv.reader(result.stdout.splitlines()))
+                wait_for(lambda: action_down() and database_down() and not answering(),
+                         'logout ends service action, private database and HTTPS')
             command(['runonce.exe', '/AlternateShellStartup'])
     app_login = None
     def independent_login_registration():
