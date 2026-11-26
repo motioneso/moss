@@ -116,13 +116,7 @@ impl Config {
                 .unwrap_or_default();
             // Only a key file the owner recorded at setup counts. An environment
             // setting on its own never unlocks a desktop server from a plain file.
-            let recorded = keystore::custody::recorded_key_file(&root);
-            let env_path = std::env::var_os("MOSS_KEY_FILE").map(std::path::PathBuf::from);
-            let key_file = match (&recorded, &env_path) {
-                (Some(recorded), Some(env)) if recorded == env => Some(recorded.clone()),
-                (Some(recorded), None) => Some(recorded.clone()),
-                _ => None,
-            };
+            let key_file = agreed_key_file(&root);
             let store = keystore::platform::platform_store();
             open_bundle_credentials(
                 &raw,
@@ -239,6 +233,17 @@ pub struct ModuleSecrets {
     pub worker_url: Option<String>,
 }
 
+/// The recorded key file for an instance, when present. An environment
+/// setting may point at it, but may never substitute a different file.
+fn agreed_key_file(root: &Path) -> Option<std::path::PathBuf> {
+    let recorded = keystore::custody::recorded_key_file(root)?;
+    let env_path = std::env::var_os("MOSS_KEY_FILE").map(std::path::PathBuf::from);
+    match env_path {
+        Some(env) if env != recorded => None,
+        _ => Some(recorded),
+    }
+}
+
 /// Whether these bytes are a wrapped key custody bundle, read from its own header.
 pub fn is_bundle(raw: &[u8]) -> bool {
     let Ok(bundle) = serde_json::from_slice::<serde_json::Value>(raw) else {
@@ -299,7 +304,7 @@ impl Config {
                 .parent()
                 .map(|f| f.to_path_buf())
                 .unwrap_or_default();
-            let key_file = keystore::custody::recorded_key_file(&root);
+            let key_file = agreed_key_file(&root);
             let store = keystore::platform::platform_store();
             open_bundle_credentials(
                 &raw,

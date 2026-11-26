@@ -416,7 +416,7 @@ pub fn set_up_headless(
     credentials: &[u8],
     key_file: &Path,
     session: &mut dyn OsKeyStore,
-) -> Result<Migration, CustodyError> {
+) -> Result<HeadlessPrepared, CustodyError> {
     // A key file inside the instance root would travel with the bundle it opens.
     let root = absolute_lexical(instance_root);
     let chosen = absolute_lexical(key_file);
@@ -439,7 +439,25 @@ pub fn set_up_headless(
     let mut store = KeyFileStore::new(key_file.to_path_buf());
     let prepared = prepare(instance_root, credentials, &mut store, "headless", false)?;
     record_key_file_choice(instance_root, key_file)?;
-    prepared.commit_with(&mut store, "headless")
+    Ok(HeadlessPrepared { prepared, store })
+}
+
+/// A headless migration waiting for the owner to copy the recovery words.
+pub struct HeadlessPrepared {
+    prepared: Prepared,
+    store: KeyFileStore,
+}
+
+impl HeadlessPrepared {
+    pub fn words(&self) -> Vec<&'static str> {
+        self.prepared.words()
+    }
+    pub fn bundle_path(&self) -> &Path {
+        self.prepared.bundle_path()
+    }
+    pub fn commit(mut self) -> Result<Migration, CustodyError> {
+        self.prepared.commit_with(&mut self.store, "headless")
+    }
 }
 
 fn absolute_lexical(path: &Path) -> PathBuf {
@@ -523,11 +541,12 @@ pub fn load_master(
 ) -> Result<MasterKey, CustodyError> {
     match store.load_master(service) {
         Ok(master) => Ok(master),
-        Err(CustodyError::Locked) => Err(CustodyError::Locked),
-        Err(error) => match key_file {
+        // Only a machine with no keychain session at all may use the file.
+        Err(CustodyError::NoSession) => match key_file {
             Some(path) => read_key_file(path),
-            None => Err(error),
+            None => Err(CustodyError::NoSession),
         },
+        Err(error) => Err(error),
     }
 }
 
@@ -543,12 +562,18 @@ pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
-            } else if let Ok(bytes) = fs::read(&path) {
-                if secrets.iter().any(|secret| {
-                    !secret.is_empty()
-                        && bytes.windows(secret.len()).any(|w| w == secret.as_slice())
-                }) {
-                    hits.push(path);
+            } else {
+                match fs::read(&path) {
+                    Ok(bytes) => {
+                        if secrets.iter().any(|secret| {
+                            !secret.is_empty()
+                                && bytes.windows(secret.len()).any(|w| w == secret.as_slice())
+                        }) {
+                            hits.push(path);
+                        }
+                    }
+                    // A file that cannot be read cannot be cleared, so it counts.
+                    Err(_) => hits.push(path),
                 }
             }
         }
@@ -654,6 +679,7 @@ pub struct Prepared {
     instance_root: PathBuf,
     settings_original: Option<Vec<u8>>,
     secrets: Vec<Vec<u8>>,
+    payload: Vec<u8>,
 }
 
 impl Prepared {
@@ -676,6 +702,17 @@ impl Prepared {
         store: &mut dyn OsKeyStore,
         service: &str,
     ) -> Result<Migration, CustodyError> {
+        // Read both halves back the way a later start will, before anything is
+        // deleted. A store that cannot hand its key back stops here, with the
+        // plain file still standing.
+        let on_disk = read_bundle(&self.instance_root)?;
+        let loaded = store.load_master(service)?;
+        let opened = unwrap_with_master(&on_disk, &loaded)?;
+        if opened != self.payload {
+            return Err(CustodyError::Damaged(
+                "the bundle read back does not hold the credentials".into(),
+            ));
+        }
         let settings_path = self.instance_root.join("modules.json");
         let finish = (|| -> Result<(), CustodyError> {
             strip_module_secrets(&self.instance_root)?;
@@ -718,34 +755,6 @@ impl Prepared {
             recovery: self.recovery,
             bundle_path: self.bundle_path,
         })
-    }
-
-    /// Commits without a store at hand. Callers that hold the store should use
-    /// `commit_with`, which can roll a failed finish all the way back.
-    pub fn commit(self) -> Result<Migration, CustodyError> {
-        let settings_path = self.instance_root.join("modules.json");
-        let _ = settings_path;
-        // The settings strip and final check still run here; only the store
-        // rollback is unavailable without the store.
-        let mut rollback = RollbackStore;
-        self.commit_with(&mut rollback, "")
-    }
-}
-
-struct RollbackStore;
-
-impl OsKeyStore for RollbackStore {
-    fn store_master(&mut self, _s: &str, _m: &MasterKey) -> Result<(), CustodyError> {
-        Ok(())
-    }
-    fn load_master(&self, _s: &str) -> Result<MasterKey, CustodyError> {
-        Err(CustodyError::NoSession)
-    }
-    fn delete_master(&mut self, _s: &str) -> Result<(), CustodyError> {
-        Ok(())
-    }
-    fn probe(&self) -> Result<(), CustodyError> {
-        Ok(())
     }
 }
 
@@ -878,6 +887,7 @@ fn prepare(
         instance_root: instance_root.to_path_buf(),
         settings_original: fs::read(instance_root.join("modules.json")).ok(),
         secrets,
+        payload,
     })
 }
 
@@ -889,11 +899,10 @@ pub fn migrate(
     store: &mut dyn OsKeyStore,
     service: &str,
     leak_plaintext: bool,
-) -> Result<Migration, CustodyError> {
+) -> Result<Prepared, CustodyError> {
     let plaintext = fs::read(instance_root.join(LEGACY_CREDENTIALS))
         .map_err(|e| CustodyError::Io(e.to_string()))?;
-    let prepared = prepare(instance_root, &plaintext, store, service, leak_plaintext)?;
-    prepared.commit_with(store, service)
+    prepare(instance_root, &plaintext, store, service, leak_plaintext)
 }
 
 /// Sets up a fresh instance. Wraps the credentials text and removes the plaintext file.
@@ -902,9 +911,8 @@ pub fn set_up_instance(
     credentials: &[u8],
     store: &mut dyn OsKeyStore,
     service: &str,
-) -> Result<Migration, CustodyError> {
-    let prepared = prepare(instance_root, credentials, store, service, false)?;
-    prepared.commit_with(store, service)
+) -> Result<Prepared, CustodyError> {
+    prepare(instance_root, credentials, store, service, false)
 }
 
 /// Prepares a fresh instance without deleting the plaintext file yet, so the

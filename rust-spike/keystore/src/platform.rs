@@ -75,6 +75,13 @@ mod linux {
         let text = error.to_string().to_ascii_lowercase();
         if text.contains("locked") || text.contains("islocked") {
             CustodyError::Locked
+        } else if text.contains("serviceunknown")
+            || text.contains("service unknown")
+            || text.contains("was not provided by any")
+            || text.contains("namehasowner") && text.contains("unknown")
+        {
+            // A bus with no Secret Service provider is no keychain session.
+            CustodyError::NoSession
         } else {
             CustodyError::Unavailable(error.to_string())
         }
@@ -187,15 +194,6 @@ mod linux {
         fn store_master(&mut self, service: &str, master: &MasterKey) -> Result<(), CustodyError> {
             let (connection, session) = self.session()?;
             let collection = Self::default_collection(&connection)?;
-            if let Some(old) = self.find(&connection, service)? {
-                let _ = connection.call_method(
-                    Some(SERVICE),
-                    old.as_str(),
-                    Some("org.freedesktop.Secret.Item"),
-                    "Delete",
-                    &(),
-                );
-            }
             let mut attributes: HashMap<&str, &str> = HashMap::new();
             attributes.insert("moss-service", service);
             let properties: HashMap<&str, Value> = HashMap::from([

@@ -22,8 +22,8 @@ CREDS = {
 SECRETS = [v.encode() for v in CREDS.values() if len(v) >= 8]
 
 
-def run(cmd, expect=0):
-    done = subprocess.run(cmd, text=True, capture_output=True)
+def run(cmd, expect=0, input_text=None):
+    done = subprocess.run(cmd, text=True, capture_output=True, input=input_text)
     if expect is not None and done.returncode != expect:
         print(done.stdout)
         print(done.stderr, file=sys.stderr)
@@ -57,8 +57,8 @@ def main():
     scratch.mkdir(parents=True)
     base = [str(binary)]
 
-    def cli(*extra):
-        return run(base + list(extra), expect=None)
+    def cli(*extra, input_text=None):
+        return run(base + list(extra), expect=None, input_text=input_text)
 
     # 1. Locked key store refuses to start with a plain reason.
     locked_root = scratch / "locked-instance"
@@ -96,12 +96,47 @@ def main():
     headless.mkdir()
     (headless / "credentials.json").write_text(json.dumps(CREDS))
     key_file = scratch / "headless-master.key"
-    done = cli("setup-headless", "--root", str(headless), "--key-file", str(key_file), "--mode", "missing")
+    done = cli("setup-headless", "--root", str(headless), "--key-file", str(key_file), "--mode", "missing", input_text="SAVED\n")
     assert done.returncode == 0, done.stdout + done.stderr
     assert key_file.is_file() and not (headless / "credentials.json").exists()
     done = cli("start", "--root", str(headless), "--mode", "missing")
     assert done.returncode == 0 and "started=true" in done.stdout, done.stdout + done.stderr
     print("headless setup starts from its recorded key file: ok")
+
+    # A real session bus with no Secret Service provider counts as no session.
+    # The private bus serves nothing, so no provider can auto-start on it.
+    import shutil as _shutil
+    if _shutil.which("dbus-daemon"):
+        bus_dir = scratch / "empty-bus"
+        (bus_dir / "no-services").mkdir(parents=True)
+        config = bus_dir / "bus.conf"
+        config.write_text(
+            '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" '
+            '"http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">\n'
+            "<busconfig><type>session</type>"
+            f"<listen>unix:path={bus_dir}/bus</listen>"
+            "<auth>EXTERNAL</auth>"
+            f"<servicedir>{bus_dir}/no-services</servicedir>"
+            '<policy context="default"><allow send_destination="*" eavesdrop="true"/>'
+            '<allow eavesdrop="true"/><allow own="*"/></policy>'
+            "</busconfig>\n"
+        )
+        daemon = subprocess.run(
+            ["dbus-daemon", f"--config-file={config}", "--fork", "--print-address=1", "--print-pid=1"],
+            text=True, capture_output=True,
+        )
+        assert daemon.returncode == 0, daemon.stderr
+        address, pid = daemon.stdout.splitlines()[:2]
+        env = dict(os.environ, DBUS_SESSION_BUS_ADDRESS=address)
+        done = subprocess.run(
+            [str(binary), "probe", "--root", str(scratch), "--mode", "platform", "--session", "headless"],
+            text=True, capture_output=True, env=env,
+        )
+        try:
+            assert done.returncode == 0 and "route=key-file-choice" in done.stdout, done.stdout + done.stderr
+        finally:
+            os.kill(int(pid), 15)
+        print("empty session bus offers the headless key file: ok")
 
     # 3. Migration removes the plaintext file and leaves no plaintext under the root.
     root = scratch / "instance"
@@ -117,7 +152,7 @@ def main():
     }))
     SECRETS.extend([b"test-module-ai-key-3456", b"test-migrations-secret-7890", b"test-worker-secret-2468"])
     extra = ["--leak-plaintext"] if args.negative_plaintext else []
-    done = cli("migrate", "--root", str(root), "--mode", "working", *extra)
+    done = cli("migrate", "--root", str(root), "--mode", "working", *extra, input_text="SAVED\n")
     # With --negative-plaintext this assertion must fail, which is the control working.
     assert done.returncode == 0, done.stdout + done.stderr
     assert not (root / "credentials.json").exists(), "credentials.json must be removed"
@@ -138,7 +173,7 @@ def main():
     other = scratch / "other-instance"
     other.mkdir()
     (other / "credentials.json").write_text(json.dumps(CREDS))
-    done_other = cli("migrate", "--root", str(other), "--mode", "working")
+    done_other = cli("migrate", "--root", str(other), "--mode", "working", input_text="SAVED\n")
     assert done_other.returncode == 0, done_other.stdout + done_other.stderr
     wrong = [line[len("words="):] for line in done_other.stdout.splitlines() if line.startswith("words=")][0]
     assert wrong != words and len(wrong.split()) == 24
@@ -159,7 +194,7 @@ def main():
     plat_root = scratch / "platform-instance"
     plat_root.mkdir()
     (plat_root / "credentials.json").write_text(json.dumps(CREDS))
-    done = cli("migrate", "--root", str(plat_root), "--mode", "platform")
+    done = cli("migrate", "--root", str(plat_root), "--mode", "platform", input_text="SAVED\n")
     assert done.returncode == 0, done.stdout + done.stderr
     assert not (plat_root / "credentials.json").exists()
     done = cli("start", "--root", str(plat_root), "--mode", "platform")

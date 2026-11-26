@@ -22,7 +22,10 @@ fn recovery_words_restore_and_wrong_words_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
     let mut store = MemoryStore::new(FakeMode::Working);
-    let migration = migrate(dir.path(), &mut store, "svc", false).unwrap();
+    let migration = migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
     assert!(!dir.path().join("credentials.json").exists());
     let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
     let words: Vec<String> = migration
@@ -49,7 +52,10 @@ fn migration_leaves_no_plaintext_under_instance_root() {
     fs::create_dir_all(dir.path().join("nested")).unwrap();
     fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
     let mut store = MemoryStore::new(FakeMode::Working);
-    migrate(dir.path(), &mut store, "svc", false).unwrap();
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
     let secrets = vec![
         b"test-auth-secret-5678-abcd".to_vec(),
         b"test-connector-key-9012".to_vec(),
@@ -112,7 +118,10 @@ fn master_key_restores_bundle_after_migration() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
     let mut store = MemoryStore::new(FakeMode::Working);
-    migrate(dir.path(), &mut store, "svc", false).unwrap();
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
     let master = start_gate(&store, "svc").unwrap();
     let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
     assert_eq!(
@@ -132,7 +141,10 @@ fn migration_strips_module_settings_secrets_and_catches_nested_copies() {
     )
     .unwrap();
     let mut store = MemoryStore::new(FakeMode::Working);
-    migrate(dir.path(), &mut store, "svc", false).unwrap();
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
     let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
     assert!(!modules.contains("test-connector-key-9012"), "{modules}");
     assert!(!modules.contains("test-ai-key-7890"), "{modules}");
@@ -165,7 +177,10 @@ fn migration_with_real_setup_shape_strips_all_plain_secrets() {
     )
     .unwrap();
     let mut store = MemoryStore::new(FakeMode::Working);
-    migrate(dir.path(), &mut store, "svc", false).unwrap();
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
     assert!(find_plaintext(
         dir.path(),
         &[
@@ -219,7 +234,7 @@ fn interrupted_migration_resumes_and_shows_fresh_words() {
     assert_eq!(prepared.words().len(), 24);
     let second_words: Vec<String> = prepared.words().iter().map(|s| s.to_string()).collect();
     assert_ne!(first_words, second_words);
-    prepared.commit().unwrap();
+    prepared.commit_with(&mut store, "svc").unwrap();
     assert!(!dir.path().join("credentials.json").exists());
     let master = start_gate(&store, "svc").unwrap();
     let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
@@ -249,7 +264,7 @@ fn failed_bundle_write_on_retry_keeps_the_old_bundle_opening() {
     fs::remove_dir(dir.path().join("key-bundle.staging")).unwrap();
     keystore::custody::prepare_instance(dir.path(), &mut store, "svc")
         .unwrap()
-        .commit()
+        .commit_with(&mut store, "svc")
         .unwrap();
 }
 
@@ -283,7 +298,10 @@ fn headless_key_file_inside_the_instance_root_is_refused() {
     let outside = dir.path().parent().unwrap().join("outside-master.key");
     let root = dir.path().join("instance");
     fs::create_dir(&root).unwrap();
-    keystore::custody::set_up_headless(&root, CREDS, &outside, &mut session).unwrap();
+    keystore::custody::set_up_headless(&root, CREDS, &outside, &mut session)
+        .unwrap()
+        .commit()
+        .unwrap();
     assert!(keystore::custody::recorded_key_file(&root).is_some());
     let _ = fs::remove_file(outside);
 }

@@ -423,6 +423,7 @@ fn supply_module_secrets_from_args() {
 
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("lifecycle-module") {
+        supply_module_secrets_from_args();
         if module_lifecycle_service::run(std::env::args().skip(2).collect()).is_err() {
             eprintln!(
                 "moss-server: The module lifecycle service stopped; read the operation result"

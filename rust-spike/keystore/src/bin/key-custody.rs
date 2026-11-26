@@ -49,7 +49,7 @@ impl FileFakeStore {
         match self.mode {
             FakeMode::Working => Ok(()),
             FakeMode::Locked => Err(CustodyError::Locked),
-            FakeMode::Missing => Err(CustodyError::Unavailable("no key store".into())),
+            FakeMode::Missing => Err(CustodyError::NoSession),
             FakeMode::Broken => Err(CustodyError::Unavailable("key store did not answer".into())),
         }
     }
@@ -154,22 +154,36 @@ fn main() -> ExitCode {
             } else {
                 Box::new(load_fake(mode, &root)) as Box<dyn OsKeyStore>
             };
-            let result = if command == "migrate" {
+            let prepared = if command == "migrate" {
                 migrate(&root, store.as_mut(), &service, leak)
             } else {
                 let credentials = std::fs::read(root.join("credentials.json")).unwrap_or_default();
                 set_up_instance(&root, &credentials, store.as_mut(), &service)
             };
-            match result {
-                Ok(migration) => {
-                    let words: Vec<&str> = migration.recovery.words();
-                    println!("words={}", words.join(" "));
-                    println!("bundle={}", migration.bundle_path.display());
-                    println!(
-                        "credentials_exists={}",
-                        root.join("credentials.json").exists()
-                    );
-                    ExitCode::SUCCESS
+            match prepared {
+                Ok(prepared) => {
+                    println!("words={}", prepared.words().join(" "));
+                    // Nothing is deleted until the owner confirms the copy.
+                    eprintln!("When the words are written down, type SAVED and press Enter.");
+                    let mut answer = String::new();
+                    use std::io::BufRead as _;
+                    let read = std::io::stdin().lock().read_line(&mut answer);
+                    if read.is_err() || answer.trim() != "SAVED" {
+                        return fail(CustodyError::Unavailable(
+                            "the words were not confirmed, so nothing was finished".into(),
+                        ));
+                    }
+                    match prepared.commit_with(store.as_mut(), &service) {
+                        Ok(migration) => {
+                            println!("bundle={}", migration.bundle_path.display());
+                            println!(
+                                "credentials_exists={}",
+                                root.join("credentials.json").exists()
+                            );
+                            ExitCode::SUCCESS
+                        }
+                        Err(error) => fail(error),
+                    }
                 }
                 Err(error) => fail(error),
             }
@@ -229,11 +243,25 @@ fn main() -> ExitCode {
                 &key_file,
                 session.as_mut(),
             ) {
-                Ok(migration) => {
-                    println!("words={}", migration.recovery.words().join(" "));
-                    println!("bundle={}", migration.bundle_path.display());
-                    println!("key_file_choice={}", key_file.display());
-                    ExitCode::SUCCESS
+                Ok(prepared) => {
+                    println!("words={}", prepared.words().join(" "));
+                    eprintln!("When the words are written down, type SAVED and press Enter.");
+                    let mut answer = String::new();
+                    use std::io::BufRead as _;
+                    let read = std::io::stdin().lock().read_line(&mut answer);
+                    if read.is_err() || answer.trim() != "SAVED" {
+                        return fail(CustodyError::Unavailable(
+                            "the words were not confirmed, so nothing was finished".into(),
+                        ));
+                    }
+                    match prepared.commit() {
+                        Ok(migration) => {
+                            println!("bundle={}", migration.bundle_path.display());
+                            println!("key_file_choice={}", key_file.display());
+                            ExitCode::SUCCESS
+                        }
+                        Err(error) => fail(error),
+                    }
                 }
                 Err(error) => fail(error),
             }
