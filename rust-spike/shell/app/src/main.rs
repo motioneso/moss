@@ -332,7 +332,16 @@ fn main() {
             .filter(|path| path.is_file())
     });
     let prepared = runtime.block_on(async {
-        let config = Config::read(&args.network)?;
+        let mut config = Config::read(&args.network)?;
+        // Saved sharing never reopens the network without a firewall manager to verify it.
+        if config.sharing
+            && std::env::var_os(firewall::STAND_IN_ENV).is_none()
+            && firewall::manager_missing()
+        {
+            eprintln!("moss-server: no supported firewall manager found, so sharing is turned off");
+            config.sharing = false;
+            let _ = config.write(&args.network);
+        }
         let platform = config.platform().await?;
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
         // Sharing off binds loopback only. The switch rebinds when the owner changes it.

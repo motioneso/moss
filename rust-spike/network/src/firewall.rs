@@ -55,6 +55,13 @@ pub struct Rule {
     /// The firewalld zone the rule was opened in, so removal targets the same zone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub zone: Option<String>,
+    /// Marks the Windows rule as Moss's own. It is written into the rule's description and read
+    /// back before a delete, so a rule that only shares the name, port and program stays.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    /// The Linux firewall manager used at add time. Removal uses the same one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manager: Option<String>,
 }
 
 /// A firewalld port command. `op` is `add`, `remove` or `query`.
@@ -84,6 +91,17 @@ impl Rule {
             if zone.is_empty() || zone.len() > 64 || !zone.chars().all(plain) {
                 return Err("The firewall zone must be short and plain");
             }
+        }
+        if let Some(token) = &self.token {
+            if token.is_empty() || token.len() > 64 || !token.chars().all(plain) {
+                return Err("The rule token must be short and plain");
+            }
+        }
+        if !matches!(
+            self.manager.as_deref(),
+            None | Some("ufw") | Some("firewalld")
+        ) {
+            return Err("The firewall manager is not supported");
         }
         if self.port == 0 {
             return Err("The rule needs a port");
@@ -148,6 +166,7 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
                 &format!("localport={port}"),
                 &format!("program={program}"),
                 "enable=yes",
+                &format!("description={}", rule.token.as_deref().unwrap_or("Moss")),
             ])],
             // Only a rule with this name, port and program goes, never another one by name.
             Action::Remove => vec![cmd(&[
@@ -178,8 +197,17 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
                 firewalld(rule, false, "remove"),
             ],
             (Linux::Ufw, Action::Add) => vec![cmd(&[
-                "ufw", "allow", "in", "proto", "tcp", "to", "any", "port", &port, "comment",
-                &rule.name,
+                "ufw",
+                "allow",
+                "in",
+                "proto",
+                "tcp",
+                "to",
+                "any",
+                "port",
+                &port,
+                "comment",
+                rule.token.as_deref().unwrap_or(&rule.name),
             ])],
             (Linux::Ufw, Action::Remove) => vec![cmd(&[
                 "ufw", "delete", "allow", "in", "proto", "tcp", "to", "any", "port", &port,
@@ -257,8 +285,12 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
         match &needle {
             // A listing that failed to run says nothing about the rule.
             Some(needle) => (code == 0).then(|| text.contains(needle)),
-            // netsh reports no match with a non-zero code.
-            None if os == Os::Windows => Some(code == 0),
+            // netsh answers 0 for a match and 1 for none. Any other code means it could not say.
+            None if os == Os::Windows => match code {
+                0 => Some(true),
+                1 => Some(false),
+                _ => None,
+            },
             // Firewalld answers 0 for yes and 1 for no. Any other code means it could not say.
             None => match code {
                 0 => Some(true),
@@ -281,7 +313,11 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
 pub fn apply(action: Action, rule: &Rule) -> Result<bool, &'static str> {
     rule.check()?;
     let linux = if this_os() == Os::Linux {
-        detect_linux()
+        match rule.manager.as_deref() {
+            Some("ufw") => Linux::Ufw,
+            Some("firewalld") => Linux::Firewalld,
+            _ => detect_linux(),
+        }
     } else {
         Linux::Nothing
     };
@@ -304,6 +340,35 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
         return Err(NO_MANAGER);
     }
     let queryable = present_query(os, linux, rule).is_some();
+    if os == Os::Windows && action == Action::Remove {
+        if let Some(token) = &rule.token {
+            // Only a rule that carries Moss's token is deleted. Anything else is left in place.
+            let verbose = cmd(&[
+                "netsh",
+                "advfirewall",
+                "firewall",
+                "show",
+                "rule",
+                &format!("name={}", rule.name),
+                "verbose",
+            ]);
+            match run_code(&verbose) {
+                Some((0, text)) if text.contains(token.as_str()) => {}
+                Some((0, _)) | Some((1, _)) => return Ok(false),
+                _ => return Err("The firewall could not be read"),
+            }
+        }
+    }
+    if linux == Linux::Ufw && os == Os::Linux && action == Action::Remove {
+        if let Some(token) = &rule.token {
+            // Only a rule whose comment carries Moss's token is deleted.
+            match run_code(&cmd(&["ufw", "show", "added"])) {
+                Some((0, text)) if text.contains(token.as_str()) => {}
+                Some((0, _)) => return Ok(false),
+                _ => return Err("The firewall could not be read"),
+            }
+        }
+    }
     if action == Action::Add {
         match (os, linux) {
             // Only a rule Moss created may carry its name.
@@ -485,9 +550,15 @@ impl Firewall {
 
     /// Opens the rule for `port`, asking the owner once. Nothing stays open if it fails.
     pub async fn open(&self, port: u16) -> Result<(), Refusal> {
-        let mut zone = None;
+        let (mut zone, mut manager) = (None, None);
         if this_os() == Os::Linux {
-            match detect_linux() {
+            let linux = detect_linux();
+            manager = match linux {
+                Linux::Ufw => Some("ufw".to_owned()),
+                Linux::Firewalld => Some("firewalld".to_owned()),
+                Linux::Nothing => None,
+            };
+            match linux {
                 // No manager means no way to verify a rule, so fail before asking the owner.
                 Linux::Nothing if self.stand_in.is_none() => return Err(Refusal::NoManager),
                 Linux::Firewalld => {
@@ -506,6 +577,8 @@ impl Firewall {
             port,
             program: self.program.clone(),
             zone,
+            token: Some(new_token()),
+            manager,
         };
         rule.check().map_err(|_| Refusal::Failed)?;
         match self.recorded()? {
@@ -515,11 +588,21 @@ impl Firewall {
             None => {}
         }
         // The record comes first, so a crash during the change still leaves a way to remove it.
+        // Windows carries a token, so removal never touches a rule that lacks it. Elsewhere the
+        // record claims the rule only when none was open before the add.
+        let linux = match rule.manager.as_deref() {
+            Some("ufw") => Linux::Ufw,
+            Some("firewalld") => Linux::Firewalld,
+            _ => Linux::Nothing,
+        };
+        // Windows and ufw rules carry the token, so removal never touches a rule without it.
+        let claim =
+            cfg!(windows) || linux == Linux::Ufw || exists(this_os(), linux, &rule) == Some(false);
         self.write_record(&Record {
             rule: rule.clone(),
             confirmed: false,
             preexisting: false,
-            added: false,
+            added: claim,
         })?;
         match self.run(Action::Add, rule.clone()).await {
             Ok(preexisting) => self.write_record(&Record {
@@ -566,6 +649,14 @@ impl Firewall {
     }
 }
 
+/// An unguessable-enough marker for one rule, from the clock and the process id.
+fn new_token() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    format!("Moss-owner-{nanos:x}-{:x}", std::process::id())
+}
+
 fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
     let mut args = vec![
         "firewall-rule".into(),
@@ -580,6 +671,14 @@ fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
     if let Some(zone) = &rule.zone {
         args.push("--zone".into());
         args.push(zone.clone());
+    }
+    if let Some(token) = &rule.token {
+        args.push("--token".into());
+        args.push(token.clone());
+    }
+    if let Some(manager) = &rule.manager {
+        args.push("--manager".into());
+        args.push(manager.clone());
     }
     args
 }
@@ -696,6 +795,8 @@ mod tests {
             port: 5198,
             program: std::env::current_exe().unwrap(),
             zone: None,
+            token: None,
+            manager: None,
         }
     }
 
@@ -804,6 +905,18 @@ mod tests {
     }
 
     #[test]
+    fn the_helper_receives_the_owner_token_and_manager() {
+        let mut owned = rule();
+        owned.token = Some("Moss-owner-1".into());
+        owned.manager = Some("ufw".into());
+        let args = helper_args(Action::Remove, &owned);
+        assert!(args.windows(2).any(|w| w == ["--token", "Moss-owner-1"]));
+        assert!(args.windows(2).any(|w| w == ["--manager", "ufw"]));
+        owned.manager = Some("iptables".into());
+        assert!(owned.check().is_err());
+    }
+
+    #[test]
     fn no_firewall_manager_fails_closed_for_add_and_remove() {
         for action in [Action::Add, Action::Remove] {
             assert_eq!(
@@ -838,6 +951,11 @@ mod tests {
 /// add|remove` changes the operating system rule and runs with the owner's approval from the
 /// system prompt. `firewall-close --instance FOLDER` removes the rule an instance left open, for
 /// uninstall. Returns the process exit code.
+/// True on Linux when neither ufw nor firewalld is usable, so sharing cannot be opened safely.
+pub fn manager_missing() -> bool {
+    this_os() == Os::Linux && detect_linux() == Linux::Nothing
+}
+
 pub fn command(args: &[String]) -> i32 {
     let word = args.first().map(String::as_str);
     if word == Some("firewall-close") {
@@ -865,6 +983,7 @@ pub fn command(args: &[String]) -> i32 {
         _ => return 2,
     };
     let (mut name, mut port, mut program, mut zone) = (None, None, None, None);
+    let (mut token, mut manager) = (None, None);
     let mut rest = args.iter().skip(2);
     while let Some(flag) = rest.next() {
         let Some(value) = rest.next() else { return 2 };
@@ -873,6 +992,8 @@ pub fn command(args: &[String]) -> i32 {
             "--port" => port = value.parse::<u16>().ok(),
             "--program" => program = Some(PathBuf::from(value)),
             "--zone" => zone = Some(value.clone()),
+            "--token" => token = Some(value.clone()),
+            "--manager" => manager = Some(value.clone()),
             _ => return 2,
         }
     }
@@ -890,6 +1011,8 @@ pub fn command(args: &[String]) -> i32 {
             port,
             program,
             zone,
+            token,
+            manager,
         },
     ) {
         Ok(true) => EXIT_ALREADY,

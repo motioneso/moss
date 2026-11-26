@@ -258,7 +258,9 @@ def main():
         folder.chmod(0o700)
     cert, key = make_certificate(folder)
     world = World(folder, binary, args.port)
-    world.force_remove_rule()
+    if world.rule_present():
+        say('FAIL: the runner is not clean, a rule is already open for this test')
+        sys.exit(1)
     probe = None
     try:
         if SYSTEM == 'Linux':
