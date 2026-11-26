@@ -37,7 +37,7 @@ export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "prerequisite",
     remediationRef: "rust-network-sharing",
     description:
-      "The firewall did not allow Moss, so sharing stays off. Turn sharing on again and choose Allow, or add Moss in the computer's firewall settings."
+      "The firewall did not allow Moss, so sharing stays off. Turn sharing on again and choose Allow, or add Moss in the computer's firewall settings. If a firewall rule with Moss's name was made by someone else, Moss leaves it alone and refuses: rename or remove that rule, then try again. On Linux, Moss needs ufw or firewalld installed and turned on."
   },
   {
     code: "app_server_stop_failed",

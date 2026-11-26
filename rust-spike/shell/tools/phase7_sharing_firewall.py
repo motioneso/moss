@@ -11,6 +11,8 @@ with commands of its own. It asserts, in order:
   listener alone    -> still refused where a firewall is active (Linux)
   prompt approved   -> second client answered, rule present
   off               -> second client refused, rule gone
+  foreign rules     -> a rule Moss did not create is never changed or deleted by on or off;
+                       on Windows a rule that already holds Moss's name makes turning on refuse
   uninstall         -> the instance's own cleanup removes a rule left open
 
 --negative-swallow-remove makes the stand-in swallow the removal, so off leaves the rule behind.
@@ -184,6 +186,42 @@ class World:
         else:
             sudo([SOCKET_FILTER, '--remove', str(self.binary)], check=False)
 
+    # Rules planted by someone else. Moss must leave every one of them alone.
+    def plant_other(self):
+        """A rule with another name (Windows) or another port or program."""
+        if SYSTEM == 'Windows':
+            run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Moss-other-instance', 'dir=in',
+                 'action=allow', 'protocol=TCP', f'localport={self.port}', f'program={self.binary}', 'enable=yes'])
+        elif SYSTEM == 'Linux':
+            sudo(['ufw', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(self.port + 1)])
+        else:
+            sudo([SOCKET_FILTER, '--add', '/usr/bin/true'], check=False)
+
+    def other_present(self):
+        if SYSTEM == 'Windows':
+            return run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', 'name=Moss-other-instance'], check=False).returncode == 0
+        if SYSTEM == 'Linux':
+            return f'{self.port + 1}/tcp' in sudo(['ufw', 'status'], check=False).stdout
+        return '/usr/bin/true' in sudo([SOCKET_FILTER, '--listapps'], check=False).stdout
+
+    def remove_other(self):
+        if SYSTEM == 'Windows':
+            run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', 'name=Moss-other-instance'], check=False)
+        elif SYSTEM == 'Linux':
+            sudo(['ufw', 'delete', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(self.port + 1)], check=False)
+        else:
+            sudo([SOCKET_FILTER, '--remove', '/usr/bin/true'], check=False)
+
+    def plant_same_name(self):
+        """Windows: a rule that already holds Moss's own rule name, with another program and port."""
+        other = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'notepad.exe')
+        run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', f'name={self.rule_name}', 'dir=in',
+             'action=allow', 'protocol=TCP', f'localport={self.port + 2}', f'program={other}', 'enable=yes'])
+
+    def same_name_present(self):
+        result = run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', f'name={self.rule_name}'], check=False)
+        return result.returncode == 0 and str(self.port + 2) in result.stdout
+
     def record_present(self):
         return (self.folder / 'firewall.json').exists()
 
@@ -239,6 +277,28 @@ def main():
             expect(world.second_client() != 'ANSWERED', 'an open listener without the rule: the firewall still refuses')
             probe.send('listener-off')
 
+        # Rules Moss did not create.
+        world.plant_other()
+        expect(world.other_present(), 'a rule planted by someone else is in the firewall')
+        if SYSTEM == 'Windows':
+            world.plant_same_name()
+            probe.send('answer approve')
+            reply = probe.send('on')
+            expect('Foreign' in reply, 'a rule already holding Moss\'s name is refused, not replaced')
+            expect(world.same_name_present(), 'the rule that held the name is untouched after the refusal')
+            expect(world.second_client() != 'ANSWERED' and not world.record_present(), 'foreign rule refusal: sharing stays off and no record is left')
+            world.force_remove_rule()
+            expect(not world.same_name_present(), 'the planted same-name rule is cleaned up')
+            probe.send('answer decline')
+        if SYSTEM == 'Linux':
+            sudo(['ufw', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(args.port)])
+            probe.send('answer approve')
+            expect(probe.send('on') == 'Ok(())', 'a rule that already opens the port: sharing turns on')
+            expect(probe.send('off') == 'Ok(())', 'a rule that already opens the port: sharing turns off')
+            expect(world.rule_present(), 'a rule that was open before Moss is still open after off')
+            world.force_remove_rule()
+            probe.send('answer decline')
+
         # The negative control approves adding but swallows removal.
         probe.send('answer approve-add-only' if args.negative_swallow_remove else 'answer approve')
         expect(probe.send('on') == 'Ok(())', 'prompt approved: sharing turns on')
@@ -252,6 +312,7 @@ def main():
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'after off: this computer still reaches the server')
         expect(not world.rule_present(), 'the firewall rule is gone after off')
         expect(not world.record_present(), 'the instance record is gone after off')
+        expect(world.other_present(), 'a rule planted by someone else survives on and off')
 
         probe.send('answer approve')
         expect(probe.send('on') == 'Ok(())', 'sharing turns on again')
@@ -272,6 +333,7 @@ def main():
         if probe:
             probe.stop()
         world.force_remove_rule()
+        world.remove_other()
         world.tear_down_client()
 
 

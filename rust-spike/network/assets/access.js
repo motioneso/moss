@@ -4,8 +4,17 @@ const status = document.getElementById("status");
 const say = (message) => {
   status.textContent = message;
 };
-const explanation = (code) =>
-  ({
+const firewallReasons = {
+  foreign_rule:
+    "The firewall already has a rule named like Moss's that Moss did not create. Moss left it alone and sharing is still off. Rename or remove that rule in your firewall settings, then try again.",
+  no_firewall_manager:
+    "Moss could not find a firewall manager it can use (ufw or firewalld). Sharing is still off. Install and turn on one of them, then try again.",
+  stuck:
+    "The firewall rule may still be open. Try again, or remove Moss's rule in your firewall settings."
+};
+const explanation = (code, reason) =>
+  firewallReasons[reason] ||
+  {
     sign_in_body_timeout: "That connection was too slow. Try signing in again.",
     sign_in_body_too_large: "This sign-in request is too large. Reload the page and try again.",
     sign_in_rate_limited: "Too many tries. Wait a minute, then try again.",
@@ -16,7 +25,7 @@ const explanation = (code) =>
     app_firewall_refused:
       "The firewall did not allow Moss. Sharing is still off. Try again and choose Allow, or add Moss in your firewall settings.",
     host_refused: "This address is not trusted. Open Moss at its configured address."
-  })[code];
+  }[code];
 async function call(path, method = "GET", body) {
   const response = await fetch(path, {
     method,
@@ -25,10 +34,16 @@ async function call(path, method = "GET", body) {
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const result = await response.json();
-  if (!response.ok)
-    throw new Error(
-      explanation(result.code) || result.message || result.error || "That did not work. Try again."
+  if (!response.ok) {
+    const failure = new Error(
+      explanation(result.code, result.reason) ||
+        result.message ||
+        result.error ||
+        "That did not work. Try again."
     );
+    failure.sharing = result.sharing;
+    throw failure;
+  }
   return result;
 }
 for (const id of ["sign-in", "setup"]) {
@@ -99,16 +114,20 @@ if (sharing) {
       })
     );
   };
+  let target = true;
   const put = async (on) => {
+    target = on;
     box.disabled = true;
     retry.hidden = true;
     say(on ? "Waiting for your firewall…" : "Turning sharing off…");
     try {
-      paint(await call("/api/network", "PUT", { sharing: on }));
+      await call("/api/network", "PUT", { sharing: on });
+      // The change reply carries no address list, so the screen reads the full state again.
+      paint(await call("/api/network"));
       say(on ? "Sharing is on. Other devices must sign in." : "Sharing is off.");
     } catch (error) {
       say(error.message);
-      retry.hidden = !on;
+      retry.hidden = false;
       paint(
         await call("/api/network").catch(() => ({ sharing: false, origins: [], fingerprint: "" }))
       );
@@ -138,7 +157,10 @@ if (sharing) {
     put(true);
   };
   document.getElementById("turn-on").addEventListener("click", start);
-  document.getElementById("try-again").addEventListener("click", start);
+  document.getElementById("try-again").addEventListener("click", () => {
+    if (target) start();
+    else put(false);
+  });
 }
 document.getElementById("sign-out")?.addEventListener("click", async () => {
   try {

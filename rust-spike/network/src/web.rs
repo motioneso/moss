@@ -473,10 +473,14 @@ fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
     let message = match refusal {
         Refusal::Declined => "The firewall did not allow Moss.",
         Refusal::Failed | Refusal::Stuck => "The firewall did not take the change.",
+        Refusal::Foreign => {
+            "The firewall already has a rule with Moss's name that Moss did not create."
+        }
+        Refusal::NoManager => "Moss could not find a firewall manager it can use.",
     };
     (
         StatusCode::CONFLICT,
-        Json(json!({"code":"app_firewall_refused", "error":message, "sharing":sharing})),
+        Json(json!({"code":"app_firewall_refused", "reason":refusal.word(), "error":message, "sharing":sharing})),
     )
         .into_response()
 }

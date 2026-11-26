@@ -22,7 +22,13 @@ pub const EXIT_FAILED: i32 = 3;
 pub const EXIT_STUCK: i32 = 4;
 /// The rule was already open before this add, so it belongs to someone else and stays on remove.
 pub const EXIT_ALREADY: i32 = 5;
+/// A rule with this name is already in the firewall and Moss did not create it.
+pub const EXIT_FOREIGN: i32 = 6;
+/// No supported firewall manager was found, so Moss cannot open or verify a rule.
+pub const EXIT_NO_MANAGER: i32 = 7;
 const STUCK: &str = "The firewall rule could not be taken back";
+const FOREIGN: &str = "A firewall rule with this name exists and Moss did not create it";
+const NO_MANAGER: &str = "No supported firewall manager was found";
 const PROMPT_LIMIT: Duration = Duration::from_secs(600);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -106,33 +112,22 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
     let program = rule.program.display().to_string();
     match os {
         Os::Windows => match action {
-            Action::Add => vec![
-                cmd(&[
-                    "netsh",
-                    "advfirewall",
-                    "firewall",
-                    "delete",
-                    "rule",
-                    &format!("name={}", rule.name),
-                    "protocol=TCP",
-                    &format!("localport={port}"),
-                    &format!("program={program}"),
-                ]),
-                cmd(&[
-                    "netsh",
-                    "advfirewall",
-                    "firewall",
-                    "add",
-                    "rule",
-                    &format!("name={}", rule.name),
-                    "dir=in",
-                    "action=allow",
-                    "protocol=TCP",
-                    &format!("localport={port}"),
-                    &format!("program={program}"),
-                    "enable=yes",
-                ]),
-            ],
+            // A rule already holding this name is refused before this runs, so add never
+            // replaces one it did not create.
+            Action::Add => vec![cmd(&[
+                "netsh",
+                "advfirewall",
+                "firewall",
+                "add",
+                "rule",
+                &format!("name={}", rule.name),
+                "dir=in",
+                "action=allow",
+                "protocol=TCP",
+                &format!("localport={port}"),
+                &format!("program={program}"),
+                "enable=yes",
+            ])],
             // Only a rule with this name, port and program goes, never another one by name.
             Action::Remove => vec![cmd(&[
                 "netsh",
@@ -249,10 +244,11 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
     let (query, needle) = present_query(os, linux, rule)?;
     let read = |query: &[String]| {
         let (ok, text) = output(query)?;
-        Some(match &needle {
-            Some(needle) => ok && text.contains(needle),
-            None => ok,
-        })
+        match &needle {
+            // A listing that failed to run says nothing about the rule.
+            Some(needle) => ok.then(|| text.contains(needle)),
+            None => Some(ok),
+        }
     };
     let saved = read(&query)?;
     if linux == Linux::Firewalld && os == Os::Linux {
@@ -270,27 +266,59 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
 /// when the rule was already open before an add, which then leaves it as it found it.
 pub fn apply(action: Action, rule: &Rule) -> Result<bool, &'static str> {
     rule.check()?;
-    let (os, linux) = (
-        this_os(),
-        if this_os() == Os::Linux {
-            detect_linux()
-        } else {
-            Linux::Nothing
-        },
-    );
+    let linux = if this_os() == Os::Linux {
+        detect_linux()
+    } else {
+        Linux::Nothing
+    };
+    apply_with(this_os(), linux, action, rule)
+}
+
+/// Saved and live firewalld state for the port. Either one keeps it open.
+fn firewalld_halves(rule: &Rule) -> Option<(bool, bool)> {
+    let query = |permanent: bool| {
+        let mut args = vec!["firewall-cmd".to_owned()];
+        if permanent {
+            args.push("--permanent".into());
+        }
+        args.push(format!("--query-port={}/tcp", rule.port));
+        output(&args).map(|(ok, _)| ok)
+    };
+    Some((query(true)?, query(false)?))
+}
+
+fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool, &'static str> {
+    if os == Os::Linux && linux == Linux::Nothing {
+        // Without a manager an add cannot be verified and a remove cannot be confirmed.
+        return Err(NO_MANAGER);
+    }
     let queryable = present_query(os, linux, rule).is_some();
-    if action == Action::Add
-        && os != Os::Windows
-        && queryable
-        && exists(os, linux, rule) == Some(true)
-    {
-        return Ok(true);
+    if action == Action::Add {
+        match (os, linux) {
+            // Only a rule Moss created may carry its name.
+            (Os::Windows, _) => match exists(os, linux, rule) {
+                Some(false) => {}
+                Some(true) => return Err(FOREIGN),
+                None => return Err("The firewall could not be read"),
+            },
+            (Os::Linux, Linux::Firewalld) => match firewalld_halves(rule) {
+                Some((false, false)) => {}
+                Some((true, true)) => return Ok(true),
+                Some(_) => return Err(FOREIGN),
+                None => return Err("The firewall could not be read"),
+            },
+            _ => {
+                if exists(os, linux, rule) == Some(true) {
+                    return Ok(true);
+                }
+            }
+        }
     }
     for step in plan(os, linux, action, rule) {
         // A missing rule makes delete commands fail, which is the state removal wants. The
         // read-back below decides success.
         let ran = output(&step).is_some_and(|(ok, _)| ok);
-        if !ran && action == Action::Add && !step.iter().any(|s| s == "delete") {
+        if !ran && action == Action::Add {
             return rolled_back(os, linux, rule, "The firewall refused the rule");
         }
     }
@@ -352,6 +380,22 @@ pub enum Refusal {
     Failed,
     /// The change failed and the rule may still be open, so its record is kept.
     Stuck,
+    /// A rule with Moss's name exists that Moss did not create. It is left alone.
+    Foreign,
+    /// No supported firewall manager was found. Sharing stays off.
+    NoManager,
+}
+
+impl Refusal {
+    pub fn word(self) -> &'static str {
+        match self {
+            Refusal::Declined => "declined",
+            Refusal::Failed => "failed",
+            Refusal::Stuck => "stuck",
+            Refusal::Foreign => "foreign_rule",
+            Refusal::NoManager => "no_firewall_manager",
+        }
+    }
 }
 
 /// The rule the instance asked for. A record that is not confirmed was written before the
@@ -432,6 +476,10 @@ impl Firewall {
             port,
             program: self.program.clone(),
         };
+        // No manager means no way to verify a rule, so fail before asking the owner anything.
+        if self.stand_in.is_none() && this_os() == Os::Linux && detect_linux() == Linux::Nothing {
+            return Err(Refusal::NoManager);
+        }
         match self.recorded()? {
             Some(open) if open.confirmed && open.rule == rule => return Ok(()),
             // A different rule, or one that was never confirmed, goes before a new one opens.
@@ -576,12 +624,16 @@ fn wait(mut command: Command) -> Result<bool, Refusal> {
         Some(EXIT_ALREADY) => Ok(true),
         Some(EXIT_FAILED) => Err(Refusal::Failed),
         Some(EXIT_STUCK) => Err(Refusal::Stuck),
+        Some(EXIT_FOREIGN) => Err(Refusal::Foreign),
+        Some(EXIT_NO_MANAGER) => Err(Refusal::NoManager),
         // The macOS prompt reports a cancelled dialog as error -128.
         Some(1) if note.contains("-128") => Err(Refusal::Declined),
         // `do shell script` ends its error text with the helper's own exit code.
         Some(1) if cfg!(target_os = "macos") => match note.trim_end().rsplit_once('(') {
             Some((_, tail)) if tail.starts_with("5)") => Ok(true),
             Some((_, tail)) if tail.starts_with("4)") => Err(Refusal::Stuck),
+            Some((_, tail)) if tail.starts_with("6)") => Err(Refusal::Foreign),
+            Some((_, tail)) if tail.starts_with("7)") => Err(Refusal::NoManager),
             _ => Err(Refusal::Failed),
         },
         _ => Err(Refusal::Declined),
@@ -687,6 +739,23 @@ mod tests {
     }
 
     #[test]
+    fn no_firewall_manager_fails_closed_for_add_and_remove() {
+        for action in [Action::Add, Action::Remove] {
+            assert_eq!(
+                apply_with(Os::Linux, Linux::Nothing, action, &rule()),
+                Err(NO_MANAGER)
+            );
+        }
+    }
+
+    #[test]
+    fn windows_add_never_replaces_a_rule_by_name() {
+        let steps = plan(Os::Windows, Linux::Nothing, Action::Add, &rule());
+        assert_eq!(steps.len(), 1);
+        assert!(!steps[0].iter().any(|a| a == "delete"));
+    }
+
+    #[test]
     fn linux_prompt_never_opens_a_terminal() {
         if cfg!(unix) && !cfg!(target_os = "macos") {
             let command = elevated(None, Action::Add, &rule()).ok().unwrap();
@@ -760,10 +829,11 @@ pub fn command(args: &[String]) -> i32 {
         Ok(false) => 0,
         Err(reason) => {
             eprintln!("moss-server: {reason}");
-            if reason == STUCK {
-                EXIT_STUCK
-            } else {
-                EXIT_FAILED
+            match reason {
+                STUCK => EXIT_STUCK,
+                FOREIGN => EXIT_FOREIGN,
+                NO_MANAGER => EXIT_NO_MANAGER,
+                _ => EXIT_FAILED,
             }
         }
     }

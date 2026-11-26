@@ -221,7 +221,11 @@ approval in this plan before parts 6, 10, 11 and 16c start.
   checklist: the real graphical firewall prompt on Ubuntu and Fedora VMs (approve, refuse, off,
   uninstall leaves no rule), the Windows and macOS prompts, and a real second machine on the
   network reaching Moss only while sharing is on. A rule names the program path, so a version
-  update that moves the program needs the rule added again.
+  update that moves the program needs the rule added again. CI also proves a rule Moss did not
+  create is never changed or deleted, and a Windows rule that already holds Moss's name makes
+  turning on refuse. Not run in CI, so also on the part 18 checklist: the launcher's instance
+  removal running the rule cleanup, the settings rollback when saving fails after the rule
+  opened, and the Linux no-firewall-manager refusal on a machine with neither ufw nor firewalld.
 
 - 2026-11-25, Ben: mockups M1 to M7 approved as drawn. Screen parts 6, 10, 11 and 16c may start
   when their dependencies merge.
