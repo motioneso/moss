@@ -215,7 +215,9 @@ approval in this plan before parts 6, 10, 11 and 16c start.
   `firewalld-service.json` receipt. `<instance>` is the folder basename, sanitized to ASCII
   letters, digits, `-_.`, truncated to 24 characters (the server uses the same rule). Generate
   one UUID-simple token per instance and preserve it across reinstall and sharing toggles.
-  The receipt is `{"service":"moss-<instance>","token":"<token>","port":<instance-port>}`.
+  The receipt is `{"service":"moss-<instance>","token":"<token>","port":<instance-port>,"zone":"<zone>"}`.
+  Capture the zone with an authorized `firewall-cmd --get-default-zone` during installation.
+  Runtime uses that recorded zone; it never asks for authorization just to discover a zone.
   Use the configured server TCP port in both places; a changed port requires installer
   reprovisioning before sharing can resume. Tokens here are public ownership markers.
 - The XML is exactly (including the final newline):

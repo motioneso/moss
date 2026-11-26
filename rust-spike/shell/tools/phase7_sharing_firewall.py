@@ -375,11 +375,13 @@ def firewalld_services(binary, scratch, port, negative):
     folder.mkdir(parents=True)
     folder.chmod(0o700)
     service, token = 'moss-' + folder.name, uuid.uuid4().hex
+    zone = sudo(['firewall-cmd', '--get-default-zone']).stdout.strip()
+    expect(bool(zone), 'the installer captures the firewalld zone while authorized')
     xml = (f'<?xml version="1.0" encoding="utf-8"?>\n<service>\n'
            f'  <short>{service}</short>\n  <description>{token}</description>\n'
            f'  <port port="{port}" protocol="tcp"/>\n</service>\n')
     (folder / 'firewalld-service.json').write_text(json.dumps(
-        {'service': service, 'token': token, 'port': port}))
+        {'service': service, 'token': token, 'port': port, 'zone': zone}))
     source = folder / (service + '.xml')
     source.write_text(xml)
     destination = Path('/etc/firewalld/services') / source.name
@@ -393,7 +395,7 @@ def firewalld_services(binary, scratch, port, negative):
                'the unloaded-service plant path is absent')
         sudo(['install', '-m', '644', source, destination])
         planted = True
-        shown = run(['firewall-cmd', f'--info-service={service}', '--verbose'], check=False)
+        shown = sudo(['firewall-cmd', f'--info-service={service}', '--verbose'], check=False)
         expect(shown.returncode != 0, 'firewalld has not loaded the new service')
         cert, key = make_certificate(folder)
         world.set_up_client()
@@ -401,13 +403,15 @@ def firewalld_services(binary, scratch, port, negative):
         reply = probe.send('on')
         record = world.moss_record()
         cleanup_rule = record['rule'] if record else None
+        expect(record and record['rule']['manager'] == 'firewalld',
+               'a denied unprivileged firewalld query never falls back to ufw')
         expect('ServiceUnavailable' in reply, 'a missing runtime service reports the reinstall remedy')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'missing runtime service keeps local access')
         expect(world.second_client() != 'ANSWERED', 'missing runtime service keeps sharing loopback only')
         for permanent in [[], ['--permanent']]:
             assigned = sudo(['firewall-cmd', *permanent, '--list-services']).stdout.split()
             expect(service not in assigned, 'missing runtime service is never assigned to a zone')
-        shown = run(['firewall-cmd', f'--info-service={service}', '--verbose'], check=False)
+        shown = sudo(['firewall-cmd', f'--info-service={service}', '--verbose'], check=False)
         expect(shown.returncode != 0, 'the application did not reload firewalld')
         expect(not world.moss_record()['confirmed'], 'missing service never confirms sharing intent')
         say('FIREWALLD UNLOADED SERVICE: PASS')
@@ -419,7 +423,10 @@ def firewalld_services(binary, scratch, port, negative):
         expect(world.second_client() != 'ANSWERED', 'firewalld refused prompt keeps loopback only')
         probe.send('answer approve-add-only' if negative else 'answer approve')
         expect(probe.send('on') == 'Ok(())', 'loaded service can be assigned after approval')
-        expect(probe.send('restart-check') == 'true', 'restart silently confirms live firewalld token and port')
+        if probe.send('restart-check') != 'true':
+            expect(probe.send('restart') == 'paused', 'a privileged firewalld query pauses without prompting')
+            expect(world.second_client() != 'ANSWERED', 'paused firewalld restart binds loopback only')
+            expect(probe.send('on') == 'Ok(())', 'Resume authorizes a read-only firewalld marker check')
         expect(probe.send('restart-check-other-port') == 'false', 'firewalld restart refuses a changed current port')
         expect(world.second_client() == 'ANSWERED', 'loaded firewalld service admits the second client')
         expect(probe.send('off') == 'Ok(())', 'firewalld sharing turns off')

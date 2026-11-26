@@ -28,6 +28,7 @@ struct InstalledService {
     service: String,
     token: String,
     port: u16,
+    zone: String,
 }
 /// Environment variable that replaces the operating system prompt with a scripted answer. The
 /// script receives the exact helper command and decides to run it or to exit 126 (declined).
@@ -415,9 +416,11 @@ fn output(args: &[String]) -> Option<(bool, String)> {
 }
 
 fn detect_linux() -> Linux {
-    if output(&cmd(&["firewall-cmd", "--state"]))
-        .is_some_and(|(ok, text)| ok && text.trim() == "running")
-    {
+    // A denied, stopped or unreadable firewalld is never permission to use another manager.
+    // The authorized helper checks its live state; startup never asks for authorization.
+    if std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths).any(|dir| dir.join("firewall-cmd").is_file())
+    }) {
         Linux::Firewalld
     } else if output(&cmd(&["ufw", "version"])).is_some_and(|(ok, _)| ok) {
         Linux::Ufw
@@ -998,14 +1001,6 @@ impl Firewall {
             match linux {
                 // No manager means no way to verify a rule, so fail before asking the owner.
                 Linux::Nothing if self.stand_in.is_none() => return Err(Refusal::NoManager),
-                Linux::Firewalld => {
-                    let (ok, text) = output(&cmd(&["firewall-cmd", "--get-default-zone"]))
-                        .ok_or(Refusal::Failed)?;
-                    if !ok {
-                        return Err(Refusal::Failed);
-                    }
-                    zone = Some(text.trim().to_owned());
-                }
                 _ => {}
             }
         }
@@ -1018,6 +1013,9 @@ impl Firewall {
             if installed.service != format!("moss-{}", self.instance) || installed.port != port {
                 return Err(Refusal::ServiceUnavailable);
             }
+            // The installer captures its zone while privileged. Reading it here avoids an
+            // authorization query before the owner's one prompt and keeps cleanup in that zone.
+            zone = Some(installed.zone);
             installed.token
         } else {
             new_token()
@@ -1317,6 +1315,31 @@ mod tests {
         assert!(delete[0].iter().any(|a| a.starts_with("program=")));
         assert!(delete[0].contains(&"localport=5198".to_owned()));
         assert!(add.contains(&"dir=in".to_owned()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_denied_firewalld_query_never_falls_back_to_ufw() {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = std::env::temp_dir().join(format!("moss-manager-{}", new_token()));
+        std::fs::create_dir(&folder).unwrap();
+        for (name, script) in [
+            ("firewall-cmd", "#!/bin/sh\nexit 253\n"),
+            ("ufw", "#!/bin/sh\nexit 0\n"),
+        ] {
+            let path = folder.join(name);
+            std::fs::write(&path, script).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let old = std::env::var_os("PATH");
+        std::env::set_var("PATH", &folder);
+        let selected = detect_linux();
+        match old {
+            Some(path) => std::env::set_var("PATH", path),
+            None => std::env::remove_var("PATH"),
+        }
+        std::fs::remove_dir_all(folder).unwrap();
+        assert_eq!(selected, Linux::Firewalld);
     }
 
     #[test]
