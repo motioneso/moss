@@ -452,6 +452,7 @@ fn kill_after_strip_then_failed_retry_keeps_the_ai_key() {
         .contains("test-module-ai-key-3456"));
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unreadable_folder_cannot_hide_a_secret_copy() {
     use std::os::unix::fs::PermissionsExt;
