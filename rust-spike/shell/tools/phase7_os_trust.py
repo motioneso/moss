@@ -2,8 +2,9 @@
 """Prove OS trust with a disposable CA; restore trust settings and any mutation on exit.
 
 Linux uses SSL_CERT_FILE/SSL_CERT_DIR (the platform loader's process-local root store).
-macOS uses a temporary user keychain and user trust setting. Windows uses CurrentUser\\Root.
-Never runs a database, changes the machine-wide root store, or installs a tool.
+macOS uses a temporary user keychain (CI may opt into administrator trust settings to avoid
+GUI authorization). Windows uses CurrentUser\\Root locally and LocalMachine\\Root on disposable CI
+(to avoid its root-enrollment consent dialog). Never runs a database or installs a tool.
 """
 import argparse
 import contextlib
@@ -19,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def run(args, **kwargs):
-    return subprocess.run([str(a) for a in args], check=True, **kwargs)
+    return subprocess.run([str(a) for a in args], check=True, timeout=120, **kwargs)
 
 
 def certificate(folder, name, *, ca=None, san="IP:127.0.0.1,DNS:localhost", expired=False):
@@ -60,19 +61,21 @@ def ca_certificate(folder, name):
 
 
 @contextlib.contextmanager
-def trusted_ca(folder, env):
+def trusted_ca(folder, env, ci_system_trust=False):
     ca = folder / "ca.pem"
     if sys.platform == "darwin":
         keychain = folder / "fixture.keychain-db"
         previous = shlex.split(subprocess.check_output(["security", "list-keychains", "-d", "user"], text=True))
+        security = ["sudo", "-n", "security"] if ci_system_trust else ["security"]
+        domain = ["-d"] if ci_system_trust else []
         run(["security", "create-keychain", "-p", "", keychain])
         try:
             run(["security", "list-keychains", "-d", "user", "-s", *previous, keychain])
-            run(["security", "add-trusted-cert", "-r", "trustRoot", "-k", keychain, ca])
+            run([*security, "add-trusted-cert", *domain, "-r", "trustRoot", "-k", keychain, ca])
             yield
         finally:
             try:
-                run(["security", "remove-trusted-cert", ca])
+                run([*security, "remove-trusted-cert", *domain, ca])
             finally:
                 try:
                     run(["security", "list-keychains", "-d", "user", "-s", *previous])
@@ -81,11 +84,12 @@ def trusted_ca(folder, env):
     elif os.name == "nt":
         der = subprocess.check_output(["openssl", "x509", "-in", str(ca), "-outform", "DER"])
         thumbprint = hashlib.sha1(der).hexdigest()
-        run(["certutil", "-user", "-addstore", "Root", ca])
+        domain = [] if ci_system_trust else ["-user"]
         try:
+            run(["certutil", *domain, "-f", "-addstore", "Root", ca])
             yield
         finally:
-            run(["certutil", "-user", "-delstore", "Root", thumbprint])
+            run(["certutil", *domain, "-delstore", "Root", thumbprint])
     else:
         empty = folder / "empty-roots"
         empty.mkdir()
@@ -100,7 +104,11 @@ def main():
                         help="disable OS verification in the source temporarily; require the same runner to fail")
     controls.add_argument("--negative-accept-invalid", action="store_true",
                           help="bypass OS validation temporarily; require the invalid-certificate assertion to fail")
+    parser.add_argument("--ci-system-trust", action="store_true",
+                        help="on disposable native CI only, enroll the test root without a GUI consent prompt")
     args = parser.parse_args()
+    if args.ci_system_trust and (sys.platform not in ("darwin", "win32") or os.environ.get("GITHUB_ACTIONS") != "true"):
+        parser.error("--ci-system-trust is only for disposable macOS/Windows GitHub Actions runners")
     mutation = args.negative_control or args.negative_accept_invalid
     env = os.environ.copy()
     if not env.get("RUSTUP_HOME") or not env.get("CARGO_TARGET_DIR"):
@@ -131,7 +139,7 @@ def main():
                 replacement = ('return Err(rustls::Error::General("OS trust disabled by negative control".into()));'
                                if args.negative_control else 'return Ok(ServerCertVerified::assertion());')
                 source.write_text(text.replace(marker, replacement))
-            with trusted_ca(folder, env):
+            with trusted_ca(folder, env, args.ci_system_trust):
                 print("COMMAND:", shlex.join(command), flush=True)
                 process = subprocess.Popen(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 output = []
