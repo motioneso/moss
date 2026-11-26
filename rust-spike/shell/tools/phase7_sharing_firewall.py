@@ -186,9 +186,10 @@ class World:
             block = ''
             for line in shown.splitlines() + ['Rule Name: end']:
                 if line.startswith('Rule Name:'):
-                    name = block.splitlines()[0] if block else ''
+                    first = block.splitlines()[0] if block else ''
+                    name = first.split(':', 1)[1].strip() if ':' in first else ''
                     # Only Moss's marker name counts, never the runner's bare-prefix plant.
-                    if name.startswith(f'Rule Name: {self.rule_name}-') and str(self.port) in block and 'sharing_probe' in block:
+                    if name.startswith(f'{self.rule_name}-') and str(self.port) in block and 'sharing_probe' in block:
                         return True
                     block = line + '\n'
                 else:
