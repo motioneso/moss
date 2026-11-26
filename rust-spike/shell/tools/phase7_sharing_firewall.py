@@ -139,7 +139,7 @@ def remove_windows_plant(name, marker, port, program):
 
 def mac_apps():
     text = sudo([SOCKET_FILTER, '--listapps']).stdout
-    expect(text.startswith('ALF:'), 'macOS returned an application listing')
+    expect(text.lstrip().startswith('ALF:'), 'macOS returned an application listing')
     return [line.split(':', 1)[1].strip() for line in text.splitlines()
             if ':' in line and line.split(':', 1)[0].strip().isdigit()]
 
@@ -355,17 +355,101 @@ def make_certificate(folder):
     return cert, key
 
 
+def firewalld_services(binary, scratch, port, negative):
+    """Installer file exists, but runtime catalog lacks it: runtime must never reload."""
+    folder = scratch / ('instance-fwd-' + uuid.uuid4().hex[:8])
+    folder.mkdir(parents=True)
+    folder.chmod(0o700)
+    service, token = 'moss-' + folder.name, uuid.uuid4().hex
+    xml = (f'<?xml version="1.0" encoding="utf-8"?>\n<service>\n'
+           f'  <short>{service}</short>\n  <description>{token}</description>\n'
+           f'  <port port="{port}" protocol="tcp"/>\n</service>\n')
+    (folder / 'firewalld-service.json').write_text(json.dumps(
+        {'service': service, 'token': token, 'port': port}))
+    source = folder / (service + '.xml')
+    source.write_text(xml)
+    destination = Path('/etc/firewalld/services') / source.name
+    probe = None
+    planted = False
+    world = World(folder, binary, port)
+    try:
+        # A real lookup, not a prompt stand-in. Do not overwrite any preexisting definition.
+        expect(sudo(['test', '-e', destination], check=False).returncode == 1,
+               'the unloaded-service plant path is absent')
+        sudo(['install', '-m', '644', source, destination])
+        planted = True
+        shown = run(['firewall-cmd', f'--info-service={service}', '--verbose'], check=False)
+        expect(shown.returncode != 0, 'firewalld has not loaded the new service')
+        cert, key = make_certificate(folder)
+        world.set_up_client()
+        probe = Probe(binary, folder, cert, key, port, 'approve')
+        reply = probe.send('on')
+        expect('ServiceUnavailable' in reply, 'a missing runtime service reports the reinstall remedy')
+        expect(world.reach('127.0.0.1') == 'ANSWERED', 'missing runtime service keeps local access')
+        expect(world.second_client() != 'ANSWERED', 'missing runtime service keeps sharing loopback only')
+        for permanent in [[], ['--permanent']]:
+            assigned = sudo(['firewall-cmd', *permanent, '--list-services']).stdout.split()
+            expect(service not in assigned, 'missing runtime service is never assigned to a zone')
+        shown = run(['firewall-cmd', f'--info-service={service}', '--verbose'], check=False)
+        expect(shown.returncode != 0, 'the application did not reload firewalld')
+        expect(not world.moss_record()['confirmed'], 'missing service never confirms sharing intent')
+        say('FIREWALLD UNLOADED SERVICE: PASS')
+        # This is the installer's one-time provisioning step, never an application command.
+        sudo(['firewall-cmd', '--reload'])
+        expect(probe.send('off') == 'Ok(())', 'confirmed absent assignments clear the failed intent')
+        probe.send('answer decline')
+        expect('Declined' in probe.send('on'), 'firewalld prompt refused keeps sharing off')
+        expect(world.second_client() != 'ANSWERED', 'firewalld refused prompt keeps loopback only')
+        probe.send('answer approve-add-only' if negative else 'answer approve')
+        expect(probe.send('on') == 'Ok(())', 'loaded service can be assigned after approval')
+        expect(probe.send('restart-check') == 'true', 'restart silently confirms live firewalld token and port')
+        expect(world.second_client() == 'ANSWERED', 'loaded firewalld service admits the second client')
+        expect(probe.send('off') == 'Ok(())', 'firewalld sharing turns off')
+        expect(world.second_client() != 'ANSWERED', 'firewalld off binds loopback only')
+        for permanent in [[], ['--permanent']]:
+            assigned = sudo(['firewall-cmd', *permanent, '--list-services']).stdout.split()
+            expect(service not in assigned, 'the firewall rule is gone after off')
+        expect(sudo(['cat', destination]).stdout == xml, 'off preserves the unassigned installer service')
+        probe.send('answer approve')
+        expect(probe.send('on') == 'Ok(())', 'firewalld sharing turns on for uninstall proof')
+        probe.stop()
+        probe = None
+        env = dict(os.environ, MOSS_FIREWALL_STAND_IN=str(binary), PROBE_STAND_IN='approve')
+        run([binary, 'firewall-close', '--instance', folder], env=env)
+        for permanent in [[], ['--permanent']]:
+            expect(service not in sudo(['firewall-cmd', *permanent, '--list-services']).stdout.split(),
+                   'instance cleanup leaves no firewalld assignment')
+        say('FIREWALLD LOADED SERVICE: PASS')
+    finally:
+        if probe:
+            probe.stop()
+        world.tear_down_client()
+        if planted:
+            # The same marker-checked application cleanup also repairs the negative control.
+            env = dict(os.environ, MOSS_FIREWALL_STAND_IN=str(binary), PROBE_STAND_IN='approve')
+            run([binary, 'firewall-close', '--instance', folder], env=env)
+            # This runner owns only the exact file it planted, never an installer/foreign file.
+            expect(sudo(['cat', destination]).stdout == xml, 'the service file still has the runner marker and port')
+            sudo(['rm', destination])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--bin', required=True)
     parser.add_argument('--scratch', required=True)
     parser.add_argument('--port', type=int, default=5198)
     parser.add_argument('--negative-swallow-remove', action='store_true')
+    parser.add_argument('--firewalld-services', action='store_true')
     args = parser.parse_args()
     suffix = '.exe' if SYSTEM == 'Windows' else ''
     binary = (Path(args.bin) / 'examples' / f'sharing_probe{suffix}').resolve()
     scratch = Path(args.scratch)
     shutil.rmtree(scratch, ignore_errors=True)
+    if args.firewalld_services:
+        expect(SYSTEM == 'Linux', 'firewalld proof runs on Linux')
+        scratch.mkdir(parents=True)
+        firewalld_services(binary, scratch, args.port, args.negative_swallow_remove)
+        return
     folder = scratch / 'instance-sharing-proof'
     folder.mkdir(parents=True)
     if SYSTEM != 'Windows':

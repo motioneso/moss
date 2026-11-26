@@ -39,6 +39,12 @@ jobs:
           echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
       - name: Provision declared Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
+      - name: macOS native firewall listing diagnostic
+        if: runner.os == 'macOS'
+        run: |
+          set +e
+          /usr/libexec/ApplicationFirewall/socketfilterfw --listapps
+          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --listapps
       - name: Firewall rule and listener unit tests
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml --lib firewall -- --test-threads=1
       - name: Runner cleanup ownership tests
@@ -71,3 +77,24 @@ jobs:
           tail -30 "$RUNNER_TEMP/sharing-negative.log"
           test "$code" -eq 1
           grep -q "FAIL: the firewall rule is gone after off" "$RUNNER_TEMP/sharing-negative.log"
+      - name: Provision the supported firewalld manager for its unloaded-service proof
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y firewalld
+          sudo ufw disable
+          sudo systemctl start firewalld
+      - name: Installer-loaded firewalld service and missing-service refusal
+        if: runner.os == 'Linux'
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/firewalld-unloaded" --port 5198 --firewalld-services
+      - name: Firewalld negative control must detect a stranded assignment
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set +e
+          python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/firewalld-negative" --port 5198 --firewalld-services --negative-swallow-remove > "$RUNNER_TEMP/firewalld-negative.log" 2>&1
+          code=$?
+          echo "Firewalld negative control exit: $code (expected 1)"
+          tail -30 "$RUNNER_TEMP/firewalld-negative.log"
+          test "$code" -eq 1
+          grep -q "AssertionError: the firewall rule is gone after off" "$RUNNER_TEMP/firewalld-negative.log"

@@ -20,6 +20,15 @@ use std::{
 };
 
 pub const RECORD_FILE: &str = "firewall.json";
+/// Installer receipt for an already-loaded, per-instance firewalld service. Not a secret.
+pub const FIREWALLD_RECEIPT_FILE: &str = "firewalld-service.json";
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InstalledService {
+    service: String,
+    token: String,
+    port: u16,
+}
 /// Environment variable that replaces the operating system prompt with a scripted answer. The
 /// script receives the exact helper command and decides to run it or to exit 126 (declined).
 pub const STAND_IN_ENV: &str = "MOSS_FIREWALL_STAND_IN";
@@ -33,9 +42,11 @@ pub const EXIT_ALREADY: i32 = 5;
 pub const EXIT_FOREIGN: i32 = 6;
 /// No supported firewall manager was found, so Moss cannot open or verify a rule.
 pub const EXIT_NO_MANAGER: i32 = 7;
+pub const EXIT_SERVICE_UNAVAILABLE: i32 = 8;
 const STUCK: &str = "The firewall rule could not be taken back";
 const FOREIGN: &str = "A firewall rule with this name exists and Moss did not create it";
 const NO_MANAGER: &str = "No supported firewall manager was found";
+const SERVICE_UNAVAILABLE: &str = "Reinstall Moss or restart the firewall";
 const PROMPT_LIMIT: Duration = Duration::from_secs(600);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -115,7 +126,9 @@ fn service_name(rule: &Rule) -> Option<String> {
 
 fn service_path(rule: &Rule) -> Option<PathBuf> {
     let service = service_name(rule)?;
-    let dir = std::env::var_os("MOSS_FIREWALLD_SERVICE_DIR")
+    let dir = cfg!(test)
+        .then(|| std::env::var_os("MOSS_FIREWALLD_SERVICE_DIR"))
+        .flatten()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/etc/firewalld/services"));
     Some(dir.join(format!("{service}.xml")))
@@ -132,11 +145,52 @@ fn service_xml(rule: &Rule) -> Option<String> {
 
 /// Whether service file text proves this rule is Moss's. The token and the port must both match.
 fn service_file_is_ours(text: &str, rule: &Rule) -> bool {
+    service_xml(rule).is_some_and(|expected| text == expected)
+}
+
+/// The runtime catalog must carry the same token and the one TCP port, with no extra grants.
+fn service_info_is_ours(text: &str, rule: &Rule) -> bool {
+    let Some(service) = service_name(rule) else {
+        return false;
+    };
     let Some(token) = rule.token.as_deref() else {
         return false;
     };
-    text.contains(&format!("<description>{token}</description>"))
-        && text.contains(&format!("port=\"{}\"", rule.port))
+    let mut lines = text.lines();
+    if lines.next() != Some(service.as_str()) {
+        return false;
+    }
+    let mut fields = std::collections::BTreeMap::new();
+    for line in lines {
+        let Some((key, value)) = line.trim().split_once(':') else {
+            return false;
+        };
+        if fields.insert(key, value.trim()).is_some() {
+            return false;
+        }
+    }
+    fields.get("description") == Some(&token)
+        && fields.get("ports") == Some(&format!("{}/tcp", rule.port).as_str())
+        && fields.iter().all(|(key, value)| match *key {
+            "description" | "ports" => true,
+            "short" => *value == service,
+            "protocols" | "source-ports" | "modules" | "destination" | "includes" | "helpers" => {
+                value.is_empty()
+            }
+            _ => false,
+        })
+}
+
+fn service_loaded(rule: &Rule) -> Result<(), &'static str> {
+    let service = service_name(rule).ok_or(SERVICE_UNAVAILABLE)?;
+    match run_code(&cmd(&[
+        "firewall-cmd",
+        &format!("--info-service={service}"),
+        "--verbose",
+    ])) {
+        Some((0, text)) if service_info_is_ours(&text, rule) => Ok(()),
+        _ => Err(SERVICE_UNAVAILABLE),
+    }
 }
 
 impl Rule {
@@ -377,7 +431,7 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
             Some(needle) if os == Os::Linux && linux == Linux::Ufw => (code == 0
                 && text.starts_with("Added user rules"))
             .then(|| !ufw_lines(&text, rule).is_empty()),
-            Some(_) if os == Os::Mac => (code == 0 && text.starts_with("ALF:"))
+            Some(_) if os == Os::Mac => (code == 0 && text.trim_start().starts_with("ALF:"))
                 .then(|| mac_path_present(&text, &rule.program)),
             Some(needle) => (code == 0).then(|| text.contains(needle)),
             // netsh answers 0 for a match and 1 for none. Any other code means it could not say.
@@ -450,38 +504,27 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
                 Some(true) => return Err(FOREIGN),
                 None => return Err("The firewall could not be read"),
             },
-            (Os::Linux, Linux::Firewalld) => match firewalld_mark(rule) {
-                // Our own service file from an earlier step in this add may be finished here.
-                ServiceMark::Ours => {}
-                ServiceMark::Foreign => return Err(FOREIGN),
-                ServiceMark::Unreadable => return Err("The firewall could not be read"),
-                ServiceMark::Missing => match firewalld_halves(rule) {
+            (Os::Linux, Linux::Firewalld) => {
+                match firewalld_mark(rule) {
+                    ServiceMark::Ours => {}
+                    ServiceMark::Foreign => return Err(FOREIGN),
+                    ServiceMark::Missing => return Err(SERVICE_UNAVAILABLE),
+                    ServiceMark::Unreadable => return Err("The firewall could not be read"),
+                }
+                service_loaded(rule)?;
+                // An assignment that predates this add is not ours to remove.
+                match firewalld_halves(rule) {
                     Some((false, false)) => {}
-                    // Assigned with no Moss service file is someone else's rule.
-                    Some(_) => return Err(FOREIGN),
+                    Some(_) => return Ok(true),
                     None => return Err("The firewall could not be read"),
-                },
-            },
+                }
+            }
             // The add and any rollback only touch a rule known to be absent before.
             _ => match exists(os, linux, rule) {
                 Some(true) => return Ok(true),
                 Some(false) => {}
                 None => return Err("The firewall could not be read"),
             },
-        }
-    }
-    if os == Os::Linux && linux == Linux::Firewalld && action == Action::Add {
-        // The Moss-owned service file comes first. Only this service is ever added or removed.
-        let (Some(path), Some(xml)) = (service_path(rule), service_xml(rule)) else {
-            return Err("The firewall could not be read");
-        };
-        if let Some(parent) = path.parent() {
-            if std::fs::create_dir_all(parent).is_err() {
-                return Err("The firewall refused the rule");
-            }
-        }
-        if std::fs::write(&path, xml).is_err() {
-            return Err("The firewall refused the rule");
         }
     }
     for step in plan(os, linux, action, rule) {
@@ -521,20 +564,8 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
             }
         }
         Action::Remove if present != Some(false) => Err("The firewall did not keep the change"),
-        Action::Remove => {
-            // The service is unassigned in both halves and its marker proved it is Moss's, so
-            // its file goes now. The file stays while any assignment remains.
-            if os == Os::Linux && linux == Linux::Firewalld {
-                if let Some(path) = service_path(rule) {
-                    match std::fs::remove_file(&path) {
-                        Ok(()) => {}
-                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                        Err(_) => return Err("The firewall did not keep the change"),
-                    }
-                }
-            }
-            Ok(false)
-        }
+        // Installer-owned service definitions remain loaded, but unassigned to any zone.
+        Action::Remove => Ok(false),
     }
 }
 
@@ -669,7 +700,7 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 return Err(UNREADABLE);
             }
             match firewalld_mark(rule) {
-                ServiceMark::Ours => Ok(true),
+                ServiceMark::Ours => service_loaded(rule).map(|_| true),
                 ServiceMark::Foreign => Ok(false),
                 ServiceMark::Missing => match firewalld_halves(rule) {
                     // Assigned with no Moss file is someone else's rule. It stays.
@@ -687,7 +718,9 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 Some(true) => {}
             }
             match run_code(&cmd(&[SOCKET_FILTER, "--listapps"])) {
-                Some((0, text)) if text.starts_with("ALF:") => Ok(mac_marker(&text, rule)),
+                Some((0, text)) if text.trim_start().starts_with("ALF:") => {
+                    Ok(mac_marker(&text, rule))
+                }
                 _ => Err(UNREADABLE),
             }
         }
@@ -741,6 +774,7 @@ pub enum Refusal {
     NoManager,
     /// A record from before ownership tokens. It never deletes, and the owner removes the old rule.
     Legacy,
+    ServiceUnavailable,
 }
 
 impl Refusal {
@@ -752,6 +786,7 @@ impl Refusal {
             Refusal::Foreign => "foreign_rule",
             Refusal::NoManager => "no_firewall_manager",
             Refusal::Legacy => "legacy_rule",
+            Refusal::ServiceUnavailable => "firewall_service_unavailable",
         }
     }
 }
@@ -855,7 +890,7 @@ impl Firewall {
             },
         };
         owned(os, linux, rule) == Ok(true)
-            && (linux != Linux::Firewalld || exists(os, linux, rule) == Some(true))
+            && (linux != Linux::Firewalld || firewalld_halves(rule).is_some_and(|(_, live)| live))
     }
 
     /// Startup never authorizes. Preserve intent and the token while accepting loopback only.
@@ -937,7 +972,19 @@ impl Firewall {
                 _ => {}
             }
         }
-        let token = new_token();
+        let token = if manager.as_deref() == Some("firewalld") {
+            let installed: InstalledService =
+                std::fs::read(self.folder.join(FIREWALLD_RECEIPT_FILE))
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                    .ok_or(Refusal::ServiceUnavailable)?;
+            if installed.service != format!("moss-{}", self.instance) || installed.port != port {
+                return Err(Refusal::ServiceUnavailable);
+            }
+            installed.token
+        } else {
+            new_token()
+        };
         let mut rule = Rule {
             // The marker names the instance and this one add, on the live rule itself.
             name: format!("moss-{}-{token}", self.instance),
@@ -1190,6 +1237,7 @@ fn wait(mut command: Command, expected: Option<String>) -> Result<bool, Refusal>
         Some(EXIT_STUCK) => Err(Refusal::Stuck),
         Some(EXIT_FOREIGN) => Err(Refusal::Foreign),
         Some(EXIT_NO_MANAGER) => Err(Refusal::NoManager),
+        Some(EXIT_SERVICE_UNAVAILABLE) => Err(Refusal::ServiceUnavailable),
         // The macOS prompt reports a cancelled dialog as error -128.
         Some(1) if note.contains("-128") => Err(Refusal::Declined),
         // `do shell script` ends its error text with the helper's own exit code.
@@ -1198,6 +1246,7 @@ fn wait(mut command: Command, expected: Option<String>) -> Result<bool, Refusal>
             Some((_, tail)) if tail.starts_with("4)") => Err(Refusal::Stuck),
             Some((_, tail)) if tail.starts_with("6)") => Err(Refusal::Foreign),
             Some((_, tail)) if tail.starts_with("7)") => Err(Refusal::NoManager),
+            Some((_, tail)) if tail.starts_with("8)") => Err(Refusal::ServiceUnavailable),
             _ => Err(Refusal::Failed),
         },
         _ => Err(Refusal::Declined),
@@ -1482,7 +1531,33 @@ mod tests {
     }
 
     #[test]
-    fn firewalld_remove_only_touches_its_own_service_file() {
+    fn firewalld_live_definition_requires_exact_token_port_and_no_extra_grants() {
+        let owned = rule();
+        let service = service_name(&owned).unwrap();
+        let info = format!("{service}\n  short: {service}\n  description: {}\n  ports: {}/tcp\n  protocols: \n  source-ports: \n  modules: \n  destination: \n  includes: \n  helpers: \n", owned.token.as_deref().unwrap(), owned.port);
+        assert!(service_info_is_ours(&info, &owned));
+        for bad in [
+            info.replace(owned.token.as_deref().unwrap(), "foreign"),
+            info.replace("5198/tcp", "15198/tcp"),
+            info.replace("5198/tcp", "5198/tcp 22/tcp"),
+            info.replace("protocols: ", "protocols: tcp"),
+            format!("{info}  description: foreign\n"),
+        ] {
+            assert!(!service_info_is_ours(&bad, &owned));
+        }
+        let xml = service_xml(&owned).unwrap();
+        assert!(!service_file_is_ours(
+            &xml.replace(
+                "</service>",
+                "<port port=\"22\" protocol=\"tcp\"/></service>"
+            ),
+            &owned
+        ));
+        assert!(!service_file_is_ours(&xml.replace("5198", "15198"), &owned));
+    }
+
+    #[test]
+    fn firewalld_runtime_never_changes_installer_service_files() {
         let folder = scratch();
         std::env::set_var("MOSS_FIREWALLD_SERVICE_DIR", folder.path());
         let mut fwd = rule();
@@ -1741,7 +1816,11 @@ pub fn command(args: &[String]) -> i32 {
                 Some("firewalld") => Linux::Firewalld,
                 _ => Linux::Nothing,
             };
-            if owned(this_os(), linux, &rule)? && exists(this_os(), linux, &rule) == Some(true) {
+            if owned(this_os(), linux, &rule)?
+                && exists(this_os(), linux, &rule) == Some(true)
+                && (linux != Linux::Firewalld
+                    || firewalld_halves(&rule).is_some_and(|(_, live)| live))
+            {
                 Ok(false)
             } else {
                 Err("The firewall could not be confirmed")
@@ -1764,6 +1843,7 @@ pub fn command(args: &[String]) -> i32 {
                 STUCK => EXIT_STUCK,
                 FOREIGN => EXIT_FOREIGN,
                 NO_MANAGER => EXIT_NO_MANAGER,
+                SERVICE_UNAVAILABLE => EXIT_SERVICE_UNAVAILABLE,
                 _ => EXIT_FAILED,
             }
         }

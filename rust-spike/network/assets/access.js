@@ -5,6 +5,7 @@ const say = (message) => {
   status.textContent = message;
 };
 const firewallReasons = {
+  firewall_service_unavailable: "Reinstall Moss or restart the firewall.",
   foreign_rule:
     "The firewall already has a rule named like Moss's that Moss did not create. Moss left it alone and sharing is still off. Rename or remove that rule in your firewall settings, then try again.",
   no_firewall_manager:

@@ -110,7 +110,7 @@ entries in the same PR.
 | 10 / M App and update screens   | M1 first run (adds Restore, Move from Docker and the disk encryption result: on, off or unknown, install rules line 252), M3 servers and tray, M6 update states.                                                                                                                                                                                                     | 2, 8, 9; Ben approves     | `phase7_app_screens`: real app on Linux, click each choice, tray Stop, update available, updating, failed and rolled back; unknown disk encryption shows no protection claim and does not block setup. Desktop and phone where the screen exists on phone (version row in Settings).                                                                                                                                                                                           | `rust-desktop-updates`; tray items; updated first-run description; disk encryption state         |
 | 11 / M Sharing and firewall     | M4 sharing prompt. Turning sharing on asks the OS firewall once per OS. Turning it off removes the rule.                                                                                                                                                                                                                                                             | 2; Ben approves           | `phase7_sharing_firewall`: a second machine (or second VM) reaches the server only after sharing is on, not after the OS prompt is refused, and not after sharing is off. Linux runs through the graphical prompt on Ubuntu and Fedora with no terminal. Fails if the rule stays behind.                                                                                                                                                                                       | Updated `rust-network-sharing`; `app_firewall_refused`                                           |
 | 12 / S OS certificate trust     | Public certificates through the OS trust store; pinned self-signed path unchanged.                                                                                                                                                                                                                                                                                   | New crate approved        | `phase7_os_trust`: a public-CA test server connects without pinning; a changed self-signed certificate still triggers the existing warning.                                                                                                                                                                                                                                                                                                                                    | None                                                                                             |
-| 13 / M Linux packages           | Unsigned `.deb` and `.rpm` launcher packages plus AppImage. Uninstall keeps data unless the owner deletes it.                                                                                                                                                                                                                                                        | 2, 8                      | `phase7_linux_packages`: install with the desktop software tool on Ubuntu 24.04 and Fedora VMs, start, uninstall, reinstall, data still there.                                                                                                                                                                                                                                                                                                                                 | None                                                                                             |
+| 13 / M Linux packages           | Unsigned `.deb` and `.rpm` launcher packages plus AppImage. Uninstall keeps data unless the owner deletes it. Follow the Linux installer firewalld contract below (preload service, install-time reload only).                                                                                                                                                       | 2, 8                      | `phase7_linux_packages`: install with the desktop software tool on Ubuntu 24.04 and Fedora VMs, start, uninstall, reinstall, data still there.                                                                                                                                                                                                                                                                                                                                 | None                                                                                             |
 | 14 / M macOS package            | Ad-hoc-signed app bundle and disk image. Refuse to run from a translocated path (desktop plan C1, line 941).                                                                                                                                                                                                                                                         | 2, 8                      | `phase7_mac_package` on `macos-latest`: launch, database starts, pgvector loads. Records whether library validation had to be off.                                                                                                                                                                                                                                                                                                                                             | `app_mac_translocated`                                                                           |
 | 15 / M Windows package          | Per-user installer (no machine-wide install), bundled OpenSSL with its licence, 60-character path test (desktop plan C2, line 952). Fix the button-click proof (slice 28 lines 47-55).                                                                                                                                                                               | 2, 8, 11                  | `phase7_windows_package` on `windows-latest`: install as a standard user, start, Stop and Open clicked, uninstall keeps data. Fails if any step needs elevation other than the firewall.                                                                                                                                                                                                                                                                                       | None                                                                                             |
 | 16a / M Docker exporter         | Rust exporter for the Docker host. Fences the source and stops app and worker containers with restart turned off, dumps, packs the vault and the key bundle into an encrypted archive.                                                                                                                                                                               | 4                         | `phase7_docker_export` on a throwaway Docker stack built from the published image: after a host reboot the old containers stay stopped. Never against the production install.                                                                                                                                                                                                                                                                                                  | None                                                                                             |
@@ -209,7 +209,44 @@ layout-only mockup CSS. Values are illustrative.
 Each has empty, loading and error states. The coordinator sends the set to Ben and records his
 approval in this plan before parts 6, 10, 11 and 16c start.
 
+### Linux installer firewalld contract (part 13 checklist)
+
+- Before first launch, provision `/etc/firewalld/services/moss-<instance>.xml` and the instance's
+  `firewalld-service.json` receipt. `<instance>` is the folder basename, sanitized to ASCII
+  letters, digits, `-_.`, truncated to 24 characters (the server uses the same rule). Generate
+  one UUID-simple token per instance and preserve it across reinstall and sharing toggles.
+  The receipt is `{"service":"moss-<instance>","token":"<token>","port":<instance-port>}`.
+  Use the configured server TCP port in both places; a changed port requires installer
+  reprovisioning before sharing can resume. Tokens here are public ownership markers.
+- The XML is exactly (including the final newline):
+
+  ```xml
+  <?xml version="1.0" encoding="utf-8"?>
+  <service>
+    <short>moss-INSTANCE</short>
+    <description>TOKEN</description>
+    <port port="PORT" protocol="tcp"/>
+  </service>
+  ```
+
+- Package installation loads the definition with one install-time firewalld reload, following
+  distro package practice. Do not assign the service to a zone at install time. Protect foreign
+  definitions: never overwrite a file whose marker does not match the instance receipt.
+  Runtime only adds/removes this already-loaded service in the recorded zone (permanent and
+  runtime assignments), never reloads and never edits/removes the service definition. Off
+  leaves the definition unassigned. Instance uninstall first closes verified assignments, then
+  removes only the matching definition and receipt; service definitions alone open no port.
+- If the definition is missing, stale, wrong-port or not loaded, runtime refuses sharing with
+  `app_firewall_refused`: “Reinstall Moss or restart the firewall.” CI exercises a real unloaded
+  service; part 18 also proves package install/reinstall and graphical approval on Fedora.
+
 ## Rulings ledger
+
+- 2026-11-26, coordinator ruling for JS-435: runtime must never reload firewalld. Part 13
+  installers preload the per-instance service at installation and reload once there. Part 11
+  only adds/removes the loaded service in its zone; a missing runtime service fails closed with
+  the reinstall/restart-firewall remedy. Contract and part 13 checklist are above. No separate
+  runtime-preservation design is authorized.
 
 - 2026-11-26, coordinator ruling for JS-435: never prompt for authorization at startup. If a
   live firewall-marker check needs root or cannot succeed silently, listen on loopback only and

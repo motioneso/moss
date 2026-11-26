@@ -478,6 +478,7 @@ fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
         }
         Refusal::NoManager => "Moss could not find a firewall manager it can use.",
         Refusal::Legacy => "An old Moss firewall rule is still there. Remove it by hand.",
+        Refusal::ServiceUnavailable => "Reinstall Moss or restart the firewall.",
     };
     (
         StatusCode::CONFLICT,
