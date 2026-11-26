@@ -142,6 +142,15 @@ On each OS, a fresh machine, with clicks only:
    logon task starts the server without the desktop app. Stop keeps it down until Start.
    Part 2 CI replays the exact action read back from Task Scheduler; it does not prove real logon.
 
+7. On Ubuntu 24.04 and Fedora VMs, approve and refuse Sharing's real graphical polkit prompt
+   with no terminal. On Windows, approve and refuse the elevation; on macOS, approve and refuse
+   the native administrator dialog for the application firewall. With the macOS firewall off,
+   confirm no entry is added and the disabled state is recorded. Use a real second machine to
+   confirm access only while sharing is on, including after a refused prompt and after off.
+   Turn sharing off and uninstall the instance; confirm its own rule is gone and foreign rules
+   remain. On Fedora, also prove the installer preloads the service and performs its one
+   install-time reload; runtime never reloads.
+
 The coordinator records each result. Ben decides a stop. If the Mac gate fails, Mac installs both
 programs but uses another computer as its server (split design section 11). The click-only run on
 macOS and Windows needs part 17b; an unsigned rehearsal runs first and is reported separately.
