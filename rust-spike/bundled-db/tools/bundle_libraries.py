@@ -7,8 +7,21 @@ import subprocess
 MACHO = {b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
          b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca"}
 
+# Windows components only. In particular, the optional Visual C++ redistributable
+# is not an OS dependency even when the CI runner installed it in System32.
+WINDOWS_SYSTEM_DLLS = frozenset("""
+advapi32.dll bcrypt.dll bcryptprimitives.dll cabinet.dll cfgmgr32.dll comdlg32.dll
+comctl32.dll crypt32.dll cryptbase.dll dbghelp.dll dnsapi.dll gdi32.dll imm32.dll
+iphlpapi.dll kernel32.dll kernelbase.dll mpr.dll msimg32.dll msvcrt.dll ncrypt.dll
+netapi32.dll normaliz.dll ntdll.dll ole32.dll oleaut32.dll powrprof.dll propsys.dll
+psapi.dll rpcrt4.dll secur32.dll security.dll setupapi.dll shell32.dll shlwapi.dll
+sspicli.dll ucrtbase.dll user32.dll userenv.dll usp10.dll version.dll winhttp.dll
+wininet.dll winmm.dll winspool.drv wintrust.dll wldap32.dll ws2_32.dll wtsapi32.dll
+""".split())
+
 
 def validate_mac(bundle):
+    bundle = bundle.resolve()
     for file in bundle.rglob("*"):
         if not file.is_file():
             continue
@@ -96,14 +109,14 @@ def pe_imports(file):
 
 
 def validate_windows(bundle, system=None):
+    bundle = bundle.resolve()
     system = system or Path(os.environ["SystemRoot"]) / "System32"
     for file in bundle.rglob("*"):
         if not file.is_file() or file.suffix.lower() not in (".exe", ".dll"):
             continue
         if not file.resolve().is_relative_to(bundle):
             raise ValueError(f"Native file escapes bundle: {file.name}")
-        available = {p.name.casefold(): p.resolve() for folder in (bundle / "bin", file.parent)
-                     for p in folder.iterdir() if p.is_file()}
+        available = {p.name.casefold(): p.resolve() for p in (bundle / "bin").iterdir() if p.is_file()}
         for dependency in pe_imports(file):
             name = dependency.casefold()
             if name.startswith(("api-ms-win-", "ext-ms-win-")):
@@ -111,6 +124,6 @@ def validate_windows(bundle, system=None):
             target = available.get(name)
             if target and target.is_relative_to(bundle):
                 continue
-            if (system / dependency).is_file():
+            if name in WINDOWS_SYSTEM_DLLS and (system / dependency).is_file():
                 continue
             raise ValueError(f"Windows dependency outside bundle for {file.name}: {dependency}")

@@ -1,4 +1,5 @@
 """Parser/policy tests, separate from the real linked CI negative controls."""
+import os
 from pathlib import Path
 import struct
 import tempfile
@@ -68,6 +69,29 @@ class LibraryTests(unittest.TestCase):
                 validate_windows(bundle, system)
             (bundle / "bin/outside.dll").write_bytes(pe_fixture([]))
             validate_windows(bundle, system)
+
+    def test_optional_runtime_in_system32_still_requires_bundle_copy(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            bundle, system = root / "bundle", root / "system"
+            (bundle / "bin").mkdir(parents=True)
+            system.mkdir()
+            (system / "VCRUNTIME140.dll").write_bytes(b"runner runtime fixture")
+            (bundle / "bin/probe.exe").write_bytes(pe_fixture(["VCRUNTIME140.dll"]))
+            with self.assertRaisesRegex(ValueError, "Windows dependency outside bundle"):
+                validate_windows(bundle, system)
+            (bundle / "bin/VCRUNTIME140.dll").write_bytes(pe_fixture([]))
+            validate_windows(bundle, system)
+
+    @unittest.skipIf(os.name == "nt", "Creating Windows symlinks needs extra privileges")
+    def test_bundle_with_symlinked_parent_is_normalized(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            real, alias = root / "real", root / "alias"
+            (real / "bin").mkdir(parents=True)
+            alias.symlink_to(real, target_is_directory=True)
+            (real / "bin/probe.exe").write_bytes(pe_fixture([]))
+            validate_windows(alias, root)
 
 
 if __name__ == "__main__":

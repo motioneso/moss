@@ -161,6 +161,14 @@ def windows_build(pg, vector, out, build, cache, jobs):
         shutil.copy2(icu / "bin64" / name, prefix / "bin" / name)
     for dll in (deps / "bin").glob("*.dll"):
         shutil.copy2(dll, prefix / "bin" / dll.name)
+    # The VS compiler's runtime is redistributable, not part of Windows. Ship it
+    # app-local rather than relying on the runner's installed redistributable.
+    redist = Path(os.environ["VCToolsRedistDir"]) / "x64"
+    crt = list(redist.glob("Microsoft.VC*.CRT"))
+    if len(crt) != 1 or not (crt[0] / "vcruntime140.dll").is_file():
+        raise ValueError("Expected one x64 Visual C++ runtime in VCToolsRedistDir")
+    for dll in crt[0].glob("*.dll"):
+        shutil.copy2(dll, prefix / "bin" / dll.name)
     run("nmake", "/NOLOGO", "/F", "Makefile.win", cwd=vector, env=env)
     run("nmake", "/NOLOGO", "/F", "Makefile.win", "install", cwd=vector, env=env)
     for name in ("lib/vector.dll", "share/extension/vector.control", "share/extension/vector--0.8.7.sql"):
