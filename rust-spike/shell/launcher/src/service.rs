@@ -97,7 +97,10 @@ fn register(install: &Path, folder: &Path) -> Result<(), String> {
     let contents = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>Label</key><string>{}</string><key>ProgramArguments</key><array><string>{}</string><string>service-run</string><string>{}</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ProcessType</key><string>Background</string><key>ExitTimeOut</key><integer>200</integer></dict></plist>", name(folder), xml(&launcher.to_string_lossy()), xml(&folder.to_string_lossy()));
     #[cfg(windows)]
     let contents = windows::definition(&launcher, folder)?;
+    #[cfg(not(windows))]
     private_write(&path, contents.as_bytes())?;
+    #[cfg(windows)]
+    private_write(&path, &contents)?;
     #[cfg(target_os = "linux")]
     {
         checked(Command::new("systemctl").args(["--user", "daemon-reload"]))?;
