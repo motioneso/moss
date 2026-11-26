@@ -105,3 +105,13 @@ jobs:
       - name: Publish a test feed, never overwrite the production channel
         shell: bash
         run: gh release create "$UPDATE_TAG" native/* feed/index.json feed/index.json.sig feed/public-key.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "App update test feed $GITHUB_RUN_ID" --notes "Phase 7 preflight tool artifacts only. Not an installer. The public key is test evidence, never client trust."
+      - name: Read the published feed with the client and verify the native bytes
+        shell: bash
+        run: |
+          gh release download "$UPDATE_TAG" --repo "$GITHUB_REPOSITORY" --dir published
+          key_id=generated-ci
+          if [[ "${{ inputs.configured_key || false }}" == true ]]; then
+            key_id=$(python3 -c 'import json; print(json.load(open("feed/index.json"))["signingKey"])')
+          fi
+          # Trust the key kept by this job, never the key in the downloaded feed.
+          "$CARGO_TARGET_DIR/debug/moss-app-update" check published "$key_id" feed/public-key.txt seen.json 0 published/moss-app-update-Linux-x86_64
