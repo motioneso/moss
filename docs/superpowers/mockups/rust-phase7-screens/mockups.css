@@ -9,6 +9,13 @@
 @font-face {
   font-family: Archivo;
   font-style: normal;
+  font-weight: 600;
+  src: url("../../../../apps/web/public/fonts/archivo/archivo-latin-600-normal.woff2")
+    format("woff2");
+}
+@font-face {
+  font-family: Archivo;
+  font-style: normal;
   font-weight: 700;
   src: url("../../../../apps/web/public/fonts/archivo/archivo-latin-700-normal.woff2")
     format("woff2");
@@ -295,6 +302,9 @@ main {
 .field textarea {
   width: 100%;
   min-width: 0;
+}
+.entry .jds-select {
+  width: auto;
 }
 textarea.jds-input {
   min-height: 88px;
