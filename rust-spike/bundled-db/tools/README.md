@@ -36,9 +36,11 @@ fresh databases with `pg_restore`, and checks the row. Linux also checks that th
 runtime library closure from every executable resolves inside the bundle apart from glibc.
 On macOS, `otool -L` checks every Mach-O file (including modules) and refuses
 absolute dependencies outside `/usr/lib/` and `/System/`. On Windows, the gate
-reads normal and delay-loaded PE imports from every EXE/DLL; each DLL must be
-beside the importing file, in the bundle's `bin`, or supplied by Windows System32
-(including OS API-set contracts). PATH is never used to satisfy a DLL import.
+reads normal and delay-loaded PE imports from every EXE/DLL; each import must be
+in the bundle's `bin` (including extension imports of `postgres.exe`) or a named
+Windows OS component supplied by System32, including OS API-set contracts.
+The optional Visual C++ runtime is copied app-local from the VS developer shell;
+its presence in System32 cannot satisfy the audit. PATH never satisfies an import.
 Inherited libpq settings are discarded.
 It stops its own server and removes its own cluster even after a failed assertion.
 It never connects to the developer's database.
