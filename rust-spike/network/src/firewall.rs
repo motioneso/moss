@@ -503,17 +503,36 @@ fn windows_marker(text: &str, rule: &Rule) -> Option<bool> {
     if text.contains("No rules match") {
         return Some(false);
     }
-    let count = text.matches("Rule Name:").count();
-    if count == 0 {
+    let count = text
+        .lines()
+        .filter(|line| line.trim_start().starts_with("Rule Name:"))
+        .count();
+    if count != 1 {
         return None;
     }
+    let field = |key: &str| {
+        let mut values = text.lines().filter_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            (name.trim() == key).then_some(value.trim())
+        });
+        let value = values.next()?;
+        values.next().is_none().then_some(value)
+    };
     // Exactly one rule holds the marker name and it carries the token for this port and program.
     Some(
-        count == 1
-            && text.contains(token)
-            && text.contains(&rule.port.to_string())
-            && text.contains(&rule.program.display().to_string()),
+        field("Rule Name")? == rule.name
+            && field("Description")? == token
+            && field("LocalPort")? == rule.port.to_string()
+            && field("Program")?.eq_ignore_ascii_case(&rule.program.display().to_string()),
     )
+}
+
+fn windows_lookup(code: i32, text: &str, rule: &Rule) -> Result<bool, &'static str> {
+    match code {
+        0 => windows_marker(text, rule).ok_or("The firewall could not be read"),
+        1 if text.trim() == "No rules match the specified criteria." => Ok(false),
+        _ => Err("The firewall could not be read"),
+    }
 }
 
 /// Whether `ufw show added` text proves the rules on the port are Moss's.
@@ -567,12 +586,8 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 &format!("name={}", rule.name),
                 "verbose",
             ]);
-            match run_code(&verbose) {
-                Some((0, text)) => windows_marker(&text, rule).ok_or(UNREADABLE),
-                Some((1, text)) if text.contains("No rules match") => Ok(false),
-                Some((_, text)) => windows_marker(&text, rule).ok_or(UNREADABLE),
-                _ => Err(UNREADABLE),
-            }
+            let (code, text) = run_code(&verbose).ok_or(UNREADABLE)?;
+            windows_lookup(code, &text, rule)
         }
         (Os::Linux, Linux::Ufw) => match run_code(&cmd(&["ufw", "show", "added"])) {
             Some((0, text)) => Ok(ufw_marker(&text, rule)),
@@ -1239,11 +1254,44 @@ mod tests {
     }
 
     #[test]
+    fn windows_marker_rejects_near_matches_and_ambiguous_lists() {
+        let rule = rule();
+        let text = format!(
+            "Rule Name: {}\nDescription: {}\nLocalPort: {}\nProgram: {}\n",
+            rule.name,
+            rule.token.as_deref().unwrap(),
+            rule.port,
+            rule.program.display()
+        );
+        assert_eq!(windows_marker(&text, &rule), Some(true));
+        assert_eq!(
+            windows_marker(&text.replace("5198", "15198"), &rule),
+            Some(false)
+        );
+        assert_eq!(
+            windows_marker(
+                &text.replace("Rule Name: moss-", "Rule Name: foreign-moss-"),
+                &rule
+            ),
+            Some(false)
+        );
+        assert_eq!(windows_marker(&format!("{text}{text}"), &rule), None);
+        assert!(windows_lookup(2, &text, &rule).is_err());
+        assert!(windows_lookup(1, "lookup failed", &rule).is_err());
+        assert!(windows_lookup(0, "garbled", &rule).is_err());
+        assert!(windows_lookup(0, &format!("{text}{text}"), &rule).is_err());
+        assert_eq!(
+            windows_lookup(1, "No rules match the specified criteria.\n", &rule),
+            Ok(false)
+        );
+    }
+
+    #[test]
     fn marker_checks_accept_ours_and_refuse_foreign_rules() {
         let owned = rule();
         let program = owned.program.display().to_string();
         let good = format!(
-            "Rule Name: {}\n{program}\n5198\n0123456789abcdef\n",
+            "Rule Name: {}\nProgram: {program}\nLocalPort: 5198\nDescription: 0123456789abcdef\n",
             owned.name
         );
         assert_eq!(windows_marker(&good, &owned), Some(true));
@@ -1251,7 +1299,7 @@ mod tests {
         let foreign = good.replace("0123456789abcdef", "someone-else");
         assert_eq!(windows_marker(&foreign, &owned), Some(false));
         let two = format!("{good}Rule Name: other\n");
-        assert_eq!(windows_marker(&two, &owned), Some(false));
+        assert_eq!(windows_marker(&two, &owned), None);
         assert_eq!(windows_marker("No rules match", &owned), Some(false));
         assert_eq!(windows_marker("garbled", &owned), None);
 
