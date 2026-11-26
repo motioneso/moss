@@ -55,14 +55,11 @@ fn command_line(pid: i32) -> Option<Vec<String>> {
     Some(text.split('\0').filter(|arg| !arg.is_empty()).map(str::to_string).collect())
 }
 
-/// `ps` joins arguments with spaces. A program path holding a space therefore fails the check,
-/// which errs towards signalling nothing.
+#[cfg(any(target_os = "macos", test))]
+#[path = "procs_macos.rs"]
+mod macos;
 #[cfg(target_os = "macos")]
-fn command_line(pid: i32) -> Option<Vec<String>> {
-    let out = std::process::Command::new("/bin/ps").args(["-ww", "-o", "command=", "-p", &pid.to_string()]).output().ok()?;
-    let args: Vec<String> = String::from_utf8_lossy(&out.stdout).split_whitespace().map(str::to_string).collect();
-    (!args.is_empty()).then_some(args)
-}
+use macos::command_line;
 
 /// Whether a `postgres` process with these arguments belongs to the install.
 pub fn belongs(args: &[&str], data: &Path, cluster: &str) -> bool {
