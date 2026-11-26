@@ -67,13 +67,15 @@ class LibraryTests(unittest.TestCase):
             (bundle / "bin").mkdir(parents=True)
             (bundle / "lib").mkdir()
             original.mkdir()
-            (bundle / "bin/initdb").write_bytes(b"executable fixture")
+            helper = bundle / "lib/postgresql/pgxs/src/test/regress/pg_regress"
+            helper.parent.mkdir(parents=True)
+            helper.write_bytes(b"\xcf\xfa\xed\xfe" + b"executable fixture")
             (original / "libicuuc.dylib").write_bytes(b"icu fixture")
             (original / "libicudata.dylib").write_bytes(b"icu data fixture")
 
             def otool(args, **kwargs):
                 file = Path(args[-1])
-                dep = {"initdb": str(original / "libicuuc.dylib"),
+                dep = {"pg_regress": str(original / "libicuuc.dylib"),
                        "libicuuc.dylib": "@loader_path/libicudata.dylib"}.get(file.name)
                 output = str(file) + ":\n" + (f"\t{dep} (compatibility version 1.0.0)\n" if dep else "")
                 return subprocess.CompletedProcess(args, 0, stdout=output)

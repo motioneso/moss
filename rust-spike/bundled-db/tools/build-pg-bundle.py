@@ -17,6 +17,8 @@ import tarfile
 import urllib.request
 import zipfile
 
+from bundle_libraries import MACHO
+
 HERE = Path(__file__).resolve().parent
 SOURCES = json.loads((HERE / "sources.json").read_text())
 TOOLS = ("postgres", "initdb", "pg_ctl", "psql", "pg_dump", "pg_restore", "pg_config")
@@ -99,7 +101,14 @@ def unix_build(pg, vector, out, jobs):
 
 def relocate_mac(out):
     # Rewrite dependencies recursively, including Homebrew ICU's C++ dependency.
-    pending = list((out / "bin").iterdir()) + list((out / "lib").rglob("*.dylib")) + list((out / "lib").rglob("*.so"))
+    pending = []
+    # PG also installs executables under lib/postgresql/pgxs. Match the audit's
+    # Mach-O coverage, rather than guessing native files from names or folders.
+    for file in out.rglob("*"):
+        if file.is_file() and not file.is_symlink():
+            with file.open("rb") as stream:
+                if stream.read(4) in MACHO:
+                    pending.append(file)
     seen = set()
     originals = {}
     while pending:
