@@ -73,7 +73,9 @@ async fn stop_requested(folder: Option<&Path>) {
     let path = folder.join(STOP_FILE);
     loop {
         tokio::time::sleep(Duration::from_millis(300)).await;
-        let Ok(bytes) = private_read(&path) else { continue };
+        let Ok(bytes) = private_read(&path) else {
+            continue;
+        };
         let _ = std::fs::remove_file(&path);
         let named = String::from_utf8_lossy(&bytes).trim().parse::<u32>().ok();
         if named == Some(std::process::id()) {
@@ -88,6 +90,7 @@ pub struct Listening {
     listeners: Vec<TcpListener>,
     binder: Option<Binder>,
     port: u16,
+    sharing: bool,
     switch: tokio::sync::mpsc::Receiver<(bool, Reply)>,
 }
 
@@ -115,7 +118,10 @@ impl Binder {
             match TcpListener::bind(SocketAddr::new(ip, port)).await {
                 Ok(l) => {
                     if port == 0 {
-                        port = l.local_addr().map_err(|_| "Cannot read the listening port")?.port();
+                        port = l
+                            .local_addr()
+                            .map_err(|_| "Cannot read the listening port")?
+                            .port();
                     }
                     found.push(l);
                 }
@@ -143,7 +149,9 @@ impl ListenSwitch {
             .send((sharing, reply))
             .await
             .map_err(|_| "The server is not accepting connections")?;
-        answer.await.map_err(|_| "The server is not accepting connections")?
+        answer
+            .await
+            .map_err(|_| "The server is not accepting connections")?
     }
 }
 
@@ -151,10 +159,22 @@ impl Listening {
     pub async fn bind(listen: SocketAddr, sharing: bool) -> Result<(Self, ListenSwitch), String> {
         let mut binder = Binder { shared: listen };
         let listeners = binder.bind(sharing).await?;
-        let port = listeners[0].local_addr().map_err(|_| "Cannot read the listening port")?.port();
+        let port = listeners[0]
+            .local_addr()
+            .map_err(|_| "Cannot read the listening port")?
+            .port();
         binder.shared.set_port(port);
         let (tx, switch) = tokio::sync::mpsc::channel(4);
-        Ok((Listening { listeners, binder: Some(binder), port, switch }, ListenSwitch { tx }))
+        Ok((
+            Listening {
+                listeners,
+                binder: Some(binder),
+                port,
+                sharing,
+                switch,
+            },
+            ListenSwitch { tx },
+        ))
     }
 
     pub fn port(&self) -> u16 {
@@ -178,9 +198,18 @@ pub async fn serve_in(
     app: Router,
     folder: Option<&Path>,
 ) -> Result<(), String> {
-    let port = listener.local_addr().map_err(|_| "Cannot read the listening port")?.port();
+    let port = listener
+        .local_addr()
+        .map_err(|_| "Cannot read the listening port")?
+        .port();
     let (_, switch) = tokio::sync::mpsc::channel(1);
-    let listening = Listening { listeners: vec![listener], binder: None, port, switch };
+    let listening = Listening {
+        listeners: vec![listener],
+        binder: None,
+        port,
+        sharing: false,
+        switch,
+    };
     serve_switched(listening, acceptor, app, folder).await
 }
 
@@ -220,7 +249,12 @@ pub async fn serve_switched(
     let (tx, mut accepted) = tokio::sync::mpsc::channel(64);
     let binder = listening.binder.clone();
     let mut switch = listening.switch;
-    let mut sockets: Vec<_> = listening.listeners.into_iter().map(|l| accept_on(l, tx.clone())).collect();
+    let mut bound = listening.sharing;
+    let mut sockets: Vec<_> = listening
+        .listeners
+        .into_iter()
+        .map(|l| accept_on(l, tx.clone()))
+        .collect();
     let stop = async {
         tokio::select! { _ = stop_signal() => {}, _ = stop_requested(folder) => {} }
     };
@@ -230,6 +264,11 @@ pub async fn serve_switched(
             _ = &mut stop => break,
             Some(_) = connections.join_next(), if !connections.is_empty() => {},
             Some((sharing, reply)) = switch.recv() => {
+                // A request for the state already held changes nothing.
+                if sharing == bound {
+                    let _ = reply.send(Ok(()));
+                    continue;
+                }
                 // Close every socket first, so the new set can reuse the port.
                 for socket in sockets.drain(..) {
                     socket.abort();
@@ -240,11 +279,11 @@ pub async fn serve_switched(
                     None => Err("This server cannot change its sockets".to_owned()),
                 };
                 match result {
-                    Ok(next) => { sockets = next; let _ = reply.send(Ok(())); }
+                    Ok(next) => { sockets = next; bound = sharing; let _ = reply.send(Ok(())); }
                     Err(reason) => {
                         // Return to the earlier state rather than stop accepting.
                         if let Some(binder) = &binder {
-                            if let Ok(back) = rebind(binder, !sharing, &tx).await { sockets = back; }
+                            if let Ok(back) = rebind(binder, bound, &tx).await { sockets = back; }
                         }
                         let _ = reply.send(Err(reason));
                     }
@@ -280,7 +319,10 @@ async fn rebind(
     tx: &tokio::sync::mpsc::Sender<(TcpStream, SocketAddr)>,
 ) -> Result<Vec<tokio::task::JoinHandle<()>>, String> {
     let listeners = binder.bind(sharing).await?;
-    Ok(listeners.into_iter().map(|l| accept_on(l, tx.clone())).collect())
+    Ok(listeners
+        .into_iter()
+        .map(|l| accept_on(l, tx.clone()))
+        .collect())
 }
 
 /// Uses the operator's installed OpenSSL. Does not install software or machine trust roots.

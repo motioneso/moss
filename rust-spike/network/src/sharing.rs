@@ -35,14 +35,25 @@ impl Control {
         save: impl Fn(bool) -> Result<(), ()>,
     ) -> Result<(), Failure> {
         if on {
-            self.firewall.open(self.port).await.map_err(Failure::Firewall)?;
+            self.firewall
+                .open(self.port)
+                .await
+                .map_err(Failure::Firewall)?;
             if save(true).is_err() {
-                let _ = self.firewall.close().await;
+                self.firewall
+                    .close()
+                    .await
+                    .map_err(|_| Failure::Firewall(Refusal::Stuck))?;
                 return Err(Failure::Save);
             }
             if self.switch.set(true).await.is_err() {
-                let _ = save(previous);
-                let _ = self.firewall.close().await;
+                if save(previous).is_err() {
+                    return Err(Failure::Save);
+                }
+                self.firewall
+                    .close()
+                    .await
+                    .map_err(|_| Failure::Firewall(Refusal::Stuck))?;
                 return Err(Failure::Switch);
             }
             policy.set_sharing(true);

@@ -17,8 +17,8 @@ use axum::{
 use safety_core::{
     access::AccessContext,
     auth, companion_gate,
-    device_requests::DeviceRequests,
     db::DataContext,
+    device_requests::DeviceRequests,
     error::ApiError,
     http::{log, Platform},
 };
@@ -170,9 +170,10 @@ async fn boundary(State(n): State<Arc<Network>>, mut request: Request, next: Nex
     let mut response = response;
     // A checked module picture arrives with its own short private cache time; keep it.
     let kept = response.status().is_success()
-        && response.headers().get(header::CACHE_CONTROL).is_some_and(|v| {
-            v.to_str().is_ok_and(|v| v.starts_with("private, max-age="))
-        })
+        && response
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .is_some_and(|v| v.to_str().is_ok_and(|v| v.starts_with("private, max-age=")))
         && response
             .headers()
             .get(header::CONTENT_TYPE)
@@ -281,12 +282,20 @@ async fn guarded(n: &Arc<Network>, request: &mut Request, next: Next) -> Respons
             }
             Err(error) => return error.into_response(),
         }
-    } else if let (false, Some((kind, token))) =
-        (public(&path), companion_gate::companion_bearer(request.headers()))
-    {
+    } else if let (false, Some((kind, token))) = (
+        public(&path),
+        companion_gate::companion_bearer(request.headers()),
+    ) {
         // A device credential opens only its own short list of paths.
-        match companion_gate::admit(&n.platform, request.headers(), request.method(), &path, kind, &token)
-            .await
+        match companion_gate::admit(
+            &n.platform,
+            request.headers(),
+            request.method(),
+            &path,
+            kind,
+            &token,
+        )
+        .await
         {
             Ok(admitted) => {
                 scoped = Some(companion_gate::Scoped::new(
@@ -421,14 +430,12 @@ async fn network_status(
     let leaf = crate::instance::leaf_der(&bytes)
         .map_err(|_| ApiError::http(500, "Invalid public certificate"))?;
     let fingerprint = crate::instance::fingerprint(&leaf);
-    Ok(Json(
-        json!({
-            "sharing":n.policy.sharing(),
-            "origins":config.origins,
-            "fingerprint":fingerprint,
-            "firewall":n.control.as_ref().map(|c| c.firewall.state().word()),
-        }),
-    ))
+    Ok(Json(json!({
+        "sharing":n.policy.sharing(),
+        "origins":config.origins,
+        "fingerprint":fingerprint,
+        "firewall":n.control.as_ref().map(|c| c.firewall.state().word()),
+    })))
 }
 
 async fn public_certificate(
@@ -465,7 +472,7 @@ struct Sharing {
 fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
     let message = match refusal {
         Refusal::Declined => "The firewall did not allow Moss.",
-        Refusal::Failed => "The firewall did not take the change.",
+        Refusal::Failed | Refusal::Stuck => "The firewall did not take the change.",
     };
     (
         StatusCode::CONFLICT,

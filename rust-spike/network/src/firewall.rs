@@ -18,6 +18,11 @@ pub const RECORD_FILE: &str = "firewall.json";
 pub const STAND_IN_ENV: &str = "MOSS_FIREWALL_STAND_IN";
 /// The helper exits with this when the rule could not be changed.
 pub const EXIT_FAILED: i32 = 3;
+/// A failed add whose rollback could not be confirmed. The rule may still be open.
+pub const EXIT_STUCK: i32 = 4;
+/// The rule was already open before this add, so it belongs to someone else and stays on remove.
+pub const EXIT_ALREADY: i32 = 5;
+const STUCK: &str = "The firewall rule could not be taken back";
 const PROMPT_LIMIT: Duration = Duration::from_secs(600);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -47,6 +52,9 @@ impl Rule {
     /// Names and paths reach operating system commands, so only plain values are accepted.
     pub fn check(&self) -> Result<(), &'static str> {
         let plain = |c: char| c.is_ascii_alphanumeric() || "-_.".contains(c);
+        if !self.name.starts_with("Moss-") {
+            return Err("The rule name must start with Moss-");
+        }
         if self.name.is_empty() || self.name.len() > 64 || !self.name.chars().all(plain) {
             return Err("The rule name must be short and plain");
         }
@@ -99,15 +107,43 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
     match os {
         Os::Windows => match action {
             Action::Add => vec![
-                cmd(&["netsh", "advfirewall", "firewall", "delete", "rule", &format!("name={}", rule.name)]),
                 cmd(&[
-                    "netsh", "advfirewall", "firewall", "add", "rule",
-                    &format!("name={}", rule.name), "dir=in", "action=allow", "protocol=TCP",
-                    &format!("localport={port}"), &format!("program={program}"), "enable=yes",
+                    "netsh",
+                    "advfirewall",
+                    "firewall",
+                    "delete",
+                    "rule",
+                    &format!("name={}", rule.name),
+                    "protocol=TCP",
+                    &format!("localport={port}"),
+                    &format!("program={program}"),
+                ]),
+                cmd(&[
+                    "netsh",
+                    "advfirewall",
+                    "firewall",
+                    "add",
+                    "rule",
+                    &format!("name={}", rule.name),
+                    "dir=in",
+                    "action=allow",
+                    "protocol=TCP",
+                    &format!("localport={port}"),
+                    &format!("program={program}"),
+                    "enable=yes",
                 ]),
             ],
+            // Only a rule with this name, port and program goes, never another one by name.
             Action::Remove => vec![cmd(&[
-                "netsh", "advfirewall", "firewall", "delete", "rule", &format!("name={}", rule.name),
+                "netsh",
+                "advfirewall",
+                "firewall",
+                "delete",
+                "rule",
+                &format!("name={}", rule.name),
+                "protocol=TCP",
+                &format!("localport={port}"),
+                &format!("program={program}"),
             ])],
         },
         Os::Mac => match action {
@@ -119,15 +155,24 @@ pub fn plan(os: Os, linux: Linux, action: Action, rule: &Rule) -> Vec<Vec<String
         },
         Os::Linux => match (linux, action) {
             (Linux::Firewalld, Action::Add) => vec![
-                cmd(&["firewall-cmd", "--permanent", &format!("--add-port={port}/tcp")]),
+                cmd(&[
+                    "firewall-cmd",
+                    "--permanent",
+                    &format!("--add-port={port}/tcp"),
+                ]),
                 cmd(&["firewall-cmd", &format!("--add-port={port}/tcp")]),
             ],
             (Linux::Firewalld, Action::Remove) => vec![
-                cmd(&["firewall-cmd", "--permanent", &format!("--remove-port={port}/tcp")]),
+                cmd(&[
+                    "firewall-cmd",
+                    "--permanent",
+                    &format!("--remove-port={port}/tcp"),
+                ]),
                 cmd(&["firewall-cmd", &format!("--remove-port={port}/tcp")]),
             ],
             (Linux::Ufw, Action::Add) => vec![cmd(&[
-                "ufw", "allow", "in", "proto", "tcp", "to", "any", "port", &port, "comment", &rule.name,
+                "ufw", "allow", "in", "proto", "tcp", "to", "any", "port", &port, "comment",
+                &rule.name,
             ])],
             (Linux::Ufw, Action::Remove) => vec![cmd(&[
                 "ufw", "delete", "allow", "in", "proto", "tcp", "to", "any", "port", &port,
@@ -142,7 +187,14 @@ fn present_query(os: Os, linux: Linux, rule: &Rule) -> Option<(Vec<String>, Opti
     let port = rule.port.to_string();
     match os {
         Os::Windows => Some((
-            cmd(&["netsh", "advfirewall", "firewall", "show", "rule", &format!("name={}", rule.name)]),
+            cmd(&[
+                "netsh",
+                "advfirewall",
+                "firewall",
+                "show",
+                "rule",
+                &format!("name={}", rule.name),
+            ]),
             None,
         )),
         Os::Mac => Some((
@@ -151,7 +203,11 @@ fn present_query(os: Os, linux: Linux, rule: &Rule) -> Option<(Vec<String>, Opti
         )),
         Os::Linux => match linux {
             Linux::Firewalld => Some((
-                cmd(&["firewall-cmd", "--permanent", &format!("--query-port={port}/tcp")]),
+                cmd(&[
+                    "firewall-cmd",
+                    "--permanent",
+                    &format!("--query-port={port}/tcp"),
+                ]),
                 None,
             )),
             Linux::Ufw => Some((cmd(&["ufw", "show", "added"]), Some(format!("{port}/tcp")))),
@@ -173,7 +229,9 @@ fn output(args: &[String]) -> Option<(bool, String)> {
 }
 
 fn detect_linux() -> Linux {
-    if output(&cmd(&["firewall-cmd", "--state"])).is_some_and(|(ok, text)| ok && text.trim() == "running") {
+    if output(&cmd(&["firewall-cmd", "--state"]))
+        .is_some_and(|(ok, text)| ok && text.trim() == "running")
+    {
         Linux::Firewalld
     } else if output(&cmd(&["ufw", "version"])).is_some_and(|(ok, _)| ok) {
         Linux::Ufw
@@ -182,38 +240,82 @@ fn detect_linux() -> Linux {
     }
 }
 
+/// Whether the rule is in the system. `None` means the answer could not be read. Firewalld is
+/// asked about both its saved and its live rules, because either one keeps the port open.
 fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
     let (query, needle) = present_query(os, linux, rule)?;
-    let (ok, text) = output(&query)?;
-    Some(match needle {
-        Some(needle) => ok && text.contains(&needle),
-        None => ok,
-    })
+    let read = |query: &[String]| {
+        let (ok, text) = output(query)?;
+        Some(match &needle {
+            Some(needle) => ok && text.contains(needle),
+            None => ok,
+        })
+    };
+    let saved = read(&query)?;
+    if linux == Linux::Firewalld && os == Os::Linux {
+        let live = read(&cmd(&[
+            "firewall-cmd",
+            &format!("--query-port={}/tcp", rule.port),
+        ]))?;
+        return Some(saved || live);
+    }
+    Some(saved)
 }
 
 /// Runs the operating system commands. This is the privileged step; callers reach it through
-/// the elevated helper. The rule is read back, and a failed add is removed again.
-pub fn apply(action: Action, rule: &Rule) -> Result<(), &'static str> {
+/// the elevated helper. The rule is read back, and a failed add is removed again. Returns true
+/// when the rule was already open before an add, which then leaves it as it found it.
+pub fn apply(action: Action, rule: &Rule) -> Result<bool, &'static str> {
     rule.check()?;
-    let (os, linux) = (this_os(), if this_os() == Os::Linux { detect_linux() } else { Linux::Nothing });
+    let (os, linux) = (
+        this_os(),
+        if this_os() == Os::Linux {
+            detect_linux()
+        } else {
+            Linux::Nothing
+        },
+    );
+    let queryable = present_query(os, linux, rule).is_some();
+    if action == Action::Add
+        && os != Os::Windows
+        && queryable
+        && exists(os, linux, rule) == Some(true)
+    {
+        return Ok(true);
+    }
     for step in plan(os, linux, action, rule) {
         // A missing rule makes delete commands fail, which is the state removal wants. The
         // read-back below decides success.
         let ran = output(&step).is_some_and(|(ok, _)| ok);
         if !ran && action == Action::Add && !step.iter().any(|s| s == "delete") {
-            let _ = apply_quietly(Action::Remove, rule, os, linux);
-            return Err("The firewall refused the rule");
+            return rolled_back(os, linux, rule, "The firewall refused the rule");
         }
     }
-    match (action, exists(os, linux, rule)) {
-        (Action::Add, Some(false)) | (Action::Remove, Some(true)) => {
-            if action == Action::Add {
-                let _ = apply_quietly(Action::Remove, rule, os, linux);
-            }
-            Err("The firewall did not keep the change")
-        }
-        _ => Ok(()),
+    if !queryable {
+        return Ok(false);
     }
+    let present = exists(os, linux, rule);
+    match action {
+        Action::Add if present != Some(true) => {
+            rolled_back(os, linux, rule, "The firewall did not keep the change")
+        }
+        Action::Remove if present != Some(false) => Err("The firewall did not keep the change"),
+        _ => Ok(false),
+    }
+}
+
+/// Takes a failed add back out and reports `reason`, or says so when the rule could not be removed.
+fn rolled_back(
+    os: Os,
+    linux: Linux,
+    rule: &Rule,
+    reason: &'static str,
+) -> Result<bool, &'static str> {
+    let _ = apply_quietly(Action::Remove, rule, os, linux);
+    if present_query(os, linux, rule).is_some() && exists(os, linux, rule) != Some(false) {
+        return Err(STUCK);
+    }
+    Err(reason)
 }
 
 fn apply_quietly(action: Action, rule: &Rule, os: Os, linux: Linux) -> Option<()> {
@@ -245,6 +347,20 @@ pub enum Refusal {
     Declined,
     /// The prompt was approved but the firewall did not take the change.
     Failed,
+    /// The change failed and the rule may still be open, so its record is kept.
+    Stuck,
+}
+
+/// The rule the instance asked for. A record that is not confirmed was written before the
+/// operating system approved the change, so it never counts as permission.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Record {
+    rule: Rule,
+    confirmed: bool,
+    /// The rule was open before Moss added it, so removal leaves it alone.
+    #[serde(default)]
+    preexisting: bool,
 }
 
 #[derive(Clone)]
@@ -262,7 +378,13 @@ impl Firewall {
             .and_then(|n| n.to_str())
             .unwrap_or("default")
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '-' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || "-_.".contains(c) {
+                    c
+                } else {
+                    '-'
+                }
+            })
             .take(48)
             .collect::<String>();
         Firewall {
@@ -277,51 +399,74 @@ impl Firewall {
         self.folder.join(RECORD_FILE)
     }
 
-    fn recorded(&self) -> Option<Rule> {
-        let bytes = std::fs::read(self.record_path()).ok()?;
-        serde_json::from_slice(&bytes).ok()
-    }
-
-    pub fn state(&self) -> State {
-        if self.record_path().exists() {
-            State::Allowed
-        } else {
-            State::NotAsked
+    /// `Ok(None)` means no record. A record that cannot be read is an error, never "no record".
+    fn recorded(&self) -> Result<Option<Record>, Refusal> {
+        match std::fs::read(self.record_path()) {
+            Ok(bytes) => serde_json::from_slice(&bytes)
+                .map(Some)
+                .map_err(|_| Refusal::Failed),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(_) => Err(Refusal::Failed),
         }
     }
 
-    fn write_record(&self, rule: &Rule) -> Result<(), Refusal> {
-        let bytes = serde_json::to_vec_pretty(rule).map_err(|_| Refusal::Failed)?;
+    pub fn state(&self) -> State {
+        match self.recorded() {
+            Ok(Some(record)) if record.confirmed => State::Allowed,
+            _ => State::NotAsked,
+        }
+    }
+
+    fn write_record(&self, record: &Record) -> Result<(), Refusal> {
+        let bytes = serde_json::to_vec_pretty(record).map_err(|_| Refusal::Failed)?;
         crate::config::private_write(&self.record_path(), &bytes).map_err(|_| Refusal::Failed)
     }
 
     /// Opens the rule for `port`, asking the owner once. Nothing stays open if it fails.
     pub async fn open(&self, port: u16) -> Result<(), Refusal> {
-        let rule = Rule { name: self.name.clone(), port, program: self.program.clone() };
-        match self.recorded() {
-            Some(open) if open == rule => return Ok(()),
+        let rule = Rule {
+            name: self.name.clone(),
+            port,
+            program: self.program.clone(),
+        };
+        match self.recorded()? {
+            Some(open) if open.confirmed && open.rule == rule => return Ok(()),
+            // A different rule, or one that was never confirmed, goes before a new one opens.
             Some(_) => self.close().await?,
             None => {}
         }
         // The record comes first, so a crash during the change still leaves a way to remove it.
-        self.write_record(&rule)?;
-        let run = self.run(Action::Add, rule).await;
-        if run.is_err() {
-            let _ = std::fs::remove_file(self.record_path());
+        self.write_record(&Record {
+            rule: rule.clone(),
+            confirmed: false,
+            preexisting: false,
+        })?;
+        match self.run(Action::Add, rule.clone()).await {
+            Ok(preexisting) => self.write_record(&Record {
+                rule,
+                confirmed: true,
+                preexisting,
+            }),
+            Err(Refusal::Stuck) => Err(Refusal::Stuck),
+            Err(other) => {
+                let _ = std::fs::remove_file(self.record_path());
+                Err(other)
+            }
         }
-        run
     }
 
-    /// Removes the open rule, if there is one.
+    /// Removes the open rule, if there is one. The record stays until the removal is confirmed.
     pub async fn close(&self) -> Result<(), Refusal> {
-        let Some(rule) = self.recorded() else {
+        let Some(record) = self.recorded()? else {
             return Ok(());
         };
-        self.run(Action::Remove, rule).await?;
+        if !record.preexisting {
+            self.run(Action::Remove, record.rule).await?;
+        }
         std::fs::remove_file(self.record_path()).map_err(|_| Refusal::Failed)
     }
 
-    async fn run(&self, action: Action, rule: Rule) -> Result<(), Refusal> {
+    async fn run(&self, action: Action, rule: Rule) -> Result<bool, Refusal> {
         let command = elevated(self.stand_in.as_deref(), action, &rule)?;
         tokio::task::spawn_blocking(move || wait(command))
             .await
@@ -360,7 +505,11 @@ fn elevated(stand_in: Option<&Path>, action: Action, rule: &Rule) -> Result<Comm
         command.arg(&exe).args(&args);
     } else if cfg!(windows) {
         command = Command::new("powershell.exe");
-        let list = args.iter().map(|a| quote_windows(a)).collect::<Vec<_>>().join(" ");
+        let list = args
+            .iter()
+            .map(|a| quote_windows(a))
+            .collect::<Vec<_>>()
+            .join(" ");
         command
             .args(["-NoProfile", "-NonInteractive", "-Command"])
             .arg(
@@ -376,16 +525,21 @@ fn elevated(stand_in: Option<&Path>, action: Action, rule: &Rule) -> Result<Comm
             .collect::<Vec<_>>()
             .join(" ");
         let script = shell.replace('\\', "\\\\").replace('"', "\\\"");
-        command.arg("-e").arg(format!("do shell script \"{script}\" with administrator privileges"));
+        command.arg("-e").arg(format!(
+            "do shell script \"{script}\" with administrator privileges"
+        ));
     } else {
         // The graphical agent only. Without it the prompt is declined, never a terminal.
         command = Command::new("pkexec");
-        command.arg("--disable-internal-agent").arg(&exe).args(&args);
+        command
+            .arg("--disable-internal-agent")
+            .arg(&exe)
+            .args(&args);
     }
     Ok(command)
 }
 
-fn wait(mut command: Command) -> Result<(), Refusal> {
+fn wait(mut command: Command) -> Result<bool, Refusal> {
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -396,7 +550,9 @@ fn wait(mut command: Command) -> Result<(), Refusal> {
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
-            Ok(None) if started.elapsed() < PROMPT_LIMIT => std::thread::sleep(Duration::from_millis(200)),
+            Ok(None) if started.elapsed() < PROMPT_LIMIT => {
+                std::thread::sleep(Duration::from_millis(200))
+            }
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
@@ -405,7 +561,7 @@ fn wait(mut command: Command) -> Result<(), Refusal> {
         }
     };
     if status.success() {
-        return Ok(());
+        return Ok(false);
     }
     let mut note = String::new();
     if let Some(mut err) = child.stderr.take() {
@@ -413,7 +569,9 @@ fn wait(mut command: Command) -> Result<(), Refusal> {
         let _ = err.read_to_string(&mut note);
     }
     match status.code() {
+        Some(EXIT_ALREADY) => Ok(true),
         Some(EXIT_FAILED) => Err(Refusal::Failed),
+        Some(EXIT_STUCK) => Err(Refusal::Stuck),
         // The macOS prompt reports a cancelled dialog as error -128.
         Some(1) if note.contains("-128") => Err(Refusal::Declined),
         Some(1) if cfg!(target_os = "macos") => Err(Refusal::Failed),
@@ -426,7 +584,11 @@ mod tests {
     use super::*;
 
     fn rule() -> Rule {
-        Rule { name: "Moss-default".into(), port: 5198, program: std::env::current_exe().unwrap() }
+        Rule {
+            name: "Moss-default".into(),
+            port: 5198,
+            program: std::env::current_exe().unwrap(),
+        }
     }
 
     #[test]
@@ -435,6 +597,9 @@ mod tests {
         let add = steps.last().unwrap();
         assert!(add.contains(&"localport=5198".to_owned()));
         assert!(add.iter().any(|a| a.starts_with("program=")));
+        let delete = plan(Os::Windows, Linux::Nothing, Action::Remove, &rule());
+        assert!(delete[0].iter().any(|a| a.starts_with("program=")));
+        assert!(delete[0].contains(&"localport=5198".to_owned()));
         assert!(add.contains(&"dir=in".to_owned()));
     }
 
@@ -458,16 +623,68 @@ mod tests {
         bad.name = "x; rm".into();
         assert!(bad.check().is_err());
         let mut bad = rule();
+        bad.name = "Other-default".into();
+        assert!(bad.check().is_err());
+        let mut bad = rule();
         bad.program = PathBuf::from("relative");
         assert!(bad.check().is_err());
         assert!(rule().check().is_ok());
+    }
+
+    struct Scratch(PathBuf);
+    impl Scratch {
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    fn scratch() -> Scratch {
+        let path = std::env::temp_dir().join(format!(
+            "moss-fw-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        Scratch(path)
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_record_is_never_treated_as_no_record() {
+        let folder = scratch();
+        let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
+        assert!(firewall.close().await.is_ok());
+        std::fs::write(folder.path().join(RECORD_FILE), b"not json").unwrap();
+        assert!(firewall.close().await.is_err());
+        assert!(folder.path().join(RECORD_FILE).exists());
+        assert_eq!(firewall.state(), State::NotAsked);
+    }
+
+    #[tokio::test]
+    async fn a_record_never_confirmed_does_not_count_as_allowed() {
+        let folder = scratch();
+        let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
+        let record = Record {
+            rule: rule(),
+            confirmed: false,
+            preexisting: false,
+        };
+        firewall.write_record(&record).unwrap();
+        assert_eq!(firewall.state(), State::NotAsked);
     }
 
     #[test]
     fn linux_prompt_never_opens_a_terminal() {
         if cfg!(unix) && !cfg!(target_os = "macos") {
             let command = elevated(None, Action::Add, &rule()).ok().unwrap();
-            let args: Vec<_> = command.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+            let args: Vec<_> = command
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect();
             assert_eq!(command.get_program(), "pkexec");
             assert_eq!(args[0], "--disable-internal-agent");
         }
@@ -485,8 +702,13 @@ pub fn command(args: &[String]) -> i32 {
             (Some("--instance"), Some(folder)) => PathBuf::from(folder),
             _ => return 2,
         };
-        let Ok(program) = std::env::current_exe() else { return EXIT_FAILED };
-        let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() else {
+        let Ok(program) = std::env::current_exe() else {
+            return EXIT_FAILED;
+        };
+        let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        else {
             return EXIT_FAILED;
         };
         return match runtime.block_on(Firewall::new(&folder, program).close()) {
@@ -510,16 +732,30 @@ pub fn command(args: &[String]) -> i32 {
             _ => return 2,
         }
     }
-    let (Some(name), Some(port), Some(program)) = (name, port, program) else { return 2 };
+    let (Some(name), Some(port), Some(program)) = (name, port, program) else {
+        return 2;
+    };
     // Only this program may be named, so the elevated helper opens nothing else.
     if std::env::current_exe().ok().as_deref() != Some(program.as_path()) {
         return 2;
     }
-    match apply(action, &Rule { name, port, program }) {
-        Ok(()) => 0,
+    match apply(
+        action,
+        &Rule {
+            name,
+            port,
+            program,
+        },
+    ) {
+        Ok(true) => EXIT_ALREADY,
+        Ok(false) => 0,
         Err(reason) => {
             eprintln!("moss-server: {reason}");
-            EXIT_FAILED
+            if reason == STUCK {
+                EXIT_STUCK
+            } else {
+                EXIT_FAILED
+            }
         }
     }
 }

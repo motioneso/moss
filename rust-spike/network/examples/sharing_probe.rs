@@ -44,19 +44,27 @@ fn is_root() -> bool {
 }
 
 fn value(args: &[String], flag: &str) -> String {
-    let at = args.iter().position(|a| a == flag).unwrap_or_else(|| panic!("{flag} needed"));
+    let at = args
+        .iter()
+        .position(|a| a == flag)
+        .unwrap_or_else(|| panic!("{flag} needed"));
     args[at + 1].clone()
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if std::env::var_os("PROBE_STAND_IN").is_some() && std::env::var_os(firewall::STAND_IN_ENV).is_some() {
+    if std::env::var_os("PROBE_STAND_IN").is_some()
+        && std::env::var_os(firewall::STAND_IN_ENV).is_some()
+    {
         // Called as `<stand-in> <program> firewall-rule ...`.
         if args.first().is_some_and(|a| PathBuf::from(a).is_absolute()) {
             std::process::exit(stand_in(&args));
         }
     }
-    if matches!(args.first().map(String::as_str), Some("firewall-rule" | "firewall-close")) {
+    if matches!(
+        args.first().map(String::as_str),
+        Some("firewall-rule" | "firewall-close")
+    ) {
         std::process::exit(firewall::command(&args));
     }
     let runtime = tokio::runtime::Runtime::new().unwrap();
