@@ -95,6 +95,18 @@ jobs:
               Get-Content "$work/out.txt" -Tail 10
               Get-Content "$work/err.txt" -Tail 10
               & quser.exe
+              Write-Host "PROBE: RDP listeners $(@(Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue).Count)"
+              Add-Type -AssemblyName UIAutomationClient
+              Add-Type -AssemblyName UIAutomationTypes
+              $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+              foreach ($window in $windows) {
+                  if ($window.Current.ProcessId -ne $client.Id) { continue }
+                  Write-Host "PROBE: RDP window $($window.Current.Name)"
+                  $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)
+                  foreach ($label in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)) {
+                      Write-Host "PROBE: RDP static label $($label.Current.Name)"
+                  }
+              }
               if ($process.ExitCode -ne 0) { throw 'Real logon probe failed' }
           } finally {
               [ProbeCredential]::CredDeleteW('TERMSRV/127.0.0.2', 1, 0) | Out-Null
