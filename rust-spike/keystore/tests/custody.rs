@@ -451,3 +451,20 @@ fn kill_after_strip_then_failed_retry_keeps_the_ai_key() {
         .unwrap()
         .contains("test-module-ai-key-3456"));
 }
+
+#[test]
+fn an_unreadable_folder_cannot_hide_a_secret_copy() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    let hidden = dir.path().join("hidden");
+    fs::create_dir(&hidden).unwrap();
+    fs::write(hidden.join("copy.txt"), "test-auth-secret-5678-abcd").unwrap();
+    fs::set_permissions(&hidden, fs::Permissions::from_mode(0o000)).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    let result = migrate(dir.path(), &mut store, "svc", false)
+        .and_then(|prepared| prepared.commit_with(&mut store, "svc"));
+    fs::set_permissions(&hidden, fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(result.is_err(), "an unreadable folder must count as a hit");
+    assert!(dir.path().join("credentials.json").exists());
+}

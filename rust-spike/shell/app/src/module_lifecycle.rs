@@ -77,9 +77,18 @@ fn child(instance: &FilePath, actor: &str, operation: Option<&str>) -> anyhow::R
     let output = command
         .env(crate::module_install::INSTALL_URL_VARIABLE, url)
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .output()?;
-    anyhow::ensure!(output.status.success(), "The lifecycle child stopped");
+    if !output.status.success() {
+        // A key store failure in the child names itself and its remedy.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        for line in stderr.lines() {
+            if line.contains("app_keystore_") {
+                anyhow::bail!("{line}");
+            }
+        }
+        anyhow::bail!("The lifecycle child stopped");
+    }
     Ok(serde_json::from_slice(&output.stdout)?)
 }
 async fn submit(

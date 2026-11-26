@@ -31,7 +31,7 @@ pub fn apply(instance: &Path, access: &AccessContext, input: Input) -> Result<()
         .env(module_install::INSTALL_URL_VARIABLE, url)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
     let payload = serde_json::to_vec(&input)?;
     let written = child
@@ -44,7 +44,18 @@ pub fn apply(instance: &Path, access: &AccessContext, input: Input) -> Result<()
         let _ = child.wait();
         anyhow::bail!("Package transfer failed");
     }
-    ensure!(child.wait()?.success(), "Package activation failed");
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        // A key store failure in the child names itself and its remedy.
+        // Surface that line instead of the generic failure.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        for line in stderr.lines() {
+            if line.contains("app_keystore_") {
+                anyhow::bail!("{line}");
+            }
+        }
+        anyhow::bail!("Package activation failed");
+    }
     Ok(())
 }
 /// Internal installer entry: keeps the elevated login in one short-lived process.

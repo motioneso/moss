@@ -410,8 +410,17 @@ mod windows {
         fn store_master(&mut self, service: &str, master: &MasterKey) -> Result<(), CustodyError> {
             let protected = protect(master.bytes())?;
             std::fs::create_dir_all(&self.dir).map_err(|e| CustodyError::Io(e.to_string()))?;
-            std::fs::write(blob_path(&self.dir, service), STANDARD.encode(protected))
-                .map_err(|e| CustodyError::Io(e.to_string()))
+            // Stage beside the blob, then rename over it, so a crash mid-write
+            // leaves the old protected blob whole.
+            let target = blob_path(&self.dir, service);
+            let staging = target.with_extension("staging");
+            std::fs::write(&staging, STANDARD.encode(protected))
+                .map_err(|e| CustodyError::Io(e.to_string()))?;
+            let renamed = std::fs::rename(&staging, &target);
+            if renamed.is_err() {
+                let _ = std::fs::remove_file(&staging);
+            }
+            renamed.map_err(|e| CustodyError::Io(e.to_string()))
         }
         fn load_master(&self, service: &str) -> Result<MasterKey, CustodyError> {
             let text = std::fs::read_to_string(blob_path(&self.dir, service))

@@ -567,12 +567,34 @@ pub fn load_master(
 pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
     let mut hits = Vec::new();
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
+    let mut visited: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = fs::read_dir(&dir) else {
+        // A linked folder that points back to a parent must not loop forever.
+        let canonical = fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
+        if !visited.insert(canonical) {
             continue;
+        }
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            // A folder that cannot be read cannot be cleared, so it counts.
+            Err(_) => {
+                hits.push(dir);
+                continue;
+            }
         };
-        for entry in entries.flatten() {
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                // An entry that cannot be read cannot be cleared either.
+                Err(_) => {
+                    hits.push(dir.clone());
+                    continue;
+                }
+            };
             let path = entry.path();
+            // The is_dir check follows links on purpose: a linked folder
+            // holding a plain copy still counts, and the visited set above
+            // keeps the walk finite.
             if path.is_dir() {
                 // The database program's own folder stays out of the claim.
                 if dir == root && path.file_name().map(|n| n == "database").unwrap_or(false) {
@@ -610,29 +632,56 @@ fn collect_leaves(value: &Value, out: &mut Vec<Vec<u8>>) {
 
 /// The password inside a connection string such as a database address,
 /// split out so a bare copy of it is caught by the search too.
-fn url_password(text: &str) -> Option<Vec<u8>> {
-    let rest = text.split_once("://")?.1;
+fn url_passwords(text: &str) -> Vec<Vec<u8>> {
+    let Some(rest) = text.split_once("://").map(|(_, rest)| rest) else {
+        return Vec::new();
+    };
     let (authority, _) = rest.split_once(['/', '?', '#']).unwrap_or((rest, ""));
-    let userinfo = authority.rsplit_once('@')?.0;
-    let password = userinfo.split_once(':')?.1;
+    let Some(userinfo) = authority.rsplit_once('@').map(|(info, _)| info) else {
+        return Vec::new();
+    };
+    let Some(password) = userinfo.split_once(':').map(|(_, password)| password) else {
+        return Vec::new();
+    };
+    // Shorter than four characters cannot be searched for: it matches
+    // ordinary file bytes, so copy detection would be all noise. Real
+    // passwords in this system are far longer.
     if password.len() < 4 {
-        return None;
+        return Vec::new();
     }
-    // Connection strings percent-encode the password. A file holds it raw.
-    let mut raw = Vec::with_capacity(password.len());
+    // The raw form as written is always searched. When percent-decoding
+    // works, the decoded form a file would hold is searched too; when it
+    // does not, the raw form still covers the copy.
+    let mut forms = vec![password.as_bytes().to_vec()];
     let bytes = password.as_bytes();
+    let mut decoded = Vec::with_capacity(password.len());
+    let mut valid = true;
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok()?;
-            raw.push(u8::from_str_radix(hex, 16).ok()?);
-            i += 3;
+        if bytes[i] == b'%' {
+            let hex = bytes
+                .get(i + 1..i + 3)
+                .and_then(|pair| std::str::from_utf8(pair).ok())
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok());
+            match hex {
+                Some(byte) => {
+                    decoded.push(byte);
+                    i += 3;
+                }
+                None => {
+                    valid = false;
+                    break;
+                }
+            }
         } else {
-            raw.push(bytes[i]);
+            decoded.push(bytes[i]);
             i += 1;
         }
     }
-    Some(raw)
+    if valid && decoded != forms[0] {
+        forms.push(decoded);
+    }
+    forms
 }
 
 /// Adds one collected value, plus the password split out of it when the
@@ -642,9 +691,7 @@ fn push_secret(out: &mut Vec<Vec<u8>>, value: &Value) {
     collect_leaves(value, &mut leaves);
     for leaf in &leaves {
         if let Ok(text) = std::str::from_utf8(leaf) {
-            if let Some(password) = url_password(text) {
-                out.push(password);
-            }
+            out.extend(url_passwords(text));
         }
     }
     out.extend(leaves);

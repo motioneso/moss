@@ -186,6 +186,21 @@ fn custody_setup(
                 let _ = config.write(&network_file);
             }
         }
+        // A migrated instance still refuses to open when its key store is
+        // locked or empty, with the custody screen instead of a generic one.
+        let store = keystore::platform::platform_store();
+        let service = keystore::platform::service_name(instance);
+        let key_file = keystore::custody::recorded_key_file(folder);
+        let opened = keystore::custody::read_bundle(folder).and_then(|bundle| {
+            let master =
+                keystore::custody::load_master(store.as_ref(), &service, key_file.as_deref())?;
+            keystore::custody::unwrap_with_master(&bundle, &master).map(|_| ())
+        });
+        if let Err(error) = opened {
+            return Err(
+                json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
+            );
+        }
         return Ok(None);
     }
     let mut store: Box<dyn keystore::custody::OsKeyStore + Send> =
@@ -886,7 +901,10 @@ impl App {
         {
             // An old file beside a bundle is an interrupted migration. It
             // resumes and shows fresh words before it counts as done.
-            let needs = folder.join(keystore::custody::LEGACY_CREDENTIALS).exists();
+            // A finished migration still checks its key store before
+            // opening; an old file beside a bundle resumes the migration.
+            let needs = folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
+                || folder.join(keystore::custody::BUNDLE_FILE).exists();
             if needs {
                 self.pending_custody = Some((name.clone(), id.clone()));
                 match custody_setup(&folder, &name) {
