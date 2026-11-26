@@ -174,7 +174,7 @@ fn service_info_is_ours(text: &str, rule: &Rule) -> bool {
         && fields.get("ports") == Some(&format!("{}/tcp", rule.port).as_str())
         && fields.iter().all(|(key, value)| match *key {
             "description" | "ports" => true,
-            "short" => *value == service,
+            "summary" => *value == service,
             "protocols" | "source-ports" | "modules" | "destination" | "includes" | "helpers" => {
                 value.is_empty()
             }
@@ -1679,9 +1679,10 @@ mod tests {
     fn firewalld_live_definition_requires_exact_token_port_and_no_extra_grants() {
         let owned = rule();
         let service = service_name(&owned).unwrap();
-        let info = format!("{service}\n  short: {service}\n  description: {}\n  ports: {}/tcp\n  protocols: \n  source-ports: \n  modules: \n  destination: \n  includes: \n  helpers: \n", owned.token.as_deref().unwrap(), owned.port);
+        let info = format!("{service}\n  summary: {service}\n  description: {}\n  ports: {}/tcp\n  protocols: \n  source-ports: \n  modules: \n  destination: \n  includes: \n  helpers: \n", owned.token.as_deref().unwrap(), owned.port);
         assert!(service_info_is_ours(&info, &owned));
         for bad in [
+            info.replace(&format!("summary: {service}"), "summary: foreign"),
             info.replace(owned.token.as_deref().unwrap(), "foreign"),
             info.replace("5198/tcp", "15198/tcp"),
             info.replace("5198/tcp", "5198/tcp 22/tcp"),
