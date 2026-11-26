@@ -30,9 +30,8 @@ try {
         Write-Host "EXIT: $($process.ExitCode)"
         $expected = if ($negative) { 1 } else { 0 }
         if ($process.ExitCode -ne $expected) { throw "Service $suffix proof failed" }
-        if ($negative -and -not (Select-String -Path $err -SimpleMatch 'server returns after service manager restart without app')) { throw 'Negative control failed before the login assertion' }
+        if ($negative -and -not (Select-String -Path $err -SimpleMatch 'server login registration exists independently of app autostart')) { throw 'Negative control failed before the login assertion' }
     }
 } finally {
-    Get-ScheduledTask -TaskName 'moss-server-*' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
     Remove-LocalUser -Name $account
 }

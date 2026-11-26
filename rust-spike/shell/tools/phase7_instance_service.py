@@ -12,6 +12,7 @@ import ssl
 import subprocess
 import time
 import urllib.request
+import html
 
 
 def command(args, **kwargs):
@@ -108,21 +109,32 @@ def main():
         return not json.loads(result.stdout).get('supervisor_pid')
     def restart_registration():
         # Linux restarts the entire user service manager. launchd re-loads the saved login
-        # agent, and Task Scheduler replays its registered action after ending the old action.
+        # agent. Windows runs its own login startup processor after ending the old action.
         if platform.system() == 'Linux':
             command(['sudo', 'systemctl', 'restart', f'user@{os.getuid()}.service'])
         elif platform.system() == 'Darwin':
             domain = f'gui/{os.getuid()}'
-            command(['launchctl', 'bootout', f'{domain}/{name}'])
+            if subprocess.run(['launchctl', 'print', f'{domain}/{name}'], capture_output=True).returncode == 0:
+                command(['launchctl', 'bootout', f'{domain}/{name}'])
             time.sleep(2)
             command(['launchctl', 'bootstrap', domain, Path.home() / 'Library/LaunchAgents' / (name + '.plist')])
         else:
-            command(['schtasks.exe', '/End', '/TN', name])
-            time.sleep(2)
-            command(['schtasks.exe', '/Run', '/TN', name])
+            if not (stopped() and database_down()):
+                pid = (folder / 'service.pid').read_text().strip()
+                command(['taskkill.exe', '/PID', pid, '/T', '/F'])
+                wait_for(database_down, 'logout ends private database')
+            command(['runonce.exe', '/AlternateShellStartup'])
+    app_login = None
+    def independent_login_registration():
+        if platform.system() == 'Linux':
+            return subprocess.run(['systemctl', '--user', 'is-enabled', name + '.service'], capture_output=True).returncode == 0
+        if platform.system() == 'Darwin':
+            return (Path.home() / 'Library/LaunchAgents' / (name + '.plist')).is_file()
+        return subprocess.run(['reg.exe', 'query', r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run', '/v', name], capture_output=True).returncode == 0
     try:
         if not args.negative_app_only:
             command([launcher, 'service-start', folder])
+            assert independent_login_registration(), 'server login registration exists independently of app autostart'
             wait_for(answering, 'service brings up real HTTPS and database without app')
             before = json.loads((folder / 'running.json').read_text())['pid']
             if not args.local_lifecycle_only:
@@ -130,25 +142,44 @@ def main():
                 wait_for(lambda: answering() and json.loads((folder / 'running.json').read_text())['pid'] != before,
                          'server returns after service manager restart without app')
         else:
-            # This is the implementation with only app autostart: no server service exists.
-            # Run the SAME no-app login assertion. It MUST fail, never quietly skip.
-            print('NEGATIVE CONTROL: only desktop app autostart; no server service', flush=True)
-            wait_for(answering, 'server returns after service manager restart without app', seconds=5)
+            # Install only the actual desktop-app login entry. The same independent-server
+            # assertion must fail; an app opening a window is never enough to satisfy this gate.
+            launch = f'"{launcher}" moss-app --data "{args.scratch / "app-data"}"'
+            if platform.system() == 'Linux':
+                app_login = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'autostart' / (name + '-app.desktop')
+                app_login.parent.mkdir(parents=True, exist_ok=True)
+                app_login.write_text('[Desktop Entry]\nType=Application\nName=Moss app negative control\nExec=' + launch + '\n')
+            elif platform.system() == 'Darwin':
+                app_login = Path.home() / 'Library/LaunchAgents' / (name + '-app.plist')
+                app_login.parent.mkdir(parents=True, exist_ok=True)
+                app_login.write_text('<plist version="1.0"><dict><key>Label</key><string>' + name + '-app</string><key>ProgramArguments</key><array><string>' + html.escape(str(launcher)) + '</string><string>moss-app</string></array><key>RunAtLoad</key><true/></dict></plist>')
+            else:
+                command(['reg.exe', 'add', r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run', '/v', name + '-app', '/t', 'REG_SZ', '/d', launch, '/f'])
+                app_login = 'registry'
+            print('NEGATIVE CONTROL: desktop app autostart registered; no server service', flush=True)
+            assert independent_login_registration(), 'server login registration exists independently of app autostart'
             raise AssertionError('Negative control unexpectedly passed')
         command([launcher, 'service-stop', folder])
         wait_for(lambda: stopped() and database_down(), 'Stop shuts down server and private database')
         assert (folder / 'service-stopped').exists()
         # A queued login action cannot undo an explicit Stop, even if invoked directly.
-        command([launcher, 'service-run', folder])
+        if args.local_lifecycle_only:
+            command([launcher, 'service-run', folder])
+        else:
+            restart_registration()
         time.sleep(3)
         assert stopped() and database_down(), 'login action undid Stop'
         print('PASS: Stop stays down across queued login action', flush=True)
         command([launcher, 'service-start', folder])
         wait_for(answering, 'explicit Start enables and starts again')
-        print('phase7_instance_service PASS', flush=True)
+        print('local lifecycle PASS (login restart not exercised)' if args.local_lifecycle_only else 'phase7_instance_service PASS', flush=True)
     finally:
         if not args.negative_app_only:
             command([launcher, 'service-remove', folder])
+        if app_login == 'registry':
+            command(['reg.exe', 'delete', r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run', '/v', name + '-app', '/f'])
+        elif app_login is not None:
+            app_login.unlink()
         shutil.rmtree(args.scratch)
 
 

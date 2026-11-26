@@ -91,6 +91,20 @@ extern "system" {
     fn PostMessageW(window: Handle, message: u32, w: usize, l: isize) -> i32;
     fn PostQuitMessage(exit_code: i32);
     fn RegisterWindowMessageW(name: *const u16) -> u32;
+    fn CreatePopupMenu() -> Handle;
+    fn AppendMenuW(menu: Handle, flags: u32, id: usize, text: *const u16) -> i32;
+    fn TrackPopupMenu(
+        menu: Handle,
+        flags: u32,
+        x: i32,
+        y: i32,
+        reserved: i32,
+        window: Handle,
+        rect: *const c_void,
+    ) -> u32;
+    fn DestroyMenu(menu: Handle) -> i32;
+    fn GetCursorPos(point: *mut Point) -> i32;
+    fn SetForegroundWindow(window: Handle) -> i32;
 }
 #[link(name = "shell32")]
 extern "system" {

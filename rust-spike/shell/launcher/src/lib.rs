@@ -44,3 +44,53 @@ pub fn launcher(install: &Path) -> PathBuf {
         install.join(name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn selector_uses_one_retained_version_and_refuses_paths() {
+        let root = std::env::temp_dir().join(format!("moss versions {}", uuid::Uuid::new_v4()));
+        for version in ["7.0.0", "7.1.0"] {
+            std::fs::create_dir_all(root.join("versions").join(version)).unwrap();
+        }
+        for version in ["7.0.0", "7.1.0"] {
+            std::fs::write(root.join("current"), version).unwrap();
+            assert_eq!(
+                current(&root).unwrap(),
+                root.canonicalize().unwrap().join("versions").join(version)
+            );
+        }
+        for invalid in [
+            "",
+            ".",
+            "..",
+            "../7.0.0",
+            "versions/7.0.0",
+            "/7.0.0",
+            "7.0.0\\bad",
+            "7.0.0\nignored",
+        ] {
+            std::fs::write(root.join("current"), invalid).unwrap();
+            assert!(current(&root).is_err(), "accepted {invalid:?}");
+        }
+        assert!(root.join("versions/7.0.0").is_dir());
+        assert!(root.join("versions/7.1.0").is_dir());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn service_identity_includes_the_entire_instance_path() {
+        assert_eq!(
+            service::name(Path::new("/one/default")),
+            service::name(Path::new("/one/default"))
+        );
+        assert_ne!(
+            service::name(Path::new("/one/default")),
+            service::name(Path::new("/two/default"))
+        );
+        assert_ne!(
+            service::name(Path::new("/one/default")),
+            service::name(Path::new("/one/test"))
+        );
+    }
+}

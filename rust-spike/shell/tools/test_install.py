@@ -47,7 +47,7 @@ class InstallTests(unittest.TestCase):
         self.assertFalse((self.install / "moss-server").exists())
 
     def test_changed_file_refuses_before_removing_anything(self):
-        for name in ("moss-server", "moss-db"):
+        for name in ("moss-server", "moss-db", "moss-launcher"):
             (self.install / name).write_bytes(b"program")
         self.inventory(["moss-server", "moss-db"])
         (self.install / "moss-db").write_bytes(b"changed")
@@ -180,7 +180,7 @@ class InstallTests(unittest.TestCase):
         source = self.root / "environment.c"
         source.write_text('#include <stdio.h>\n#include <stdlib.h>\nint main(int argc, char **argv) { puts(getenv("LD_LIBRARY_PATH")); puts(getenv("OPENSSL_CONF")); for (int i=1; i<argc; ++i) puts(argv[i]); return 0; }')
         subprocess.run(["cc", str(source), "-o", str(self.install / "moss-app")], check=True)
-        for name in ("moss-server", "moss-db"):
+        for name in ("moss-server", "moss-db", "moss-launcher"):
             shutil.copy2(self.install / "moss-app", self.install / name)
         (self.install / "postgres").mkdir()
         stage_runtime(self.install, Path("/usr/bin/openssl"), Path("/etc/ssl/certs/ca-certificates.crt"))
@@ -210,7 +210,7 @@ class InstallTests(unittest.TestCase):
         source.write_text('#include <stdio.h>\n#include <stdlib.h>\nint main(void) {\n' +
                           ''.join(f'puts(getenv("{name}"));\n' for name in variables) + 'return 0; }')
         subprocess.run(["cc", str(source), "-o", str(self.install / "moss-app")], check=True)
-        for name in ("moss-server", "moss-db"):
+        for name in ("moss-server", "moss-db", "moss-launcher"):
             shutil.copy2("/bin/true", self.install / name)
         (self.install / "postgres").mkdir()
         stage_runtime(self.install, Path("/usr/bin/openssl"),

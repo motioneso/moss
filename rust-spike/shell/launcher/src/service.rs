@@ -28,12 +28,14 @@ fn checked(command: &mut Command) -> Result<(), String> {
 fn canonical(folder: &Path) -> Result<PathBuf, String> {
     folder.canonicalize().map_err(|_| REMEDY.into())
 }
+#[cfg(not(windows))]
 fn home() -> Result<PathBuf, String> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(PathBuf::from)
         .ok_or_else(|| REMEDY.into())
 }
 fn registration(folder: &Path) -> Result<PathBuf, String> {
+    #[cfg(not(windows))]
     let id = name(folder);
     #[cfg(target_os = "linux")]
     return Ok(std::env::var_os("XDG_CONFIG_HOME")
@@ -46,9 +48,9 @@ fn registration(folder: &Path) -> Result<PathBuf, String> {
         .join("Library/LaunchAgents")
         .join(format!("{id}.plist")));
     #[cfg(windows)]
-    return Ok(folder.join("login-task.xml"));
+    return Ok(folder.join("login-entry.json"));
 }
-#[cfg(any(target_os = "macos", windows))]
+#[cfg(target_os = "macos")]
 fn xml(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -92,32 +94,11 @@ fn register(install: &Path, folder: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let contents = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>Label</key><string>{}</string><key>ProgramArguments</key><array><string>{}</string><string>service-run</string><string>{}</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ProcessType</key><string>Background</string><key>ExitTimeOut</key><integer>200</integer></dict></plist>", name(folder), xml(&launcher.to_string_lossy()), xml(&folder.to_string_lossy()));
     #[cfg(windows)]
-    let contents = {
-        let output = Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "[Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
-            ])
-            .output()
-            .map_err(|_| REMEDY)?;
-        if !output.status.success() {
-            return Err(REMEDY.into());
-        }
-        let sid = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-        if !sid.starts_with("S-1-")
-            || !sid
-                .bytes()
-                .all(|b| b.is_ascii_digit() || b"S-".contains(&b))
-        {
-            return Err(REMEDY.into());
-        }
-        // Windows parses this with CommandLineToArgvW. A canonical folder cannot end in a
-        // separator unless it is a drive root; JSON quoting is NOT Windows argv quoting.
-        let argument = format!("service-run {}", windows_arg(folder));
-        format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{sid}</UserId></LogonTrigger></Triggers><Principals><Principal id=\"Owner\"><UserId>{sid}</UserId><LogonType>S4U</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings><Actions Context=\"Owner\"><Exec><Command>{}</Command><Arguments>{}</Arguments></Exec></Actions></Task>", xml(&launcher.to_string_lossy()), xml(&argument))
-    };
+    let contents = format!(
+        "{} service-run {}",
+        windows_arg(&launcher),
+        windows_arg(folder)
+    );
     private_write(&path, contents.as_bytes())?;
     #[cfg(target_os = "linux")]
     {
@@ -149,15 +130,34 @@ fn register(install: &Path, folder: &Path) -> Result<(), String> {
     }
     #[cfg(windows)]
     {
-        checked(
-            Command::new("schtasks.exe")
-                .args(["/Create", "/TN", &name(folder), "/XML"])
-                .arg(path)
-                .arg("/F"),
-        )?;
-        checked(Command::new("schtasks.exe").args(["/Run", "/TN", &name(folder)]))
+        checked(Command::new("reg.exe").args([
+            "add",
+            RUN_KEY,
+            "/v",
+            &name(folder),
+            "/t",
+            "REG_SZ",
+            "/d",
+            &contents,
+            "/f",
+        ]))?;
+        // Explicit Start begins the action now; subsequent sign-ins use the separate Run item.
+        let mut command = Command::new(launcher);
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0000_0008 | 0x0000_0200 | 0x0800_0000);
+        command
+            .arg("service-run")
+            .arg(folder)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|_| REMEDY)?;
+        Ok(())
     }
 }
+#[cfg(windows)]
+const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 #[cfg(windows)]
 fn windows_arg(path: &Path) -> String {
     let text = path.to_string_lossy();
@@ -189,7 +189,13 @@ pub fn stop(_install: &Path, folder: &Path) -> Result<(), String> {
         &format!("{}.service", name(&folder)),
     ]))?;
     #[cfg(windows)]
-    checked(Command::new("schtasks.exe").args(["/Change", "/TN", &name(&folder), "/Disable"]))?;
+    if Command::new("reg.exe")
+        .args(["query", RUN_KEY, "/v", &name(&folder)])
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
+        checked(Command::new("reg.exe").args(["delete", RUN_KEY, "/v", &name(&folder), "/f"]))?;
+    }
     if folder.join(RUNNING_FILE).exists() {
         let running = Running::read(&folder)?;
         private_write(
@@ -226,13 +232,15 @@ fn unload(folder: &Path) -> Result<(), String> {
             .arg(registration(folder)?),
     );
     #[cfg(windows)]
-    return Ok(()); // A disabled task whose action returned has nothing left to terminate.
+    {
+        let _ = folder;
+        Ok(())
+    } // The disabled login action has returned.
 }
 pub fn remove(install: &Path, folder: &Path) -> Result<(), String> {
     stop(install, folder)?;
     let folder = canonical(folder)?;
-    #[cfg(windows)]
-    checked(Command::new("schtasks.exe").args(["/Delete", "/TN", &name(&folder), "/F"]))?;
+
     std::fs::remove_file(registration(&folder)?).map_err(|_| REMEDY)?;
     #[cfg(target_os = "linux")]
     checked(Command::new("systemctl").args(["--user", "daemon-reload"]))?;
@@ -261,6 +269,10 @@ pub fn run(install: &Path, folder: &Path) -> Result<(), String> {
     if folder.join(STOPPED).exists() {
         return Ok(());
     }
+    private_write(
+        &folder.join("service.pid"),
+        std::process::id().to_string().as_bytes(),
+    )?;
     crate::database::ensure_database(install, &folder, false).map_err(|_| REMEDY)?;
     let mut options = std::fs::OpenOptions::new();
     options.create(true).append(true);

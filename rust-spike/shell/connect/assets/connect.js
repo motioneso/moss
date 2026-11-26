@@ -260,15 +260,18 @@ const screens = {
         el(
           "li",
           { class: "connect-server" },
-          el(
-            "div",
-            {},
-            el("p", {}, el("strong", {}, server.name)),
-            muted(`${server.detail} · ${server.state}`)
-          ),
+          el("div", {}, el("p", {}, el("strong", {}, server.name)), muted(server.detail)),
           el(
             "div",
             { class: "connect-actions" },
+            el(
+              "span",
+              {
+                class: `jds-indicator jds-indicator--${["Running", "Reachable"].includes(server.state) ? "ready" : "idle"}`
+              },
+              el("span", { class: "jds-indicator__dot" }),
+              el("span", {}, server.state)
+            ),
             server.removable
               ? button("Remove", "quiet", () => post({ do: "remove", id: server.id }))
               : "",

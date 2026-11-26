@@ -40,18 +40,12 @@ pub fn window_lock(data: &Path) -> Option<File> {
         .write(true)
         .open(data.join(LOCK))
         .ok()?;
-    portability::file_lock::try_exclusive(&file)
-        .ok()?
-        .then_some(file)
+    portability::file_lock::try_exclusive(&file).ok()?.then_some(file)
 }
 
 /// Whether a window app is running for this data folder.
 pub fn window_running(data: &Path) -> bool {
-    let Ok(file) = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(data.join(LOCK))
+    let Ok(file) = OpenOptions::new().create(true).truncate(false).write(true).open(data.join(LOCK))
     else {
         return false;
     };
@@ -108,10 +102,7 @@ pub fn open(data: &Path, request: &Request) -> Result<(), String> {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
-    command
-        .spawn()
-        .map(|_| ())
-        .map_err(|_| "Cannot start the app".into())
+    command.spawn().map(|_| ()).map_err(|_| "Cannot start the app".into())
 }
 
 #[cfg(test)]
@@ -126,15 +117,7 @@ mod tests {
 
     #[test]
     fn paths_must_stay_on_the_server() {
-        for bad in [
-            "",
-            "tasks",
-            "//evil.example",
-            "/\\evil",
-            "/a:b",
-            "/a\nb",
-            "https://x",
-        ] {
+        for bad in ["", "tasks", "//evil.example", "/\\evil", "/a:b", "/a\nb", "https://x"] {
             assert!(!valid_path(bad), "{bad:?}");
         }
         assert!(valid_path("/tasks?open=1"));
@@ -156,23 +139,13 @@ mod tests {
     #[test]
     fn request_is_taken_once_and_unsafe_ones_are_refused() {
         let dir = folder();
-        let ask = Request {
-            server: Some("s1".into()),
-            path: Some("/tasks".into()),
-        };
+        let ask = Request { server: Some("s1".into()), path: Some("/tasks".into()) };
         write_request(&dir, &ask).unwrap();
         assert_eq!(take_request(&dir), Some(ask));
         assert_eq!(take_request(&dir), None);
-        let evil = Request {
-            server: Some("s1".into()),
-            path: Some("//evil.example".into()),
-        };
+        let evil = Request { server: Some("s1".into()), path: Some("//evil.example".into()) };
         assert!(write_request(&dir, &evil).is_err());
-        std::fs::write(
-            dir.join(REQUEST),
-            br#"{"server":"s1","path":"//evil.example"}"#,
-        )
-        .unwrap();
+        std::fs::write(dir.join(REQUEST), br#"{"server":"s1","path":"//evil.example"}"#).unwrap();
         assert_eq!(take_request(&dir), None);
         std::fs::remove_dir_all(dir).unwrap();
     }

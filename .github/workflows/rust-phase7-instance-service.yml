@@ -7,8 +7,6 @@ on:
       - "rust-spike/network/**"
       - "rust-spike/portability/**"
       - ".github/workflows/rust-phase7-instance-service.yml"
-  push:
-    branches: ["task/429-rust-phase-7-part-2-program-layout-and-b"]
   workflow_dispatch:
 permissions:
   contents: read

@@ -60,6 +60,8 @@ enum UserEvent {
     Reveal,
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     TrayUnavailable,
+    TrayStop,
+    Quit,
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Desktop,
     Stopped {
@@ -218,11 +220,38 @@ fn main() {
 
     let preferences = desktop::Preferences::load(&store).unwrap_or_default();
     let tray = desktop::tray(proxy.clone());
+    let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let tray_store = store.clone();
+    runtime.spawn(async move {
+        loop {
+            let saved = tray_store.load().unwrap_or_default();
+            let locals: Vec<_> = tray_store
+                .targets(&saved)
+                .into_iter()
+                .filter(|t| matches!(t, Target::Local { .. }))
+                .collect();
+            let target = locals
+                .iter()
+                .find(|t| Some(t.id()) == saved.last)
+                .or_else(|| locals.first());
+            let status = if let Some(target @ Target::Local { folder, .. }) = target {
+                let (label, running) = match reach::local(folder).await {
+                    Ok((server, _)) => (format!("Running · {}", server.version), true),
+                    Err(_) => ("Stopped".into(), false),
+                };
+                Some((target.id(), label, running))
+            } else {
+                None
+            };
+            desktop::set_server_status(status);
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    });
     let mut app = App {
         store,
         servers,
         install: args.install,
-        runtime: tokio::runtime::Runtime::new().expect("tokio runtime"),
+        runtime,
         proxy,
         window,
         connect,
@@ -398,6 +427,14 @@ impl App {
                 self.pending_link = path.map(|p| (id.clone(), p));
                 self.choose(id);
             }
+            UserEvent::TrayStop => {
+                if let Some((id, _, true)) = desktop::server_status() {
+                    self.turn += 1;
+                    self.bring_forward();
+                    self.confirm_stop(id);
+                }
+            }
+            UserEvent::Quit => self.quit = true,
             UserEvent::TrayUnavailable => {
                 self.tray = None;
                 self.window.set_visible(true);
@@ -425,7 +462,7 @@ impl App {
                 if self.turn == turn || waiting {
                     match result {
                         Ok(()) => self.list_servers(),
-                        Err(_) => self.show(json!({"screen":"stop-failed", "code":"app_server_stop_failed", "reason":"The server or its database could not be stopped. Open Servers to check its state and try again."})),
+                        Err(problem) => self.show(json!({"screen":"stop-failed", "code":if problem == Problem::ServiceFailed { problem.code() } else { "app_server_stop_failed" }, "reason":problem.reason()})),
                     }
                 }
             }
