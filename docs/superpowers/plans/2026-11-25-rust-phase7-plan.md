@@ -216,6 +216,13 @@ approval in this plan before parts 6, 10, 11 and 16c start.
   real server health and native task removal. Linux and macOS also read back from their native
   managers. Actual Windows logon remains in the part 18 fresh-machine checklist.
 
+- 2026-11-26, JS-435: CI proves sharing off is loopback-only and that the real rule commands
+  add and remove the rule (Linux also proves a second client is blocked). Part 18 fresh-machine
+  checklist: the real graphical firewall prompt on Ubuntu and Fedora VMs (approve, refuse, off,
+  uninstall leaves no rule), the Windows and macOS prompts, and a real second machine on the
+  network reaching Moss only while sharing is on. A rule names the program path, so a version
+  update that moves the program needs the rule added again.
+
 - 2026-11-25, Ben: mockups M1 to M7 approved as drawn. Screen parts 6, 10, 11 and 16c may start
   when their dependencies merge.
 - 2026-11-25, Ben: all decisions as recommended.

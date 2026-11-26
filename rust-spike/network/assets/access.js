@@ -13,6 +13,8 @@ const explanation = (code) =>
     setup_is_complete: "Moss already has an owner. Go back and sign in.",
     setup_is_local_only: "Create the owner account on the computer running Moss.",
     origin_or_sharing_refused: "This address is not allowed. Open Moss at a trusted address.",
+    app_firewall_refused:
+      "The firewall did not allow Moss. Sharing is still off. Try again and choose Allow, or add Moss in your firewall settings.",
     host_refused: "This address is not trusted. Open Moss at its configured address."
   })[code];
 async function call(path, method = "GET", body) {
@@ -77,18 +79,44 @@ if (document.getElementById("setup") || document.getElementById("setup-link")) {
 }
 const sharing = document.getElementById("sharing");
 if (sharing) {
-  call("/api/network")
-    .then((result) => {
-      const checkbox = document.getElementById("sharing-enabled");
-      document.getElementById("fingerprint").textContent = result.fingerprint;
-      checkbox.checked = result.sharing;
-      checkbox.disabled = false;
-      sharing.querySelector("button").disabled = false;
-      for (const origin of result.origins) {
+  const box = document.getElementById("sharing-enabled");
+  const confirmBox = document.getElementById("confirm");
+  const retry = document.getElementById("retry");
+  const paint = (result) => {
+    box.checked = result.sharing;
+    box.disabled = false;
+    document.getElementById("firewall").textContent =
+      result.firewall === "allowed" ? "Allowed" : "Not asked yet";
+    document.getElementById("address").textContent = result.origins[0] || "No network found.";
+    document.getElementById("address-state").textContent = result.sharing ? "On" : "Off";
+    document.getElementById("fingerprint").textContent = result.fingerprint;
+    const list = document.getElementById("origins");
+    list.replaceChildren(
+      ...result.origins.map((origin) => {
         const li = document.createElement("li");
         li.textContent = origin;
-        document.getElementById("origins").append(li);
-      }
+        return li;
+      })
+    );
+  };
+  const put = async (on) => {
+    box.disabled = true;
+    retry.hidden = true;
+    say(on ? "Waiting for your firewall…" : "Turning sharing off…");
+    try {
+      paint(await call("/api/network", "PUT", { sharing: on }));
+      say(on ? "Sharing is on. Other devices must sign in." : "Sharing is off.");
+    } catch (error) {
+      say(error.message);
+      retry.hidden = !on;
+      paint(
+        await call("/api/network").catch(() => ({ sharing: false, origins: [], fingerprint: "" }))
+      );
+    }
+  };
+  call("/api/network")
+    .then((result) => {
+      paint(result);
       say(
         result.sharing
           ? "Sharing is on. Other devices must sign in."
@@ -96,21 +124,21 @@ if (sharing) {
       );
     })
     .catch((error) => say(error.message));
-  sharing.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const button = sharing.querySelector("button");
-    button.disabled = true;
-    try {
-      const result = await call("/api/network", "PUT", {
-        sharing: document.getElementById("sharing-enabled").checked
-      });
-      say(result.sharing ? "Saved. Other devices can now sign in." : "Saved. Sharing is off.");
-    } catch (error) {
-      say(error.message);
-    } finally {
-      button.disabled = false;
-    }
+  box.addEventListener("change", () => {
+    if (box.checked) {
+      box.checked = false;
+      confirmBox.hidden = false;
+    } else put(false);
   });
+  document.getElementById("cancel").addEventListener("click", () => {
+    confirmBox.hidden = true;
+  });
+  const start = () => {
+    confirmBox.hidden = true;
+    put(true);
+  };
+  document.getElementById("turn-on").addEventListener("click", start);
+  document.getElementById("try-again").addEventListener("click", start);
 }
 document.getElementById("sign-out")?.addEventListener("click", async () => {
   try {

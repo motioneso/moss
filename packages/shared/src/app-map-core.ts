@@ -206,7 +206,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Rust Moss - LAN and tailnet sharing",
     description:
-      "Sharing starts off. An administrator can save Allow LAN and tailnet access under Sharing; disabling it refuses remote requests on their next call, including existing connections. Exact HTTPS addresses and certificates are configured on the host. Local certificates need verified trust on each device; tailnet and user-supplied PEM certificates are supported. Open the configured address after a Host or origin refusal. Forwarded headers do not grant trust. The page explains the limits of accounts sharing one operating system user and offers Sign out.",
+      "Sharing starts off, and while it is off Moss listens on this computer only. An administrator turns on Share on your network under Sharing and confirms Turn on; the computer then asks once to let Moss through its firewall (an administrator prompt on Windows, the firewall prompt on macOS, a graphical prompt on Linux). Turning it off removes the firewall rule, and uninstalling the instance removes it too. If the prompt is refused, sharing stays off and the page says The firewall did not allow Moss with Try again. The page shows the address and firewall state. Exact HTTPS addresses and certificates are configured on the host. Local certificates need verified trust on each device; tailnet and user-supplied PEM certificates are supported. Open the configured address after a Host or origin refusal. Forwarded headers do not grant trust. The page offers Sign out.",
     path: "/settings/sharing",
     scope: "admin"
   },

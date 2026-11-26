@@ -32,6 +32,14 @@ export const DESKTOP_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "app_firewall_refused",
+    runtime: "rust",
+    class: "prerequisite",
+    remediationRef: "rust-network-sharing",
+    description:
+      "The firewall did not allow Moss, so sharing stays off. Turn sharing on again and choose Allow, or add Moss in the computer's firewall settings."
+  },
+  {
     code: "app_server_stop_failed",
     runtime: "rust",
     class: "transient",
