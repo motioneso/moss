@@ -498,7 +498,13 @@ pub fn set_login(data: &Path, install: &Path, enabled: bool) -> Result<(), Strin
         let key = Key(key);
         let name = value_name(data);
         let result = if enabled {
-            let exe = std::env::current_exe().map_err(|_| "Cannot find this app")?;
+            let stable = moss_launcher::launcher(install);
+            let versioned = stable.is_file();
+            let exe = if versioned {
+                stable
+            } else {
+                std::env::current_exe().map_err(|_| "Cannot find this app")?
+            };
             let quote = |path: &Path| -> Result<String, String> {
                 let text = path.to_str().ok_or("The install path is not valid text")?;
                 if text.contains(['"', '\r', '\n', '\0']) || text.ends_with('\\') {
@@ -506,12 +512,16 @@ pub fn set_login(data: &Path, install: &Path, enabled: bool) -> Result<(), Strin
                 }
                 Ok(format!("\"{text}\""))
             };
-            let command = wide(&format!(
-                "{} --data {} --install {}",
-                quote(&exe)?,
-                quote(data)?,
-                quote(install)?
-            ));
+            let command = wide(&if versioned {
+                format!("{} moss-app --data {}", quote(&exe)?, quote(data)?)
+            } else {
+                format!(
+                    "{} --data {} --install {}",
+                    quote(&exe)?,
+                    quote(data)?,
+                    quote(install)?
+                )
+            });
             RegSetValueExW(
                 key.0,
                 name.as_ptr(),

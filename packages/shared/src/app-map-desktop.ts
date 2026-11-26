@@ -12,7 +12,7 @@ export const DESKTOP_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Rust Moss desktop app - choose and connect to a server",
     description:
-      "The Moss desktop app opens the server it used last. On first run it asks This computer or Another computer. This computer sets up its first local server on the spot (a short Setting up screen while the private database and secure address are made) and starts it in the background if it is not running; the server keeps running after the window closes. Another computer takes an HTTPS address from that computer's Sharing screen, shows its certificate code, and saves the server only after It matches is pressed. A saved server whose certificate later changes shows the new code to compare again. Each saved server has its own sign-in. The Servers list (also at moss-app://servers) shows each server as Running, Not running, Reachable or Can't reach, with Open, Stop (asks for confirmation before disconnecting people and stopping a local server and its database), Remove (other computers) and New server here, which asks for a name and makes another local server. Inside any server, the account menu at the bottom of the side bar has Switch server, which returns to this list. When a server cannot be reached the app names the reason and tries again with growing waits. The app reaches other computers only when their sharing is on. Creating and stopping local servers is not available on Windows yet; its database supervisor still needs a Windows port.",
+      "The Moss desktop app opens the server it used last. On first run it asks This computer or Another computer. This computer sets up its first local server on the spot (a short Setting up screen while the private database and secure address are made) and starts it in the background if it is not running; the server keeps running after the window closes. Another computer takes an HTTPS address from that computer's Sharing screen, shows its certificate code, and saves the server only after It matches is pressed. A saved server whose certificate later changes shows the new code to compare again. Each saved server has its own sign-in. The Servers list (also at moss-app://servers) shows each server as Running, Stopped, Reachable or Can't reach, with Open, Start for a stopped local server, Stop (asks for confirmation before disconnecting people and stopping a local server and its database), Remove (other computers) and New server here, which asks for a name and makes another local server. Inside any server, the account menu at the bottom of the side bar has Switch server, which returns to this list. When a server cannot be reached the app names the reason and tries again with growing waits. The app reaches other computers only when their sharing is on. Each local server has its own sign-in service, independent of the app login entry: a systemd user unit on Linux, LaunchAgent on macOS or per-user Task Scheduler logon task on Windows. Stop disables that service and keeps it down across app restarts and sign-ins until Start. Program versions live side by side apart from data; the launcher selects the current version.",
     path: "moss-app://localhost/index.html",
     scope: "user"
   }
@@ -63,6 +63,14 @@ export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
       "The desktop app started the local Moss server but it did not answer within twenty seconds."
   },
   {
+    code: "app_server_service_failed",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "rust-app-server-service",
+    description:
+      "Moss could not register, start or stop this instance's background sign-in service."
+  },
+  {
     code: "app_server_unreachable",
     runtime: "rust",
     class: "transient",
@@ -101,6 +109,14 @@ export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const DESKTOP_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "rust-app-server-service",
+    runtime: "rust",
+    description:
+      "Check your sign-in services, then press Start on Servers. A stopped server stays stopped until Start.",
+    path: "moss-app://servers",
+    scope: "user"
+  },
   {
     id: "rust-app-desktop-settings",
     runtime: "rust",

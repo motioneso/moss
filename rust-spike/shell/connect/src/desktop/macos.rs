@@ -475,7 +475,13 @@ pub fn set_login(
             Err(_) => Err("Cannot turn off start at login".into()),
         };
     }
-    let exe = std::env::current_exe().map_err(|_| "Cannot find this app")?;
+    let stable = moss_launcher::launcher(install);
+    let versioned = stable.is_file();
+    let exe = if versioned {
+        stable
+    } else {
+        std::env::current_exe().map_err(|_| "Cannot find this app")?
+    };
     let paths = [&exe, data, install];
     let args = paths
         .iter()
@@ -486,8 +492,13 @@ pub fn set_login(
                 .ok_or("The install path is not valid text")
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let program = if versioned {
+        format!("<string>{}</string><string>moss-app</string><string>--data</string><string>{}</string>", args[0], args[1])
+    } else {
+        format!("<string>{}</string><string>--data</string><string>{}</string><string>--install</string><string>{}</string>", args[0], args[1], args[2])
+    };
     let label = format!("app.moss.desktop.{:016x}", install_id(data));
-    let plist = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>Label</key><string>{label}</string><key>ProgramArguments</key><array><string>{}</string><string>--data</string><string>{}</string><string>--install</string><string>{}</string></array><key>RunAtLoad</key><true/><key>LimitLoadToSessionType</key><string>Aqua</string></dict></plist>", args[0], args[1], args[2]);
+    let plist = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>Label</key><string>{label}</string><key>ProgramArguments</key><array>{program}</array><key>RunAtLoad</key><true/><key>LimitLoadToSessionType</key><string>Aqua</string></dict></plist>", );
     std::fs::create_dir_all(path.parent().ok_or("No login settings folder")?)
         .map_err(|_| "Cannot create login settings")?;
     write(&path, plist.as_bytes())

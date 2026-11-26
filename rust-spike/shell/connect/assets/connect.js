@@ -158,25 +158,23 @@ const screens = {
 
   "confirm-stop": (s) => [
     back("Servers", { do: "servers" }),
-    heading(`Stop ${s.name}?`),
-    muted(
-      "People using this server will be disconnected. Jobs and agents will stop. You can start it again from Servers."
-    ),
+    heading("Stop Moss?"),
+    muted("Phones and other computers lose access until you start it again."),
     el(
       "div",
       { class: "connect-actions" },
       button("Cancel", "secondary", () => post({ do: "servers" })),
-      button("Stop server", "primary", () => post({ do: "confirm-stop", id: s.id }))
+      button("Stop", "primary", () => post({ do: "confirm-stop", id: s.id }))
     )
   ],
 
   "stop-failed": (s) => [
-    heading("Could not stop Moss"),
+    heading("Moss could not stop."),
     muted(s.reason),
     button("Servers", "secondary", () => post({ do: "servers" }))
   ],
 
-  stopping: (s) => [heading(s.name), muted("Stopping the server and its database…")],
+  stopping: (s) => [heading(s.name), muted("Stopping…")],
 
   desktop: (s) => [
     back("Servers", { do: "servers" }),
@@ -277,7 +275,9 @@ const screens = {
             server.stoppable
               ? button("Stop", "quiet", () => post({ do: "stop", id: server.id }))
               : "",
-            button("Open", "secondary", () => post({ do: "open", id: server.id }))
+            server.local && server.state === "Stopped"
+              ? button("Start", "secondary", () => post({ do: "start", id: server.id }))
+              : button("Open", "primary", () => post({ do: "open", id: server.id }))
           )
         )
       )

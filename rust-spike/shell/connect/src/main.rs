@@ -14,9 +14,9 @@ mod provision;
 mod reach;
 #[cfg(all(test, target_os = "linux"))]
 mod runtime_proof;
+mod store;
 #[cfg(all(test, windows))]
 mod windows_proof;
-mod store;
 
 #[cfg(target_os = "linux")]
 mod trust_linux;
@@ -162,7 +162,13 @@ fn main() {
     let Some(_window_lock) = link::window_lock(&args.data) else {
         // A destination already waiting for the first window must not be overwritten.
         if !args.data.join("open-request.json").exists() {
-            let _ = link::write_request(&args.data, &link::Request { server: None, path: None });
+            let _ = link::write_request(
+                &args.data,
+                &link::Request {
+                    server: None,
+                    path: None,
+                },
+            );
         }
         std::process::exit(0);
     };
@@ -184,7 +190,10 @@ fn main() {
     let hand_off_data = store.data.clone();
     std::thread::spawn(move || loop {
         if let Some(request) = link::take_request(&hand_off_data) {
-            let event = UserEvent::OpenLink { server: request.server, path: request.path };
+            let event = UserEvent::OpenLink {
+                server: request.server,
+                path: request.path,
+            };
             if hand_off.send_event(event).is_err() {
                 return;
             }
@@ -462,10 +471,34 @@ impl App {
             .and_then(Value::as_str)
             .unwrap_or_default()
         {
-            "start" | "retry" => match self.current.clone().or_else(|| self.servers.last.clone()) {
+            "retry" => match self.current.clone().or_else(|| self.servers.last.clone()) {
                 Some(id) => self.connect(id),
                 None => self.show(json!({"screen":"first-run"})),
             },
+            "start" => {
+                let id = if text("id").is_empty() {
+                    self.current
+                        .clone()
+                        .or_else(|| self.servers.last.clone())
+                        .unwrap_or_default()
+                } else {
+                    text("id")
+                };
+                if let Some(Target::Local { folder, .. }) = self.store.find(&self.servers, &id) {
+                    // Clear only the owner's explicit Stop marker. local_or_start serializes
+                    // registration and launch using the instance start lock.
+                    if std::fs::remove_file(folder.join(moss_launcher::service::STOPPED))
+                        .is_err_and(|e| e.kind() != std::io::ErrorKind::NotFound)
+                    {
+                        self.show(problem_screen(
+                            &self.store.find(&self.servers, &id).unwrap(),
+                            &Problem::ServiceFailed,
+                        ));
+                        return;
+                    }
+                }
+                self.choose(id);
+            }
             "first-run" => self.show(json!({"screen":"first-run"})),
             "this-computer" => self.this_computer(),
             "new-server" => self.show(json!({"screen":"create", "name": text("name")})),
@@ -819,7 +852,7 @@ impl App {
                 let state = match target {
                     Target::Local { folder, .. } => match reach::local(folder).await {
                         Ok(_) => "Running",
-                        Err(_) => "Not running",
+                        Err(_) => "Stopped",
                     },
                     Target::Remote(remote) => match reach::hello(&remote.origin, &remote.pin).await
                     {
@@ -858,7 +891,7 @@ impl App {
                 Ok(view) => self.server = Some(view),
                 Err(error) => {
                     eprintln!("moss-app: cannot open the server's pages ({error})");
-                    return self.show(json!({"screen":"problem", "name": opened.name, "reason": "This app could not open the server's pages.", "retry": false}))
+                    return self.show(json!({"screen":"problem", "name": opened.name, "reason": "This app could not open the server's pages.", "retry": false}));
                 }
             }
         }
@@ -966,6 +999,7 @@ fn server_row(target: &Target, state: &str) -> Value {
         "detail": detail,
         "state": state,
         "removable": matches!(target, Target::Remote(_)),
+        "local": matches!(target, Target::Local { .. }),
         "stoppable": matches!(target, Target::Local { .. }) && state == "Running",
     })
 }
@@ -991,6 +1025,9 @@ fn problem_screen(target: &Target, problem: &Problem) -> Value {
             "screen":"version", "title": problem.reason().trim_end_matches('.'),
             "detail": format!("{name} needs a newer app."),
         }),
+        Problem::ServiceStopped => {
+            json!({"screen":"problem", "name": name, "reason": problem.reason(), "retry": false, "local": true})
+        }
         Problem::NotSetUp => {
             json!({"screen":"problem", "name": name, "reason": problem.reason(), "retry": false, "local": local})
         }

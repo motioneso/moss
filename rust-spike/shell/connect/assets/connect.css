@@ -82,3 +82,22 @@
   margin: 0;
   color: var(--danger-fg);
 }
+
+/* Server rows use the available desktop width, and wrap before actions crowd names. */
+.auth-panel.connect-panel {
+  width: 100%;
+  max-width: none;
+}
+.connect-server {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+}
+.connect-server > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .connect-server {
+    grid-template-columns: 1fr;
+  }
+}

@@ -20,8 +20,8 @@ cargo build --release --quiet -p moss-shell-ui --target wasm32-unknown-unknown
 python3 assets/build-assets.py "$web"
 python3 ../module-ui/build-assets.py "$web/module-shared"
 cp assets/index.html "$web/index.html"
-cargo build --release --quiet -p moss-server -p moss-app
-cp "$CARGO_TARGET_DIR/release/moss-server" "$CARGO_TARGET_DIR/release/moss-app" "$out/"
+cargo build --release --quiet -p moss-server -p moss-app -p moss-launcher
+cp "$CARGO_TARGET_DIR/release/moss-server" "$CARGO_TARGET_DIR/release/moss-app" "$CARGO_TARGET_DIR/release/moss-launcher" "$out/"
 # The database supervisor the app uses to set up a local server (unix only).
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*) ;;

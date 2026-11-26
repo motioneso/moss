@@ -1,0 +1,121 @@
+name: Rust phase7_instance_service
+on:
+  pull_request:
+    paths:
+      - "rust-spike/shell/**"
+      - "rust-spike/bundled-db/**"
+      - "rust-spike/network/**"
+      - "rust-spike/portability/**"
+      - ".github/workflows/rust-phase7-instance-service.yml"
+  push:
+    branches: ["task/429-rust-phase-7-part-2-program-layout-and-b"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_instance_service:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Native dependency parser and policy tests
+        run: python -m unittest discover -s rust-spike/bundled-db/tools -p test_bundle_libraries.py
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/phase7-pg/downloads
+          key: phase7-pg-sources-${{ runner.os }}-${{ hashFiles('rust-spike/bundled-db/tools/sources.json') }}
+      - name: Linux build dependencies already declared by the database proof
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bison flex libicu-dev zlib1g-dev libzstd-dev libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev
+      - name: macOS build dependencies already declared by the database proof
+        if: runner.os == 'macOS'
+        run: |
+          brew list bison flex icu4c zstd >/dev/null || brew install bison flex icu4c zstd
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: Windows source build dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r rust-spike/bundled-db/tools/requirements-ci.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Hash-locked tool install failed' }
+          & C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed bison flex
+          if ($LASTEXITCODE -ne 0) { throw 'Declared parser build dependencies unavailable' }
+          $runnerPg = (Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+          if (-not $runnerPg) { throw 'Runner Postgres needed for the negative control' }
+          "MOSS_RUNNER_PG_BIN=$runnerPg\bin" >> $env:GITHUB_ENV
+      - name: Build pinned sources on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 rust-spike/bundled-db/tools/build-pg-bundle.py --scratch "$RUNNER_TEMP/phase7-pg" --out "$RUNNER_TEMP/pg-built"
+      - name: Build pinned sources on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $env:PATH += ';C:\msys64\usr\bin'
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" && python rust-spike/bundled-db/tools/build-pg-bundle.py --scratch `"$env:RUNNER_TEMP\phase7-pg`" --out `"$env:RUNNER_TEMP\pg-built`""
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned database build failed' }
+      - name: Relocate bundle and remove source build trees
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          shutil.move(root / 'pg-built', root / 'postgres relocated')
+          shutil.rmtree(root / 'phase7-pg/build')
+          with open(os.environ['GITHUB_PATH'], 'a') as f:
+              f.write(str(root / 'postgres relocated/bin') + '\n')
+      - name: Select task-owned Rust paths
+        shell: bash
+        run: |
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-service/target" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+      - name: Provision declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Build private database supervisor
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --bin moss-db
+      - name: Build app, server, launcher and native fixture
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app -p moss-server -p moss-launcher --bins --examples
+      - name: Start Linux user service manager
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+      - name: phase7_instance_service without a desktop app process
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 rust-spike/shell/tools/phase7_instance_service.py --bin "$CARGO_TARGET_DIR/debug" --postgres "$RUNNER_TEMP/postgres relocated" --scratch "$RUNNER_TEMP/service-proof" --port 5198
+      - name: App-only negative control must fail the same login assertion
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set +e
+          python3 rust-spike/shell/tools/phase7_instance_service.py --bin "$CARGO_TARGET_DIR/debug" --postgres "$RUNNER_TEMP/postgres relocated" --scratch "$RUNNER_TEMP/service-negative" --port 5198 --negative-app-only
+          code=$?
+          echo "Negative control exit: $code (expected 1)"
+          test "$code" -eq 1
+      - name: Native Windows service proof as an ordinary user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/shell/tools/phase7-instance-service-windows.ps1 -Bin "$env:CARGO_TARGET_DIR/debug" -Postgres "$env:RUNNER_TEMP/postgres relocated" -Repo (Get-Location).Path

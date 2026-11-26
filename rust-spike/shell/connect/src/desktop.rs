@@ -372,14 +372,18 @@ mod linux {
             .map_err(|_| "Cannot create login settings")?;
         let launch = login_command(install)?;
         let data = quoted(&store.data)?;
-        let install = quoted(install)?;
+        let install_arg = if moss_launcher::launcher(install).is_file() {
+            String::new()
+        } else {
+            format!(" --install {}", quoted(install)?)
+        };
         let entry = gio::glib::KeyFile::new();
         entry.set_string("Desktop Entry", "Type", "Application");
         entry.set_string("Desktop Entry", "Name", "Moss");
         entry.set_string(
             "Desktop Entry",
             "Exec",
-            &format!("{launch} --data {data} --install {install}"),
+            &format!("{launch} --data {data}{install_arg}"),
         );
         entry.set_boolean("Desktop Entry", "Terminal", false);
         entry.set_boolean("Desktop Entry", "X-GNOME-Autostart-enabled", true);
@@ -388,7 +392,12 @@ mod linux {
     }
 
     pub(super) fn login_command(install: &Path) -> Result<String, String> {
-        if crate::launch::bundled_runtime(install) {
+        if moss_launcher::launcher(install).is_file() {
+            Ok(format!(
+                "{} moss-app",
+                quoted(&moss_launcher::launcher(install))?
+            ))
+        } else if crate::launch::bundled_runtime(install) {
             let launcher = install.join("moss-run");
             if !launcher.is_file() {
                 return Err("This copy of Moss is missing its runtime launcher".into());

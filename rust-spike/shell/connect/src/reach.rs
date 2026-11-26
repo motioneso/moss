@@ -27,6 +27,8 @@ pub const SUPPORTED: ApiRange = ApiRange {
 pub enum Problem {
     NotSetUp,
     DidNotStart,
+    ServiceFailed,
+    ServiceStopped,
     Unreachable,
     HostRefused,
     SharingOff,
@@ -42,6 +44,7 @@ impl Problem {
         match self {
             Problem::NotSetUp => "app_server_not_set_up",
             Problem::DidNotStart => "app_server_did_not_start",
+            Problem::ServiceFailed | Problem::ServiceStopped => "app_server_service_failed",
             Problem::Unreachable => "app_server_unreachable",
             Problem::HostRefused => "host_refused",
             Problem::SharingOff => "origin_or_sharing_refused",
@@ -56,6 +59,8 @@ impl Problem {
         match self {
             Problem::NotSetUp => "Moss isn't set up on this computer yet.",
             Problem::DidNotStart => "Moss didn't start on this computer.",
+            Problem::ServiceFailed => "Check your sign-in services, then press Start.",
+            Problem::ServiceStopped => "Moss is stopped. Press Start.",
             Problem::Unreachable => "Moss isn't answering at this address.",
             Problem::HostRefused => {
                 "That computer doesn't list this address. Use one from its Sharing screen."
@@ -486,6 +491,11 @@ fn start_lock(folder: &Path) -> Result<Option<std::fs::File>, Problem> {
         .map_err(|_| Problem::DidNotStart)
 }
 
+/// Development fixtures without a launcher retain their direct-process lifecycle.
+pub fn managed(install: &Path) -> bool {
+    moss_launcher::launcher(install).is_file()
+}
+
 /// Finds the local server, starting it if no one else is. The lock is released on return.
 pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, Vec<u8>), Problem> {
     match local(folder).await {
@@ -499,15 +509,25 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
     if lock.is_some() {
         match local(folder).await {
             Err(Problem::Unreachable) => {
-                // An instance the app made has its own database, which must be up first.
-                let (i, f) = (install.to_owned(), folder.to_owned());
-                tokio::task::spawn_blocking(move || {
-                    crate::provision::ensure_database(&i, &f, false)
-                })
-                .await
-                .map_err(|_| Problem::DidNotStart)?
-                .map_err(|_| Problem::DidNotStart)?;
-                start_local(install, folder)?
+                if managed(install) {
+                    if folder.join(moss_launcher::service::STOPPED).exists() {
+                        return Err(Problem::ServiceStopped);
+                    }
+                    let (i, f) = (install.to_owned(), folder.to_owned());
+                    tokio::task::spawn_blocking(move || moss_launcher::service::start(&i, &f))
+                        .await
+                        .map_err(|_| Problem::ServiceFailed)?
+                        .map_err(|_| Problem::ServiceFailed)?;
+                } else {
+                    let (i, f) = (install.to_owned(), folder.to_owned());
+                    tokio::task::spawn_blocking(move || {
+                        crate::provision::ensure_database(&i, &f, false)
+                    })
+                    .await
+                    .map_err(|_| Problem::DidNotStart)?
+                    .map_err(|_| Problem::DidNotStart)?;
+                    start_local(install, folder)?;
+                }
             }
             other => return other,
         }
@@ -519,7 +539,7 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
         }
         let gave_up = match &lock {
             // The server this app started has stopped, so waiting longer cannot help.
-            Some(_) => !still_running(folder),
+            Some(_) => !managed(install) && !still_running(folder),
             // The app that was starting it has let go of the lock.
             None => start_lock(folder)?.is_some(),
         };
@@ -547,6 +567,13 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
     })
     .await
     .map_err(|_| Problem::Unreachable)??;
+    if managed(install) {
+        let (i, f) = (install.to_owned(), folder.to_owned());
+        return tokio::task::spawn_blocking(move || moss_launcher::service::stop(&i, &f))
+            .await
+            .map_err(|_| Problem::ServiceFailed)?
+            .map_err(|_| Problem::ServiceFailed);
+    }
     // Unreachable is not proof of death: leave the database alone if hello cannot answer.
     let (running, _) = local(folder).await?;
     if running.pid == 0 || running.pid > i32::MAX as u32 {
