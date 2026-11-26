@@ -14,6 +14,7 @@ pub struct Remote {
     pub name: String,
     pub origin: String,
     /// Leaf certificate fingerprint the user confirmed against the Sharing screen.
+    /// Empty means OS trust on every connection; existing nonempty pins are never migrated.
     pub pin: String,
 }
 

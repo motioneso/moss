@@ -14,9 +14,9 @@ mod provision;
 mod reach;
 #[cfg(all(test, target_os = "linux"))]
 mod runtime_proof;
+mod store;
 #[cfg(all(test, windows))]
 mod windows_proof;
-mod store;
 
 #[cfg(target_os = "linux")]
 mod trust_linux;
@@ -50,6 +50,7 @@ enum UserEvent {
     },
     Show(Value),
     Open(Opened),
+    PublicServer(String),
     ShowServers,
     /// Another program asked this window to show a saved server, and maybe one of its pages.
     OpenLink {
@@ -83,6 +84,7 @@ struct Opened {
     name: String,
     origin: String,
     certificate: Vec<u8>,
+    os_trust: bool,
 }
 
 /// Declared in this order so the web view drops before the profile it uses.
@@ -162,7 +164,13 @@ fn main() {
     let Some(_window_lock) = link::window_lock(&args.data) else {
         // A destination already waiting for the first window must not be overwritten.
         if !args.data.join("open-request.json").exists() {
-            let _ = link::write_request(&args.data, &link::Request { server: None, path: None });
+            let _ = link::write_request(
+                &args.data,
+                &link::Request {
+                    server: None,
+                    path: None,
+                },
+            );
         }
         std::process::exit(0);
     };
@@ -184,7 +192,10 @@ fn main() {
     let hand_off_data = store.data.clone();
     std::thread::spawn(move || loop {
         if let Some(request) = link::take_request(&hand_off_data) {
-            let event = UserEvent::OpenLink { server: request.server, path: request.path };
+            let event = UserEvent::OpenLink {
+                server: request.server,
+                path: request.path,
+            };
             if hand_off.send_event(event).is_err() {
                 return;
             }
@@ -365,6 +376,7 @@ impl App {
             }
             UserEvent::Show(state) => self.show(state),
             UserEvent::Open(opened) => self.open(opened),
+            UserEvent::PublicServer(origin) => self.add_remote(origin, String::new()),
             UserEvent::ShowServers => {
                 self.turn += 1;
                 self.list_servers();
@@ -719,6 +731,7 @@ impl App {
                     name,
                     origin,
                     certificate,
+                    os_trust: matches!(&target, Target::Remote(remote) if remote.pin.is_empty()),
                 }),
                 Err(problem) => UserEvent::Show(problem_screen(&target, &problem)),
             };
@@ -751,10 +764,18 @@ impl App {
                 return self.show(json!({"screen":"add", "address": address, "error": error, "first": self.servers.last.is_none()}))
             }
         };
+        // Re-adding a saved address must never replace a user-confirmed pin with OS trust.
+        if let Some(remote) = self.servers.remotes.iter().find(|r| r.origin == origin) {
+            return self.choose(remote.id.clone());
+        }
         self.show(json!({"screen":"connecting", "name": origin.trim_start_matches("https://")}));
         let first = self.servers.last.is_none();
         let (proxy, turn) = (self.proxy.clone(), self.turn);
         self.runtime.spawn(async move {
+            if reach::hello(&origin, "").await.is_ok() {
+                let _ = proxy.send_event(UserEvent::Later(turn, Box::new(UserEvent::PublicServer(origin))));
+                return;
+            }
             let state = match reach::peek_certificate(&origin).await {
                 Ok(fingerprint) => json!({"screen":"check", "address": origin, "fingerprint": fingerprint}),
                 Err(problem) => json!({"screen":"add", "address": origin, "error": problem.reason(), "first": first}),
@@ -858,7 +879,7 @@ impl App {
                 Ok(view) => self.server = Some(view),
                 Err(error) => {
                     eprintln!("moss-app: cannot open the server's pages ({error})");
-                    return self.show(json!({"screen":"problem", "name": opened.name, "reason": "This app could not open the server's pages.", "retry": false}))
+                    return self.show(json!({"screen":"problem", "name": opened.name, "reason": "This app could not open the server's pages.", "retry": false}));
                 }
             }
         }
@@ -889,7 +910,11 @@ impl App {
                 let server = opened.id.clone();
                 let origin = opened.origin.clone();
                 let data = self.store.data.clone();
-                let pin = moss_network::instance::fingerprint(&opened.certificate);
+                let pin = if opened.os_trust {
+                    String::new()
+                } else {
+                    moss_network::instance::fingerprint(&opened.certificate)
+                };
                 move |request: Request<String>| {
                     if url::Url::parse(&request.uri().to_string())
                         .is_ok_and(|u| u.origin().ascii_serialization() == origin)

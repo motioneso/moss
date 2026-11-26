@@ -27,6 +27,7 @@ const CANCEL: isize = 2;
 struct Pin {
     id: String,
     certificate: Vec<u8>,
+    os_trust: bool,
     proxy: EventLoopProxy<UserEvent>,
 }
 
@@ -70,6 +71,7 @@ pub fn install(
             Pin {
                 id: opened.id.clone(),
                 certificate: opened.certificate.clone(),
+                os_trust: opened.os_trust,
                 proxy,
             },
         );
@@ -141,6 +143,9 @@ unsafe extern "C-unwind" fn challenge(
         let Some(pin) = guard.as_ref().and_then(|g| g.as_ref()?.get(&key)) else {
             return answer(DEFAULT_HANDLING, std::ptr::null_mut());
         };
+        if pin.os_trust {
+            return answer(DEFAULT_HANDLING, std::ptr::null_mut());
+        }
         let presented = leaf(trust);
         if presented.as_deref() == Some(pin.certificate.as_slice()) {
             let class = AnyClass::get(c"NSURLCredential");

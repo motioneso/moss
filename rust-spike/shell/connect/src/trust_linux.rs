@@ -19,10 +19,12 @@ pub fn install(
     use wry::WebViewExtUnix;
     let webkit = view.webview();
     let context = webkit.context().ok_or("No web context")?;
-    let pem = pem(&opened.certificate);
-    let certificate = gio::TlsCertificate::from_pem(&pem).map_err(|_| "Invalid certificate")?;
-    let host = host_of(&opened.origin).ok_or("Invalid origin")?;
-    context.allow_tls_certificate_for_host(&certificate, &host);
+    if !opened.os_trust {
+        let pem = pem(&opened.certificate);
+        let certificate = gio::TlsCertificate::from_pem(&pem).map_err(|_| "Invalid certificate")?;
+        let host = host_of(&opened.origin).ok_or("Invalid origin")?;
+        context.allow_tls_certificate_for_host(&certificate, &host);
+    }
     let id = opened.id.clone();
     let failed = proxy.clone();
     webkit.connect_load_failed(move |_, _, _, _| {
@@ -35,6 +37,9 @@ pub fn install(
         let _ = tls_failed.send_event(UserEvent::Check(id.clone()));
         false
     });
+    if opened.os_trust {
+        return Ok(()); // WebKit performs OS verification, with no certificate exception.
+    }
     let (id, pinned) = (opened.id.clone(), opened.certificate.clone());
     webkit.connect_load_changed(move |webkit, event| {
         use gio::prelude::TlsCertificateExt;

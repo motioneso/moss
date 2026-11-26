@@ -109,24 +109,29 @@ pub fn is_loopback_origin(origin: &str) -> bool {
 
 /// Records the leaf certificate and, when pinned, accepts only that exact leaf. The server must
 /// still prove it holds the certificate's key through the normal handshake signature. Validity
-/// dates are ignored on purpose: a renewed certificate is a new leaf and is asked about again.
+/// dates are ignored only on the pinned path: a renewed leaf is asked about again.
+/// The platform path verifies the chain, name and validity through the OS trust policy.
 #[derive(Debug)]
 struct Pin {
     expected: Option<String>,
     seen: Arc<Mutex<Option<Vec<u8>>>>,
     provider: Arc<CryptoProvider>,
+    platform: Option<rustls_platform_verifier::Verifier>,
 }
 
 impl ServerCertVerifier for Pin {
     fn verify_server_cert(
         &self,
         end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp: &[u8],
-        _now: UnixTime,
+        intermediates: &[CertificateDer<'_>],
+        server_name: &ServerName<'_>,
+        ocsp: &[u8],
+        now: UnixTime,
     ) -> Result<ServerCertVerified, rustls::Error> {
         *self.seen.lock().expect("pin lock") = Some(end_entity.as_ref().to_vec());
+        if let Some(platform) = &self.platform {
+            return platform.verify_server_cert(end_entity, intermediates, server_name, ocsp, now);
+        }
         match &self.expected {
             Some(pin) if *pin != fingerprint(end_entity.as_ref()) => {
                 Err(rustls::Error::General("certificate pin mismatch".into()))
@@ -172,7 +177,9 @@ impl ServerCertVerifier for Pin {
 
 type Tls = tokio_rustls::client::TlsStream<TcpStream>;
 
-/// Opens TLS to an origin. `Err(Some(der))` means the certificate did not match the pin.
+/// Opens TLS to an origin. A nonempty pin keeps the existing exact-leaf trust path; an empty
+/// pin requires OS trust. `None` is certificate inspection only and must never send a request.
+/// `Err(Ok(der))` means the certificate did not match a nonempty pin.
 async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<Vec<u8>, Problem>> {
     let url = url::Url::parse(origin).map_err(|_| Err(Problem::NotMoss))?;
     let host = url
@@ -184,9 +191,17 @@ async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let seen = Arc::new(Mutex::new(None));
     let verifier = Pin {
-        expected: pin.map(str::to_owned),
+        expected: pin.filter(|p| !p.is_empty()).map(str::to_owned),
         seen: seen.clone(),
         provider: provider.clone(),
+        platform: if pin == Some("") {
+            Some(
+                rustls_platform_verifier::Verifier::new(provider.clone())
+                    .map_err(|_| Err(Problem::NotMoss))?,
+            )
+        } else {
+            None
+        },
     };
     let mut config = rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
@@ -211,13 +226,15 @@ async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<
     let leaf = seen.lock().expect("pin lock").clone();
     match (handshake, leaf) {
         (Ok(Ok(stream)), Some(der)) => Ok((stream, der)),
-        (Ok(Err(_)), Some(der)) if pin.is_some_and(|p| p != fingerprint(&der)) => Err(Ok(der)),
+        (Ok(Err(_)), Some(der)) if pin.is_some_and(|p| !p.is_empty() && p != fingerprint(&der)) => {
+            Err(Ok(der))
+        }
         (Ok(Err(_)), Some(_)) => Err(Err(Problem::NotMoss)),
         _ => Err(Err(Problem::Unreachable)),
     }
 }
 
-/// One HTTPS request over the pinned connection. Used by the notifier, which has no web view.
+/// One HTTPS request over the pinned or OS-verified connection. Used by the notifier, which has no web view.
 /// `Origin` is the server's own origin, as the server requires for writes.
 pub async fn request(
     origin: &str,
@@ -264,7 +281,8 @@ pub async fn peek_certificate(origin: &str) -> Result<String, Problem> {
     }
 }
 
-/// Connects with the pin, asks for hello and checks versions. Returns the leaf certificate so
+/// Connects with the pin (or OS trust for an empty pin), asks for hello and checks versions.
+/// Returns the leaf certificate so
 /// the window's web engine can trust exactly the same one.
 pub async fn hello(origin: &str, pin: &str) -> Result<(Hello, Vec<u8>), Problem> {
     let (mut tls, der) = match open(origin, Some(pin)).await {
@@ -597,3 +615,6 @@ pub(crate) fn request_stop_by_file(folder: &Path, pid: u32) -> Result<(), Proble
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod phase7_os_trust;
