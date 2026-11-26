@@ -1,6 +1,6 @@
 //! Database lifecycle shared by first-run setup and the login service.
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 pub const DATABASE_FOLDER: &str = "database";
@@ -13,6 +13,25 @@ pub enum Failure {
 }
 /// Database supervisors this app started, kept so they are reaped when they exit.
 static STARTED: std::sync::Mutex<Vec<Child>> = std::sync::Mutex::new(Vec::new());
+
+/// The private Windows database boundary accepts ordinary drive paths, never device
+/// namespaces. The service canonicalizes its instance folder (adding `\\?\` on Windows),
+/// so remove only that canonical drive prefix before handing the path to moss-db. Its
+/// strict ancestor, reparse and private-object checks still run on the ordinary path.
+fn database_root(folder: &Path) -> PathBuf {
+    let root = folder.join(DATABASE_FOLDER);
+    #[cfg(windows)]
+    if matches!(
+        root.components().next(),
+        Some(std::path::Component::Prefix(prefix))
+            if matches!(prefix.kind(), std::path::Prefix::VerbatimDisk(_))
+    ) {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        let ordinary: Vec<u16> = root.as_os_str().encode_wide().skip(4).collect();
+        return PathBuf::from(std::ffi::OsString::from_wide(&ordinary));
+    }
+    root
+}
 
 pub fn supervisor_running(install: &Path, root: &Path) -> bool {
     crate::runtime::command(install, "moss-db")
@@ -29,7 +48,7 @@ pub fn supervisor_running(install: &Path, root: &Path) -> bool {
 /// Makes sure the instance's private database is up and migrated. Does nothing for an instance
 /// without a database folder, unless `create` says this is the first start.
 pub fn ensure_database(install: &Path, folder: &Path, create: bool) -> Result<(), Failure> {
-    let root = folder.join(DATABASE_FOLDER);
+    let root = database_root(folder);
     if !create && !root.is_dir() {
         return Ok(());
     }
@@ -140,7 +159,7 @@ fn read_event(log: &Path) -> Option<String> {
 /// Asks the instance's database supervisor to stop and waits for it. Quietly does nothing when
 /// the instance has no database folder or it is not running.
 pub fn stop_database(install: &Path, folder: &Path) -> Result<(), Failure> {
-    let root = folder.join(DATABASE_FOLDER);
+    let root = database_root(folder);
     if !root.is_dir()
         || !install
             .join(format!("moss-db{}", std::env::consts::EXE_SUFFIX))
@@ -160,4 +179,19 @@ pub fn stop_database(install: &Path, folder: &Path) -> Result<(), Failure> {
         .success()
         .then_some(())
         .ok_or(Failure::DatabaseFailed)
+}
+
+#[cfg(all(test, windows))]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn canonical_drive_folder_uses_the_database_boundarys_ordinary_namespace() {
+        let plain = Path::new(r"C:\Moss data\instance");
+        let canonical = Path::new(r"\\?\C:\Moss data\instance");
+        assert_eq!(database_root(canonical), database_root(plain));
+        // UNC/device namespaces stay rejected by the private database's own boundary.
+        let unc = Path::new(r"\\?\UNC\host\share\instance");
+        assert_eq!(database_root(unc), unc.join(DATABASE_FOLDER));
+    }
 }
