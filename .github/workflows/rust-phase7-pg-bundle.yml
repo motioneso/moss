@@ -1,0 +1,95 @@
+name: Rust phase7_pg_bundle
+on:
+  pull_request:
+    paths:
+      - "rust-spike/bundled-db/**"
+      - "rust-spike/shell/tools/stage-install.py"
+      - "rust-spike/shell/tools/test_install.py"
+      - ".github/workflows/rust-phase7-pg-bundle.yml"
+      - ".github/workflows/rust-windows-supervisor.yml"
+      - "package.json"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_pg_bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Native dependency parser and policy tests
+        run: python -m unittest discover -s rust-spike/bundled-db/tools -p test_bundle_libraries.py
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/phase7-pg/downloads
+          key: phase7-pg-sources-${{ runner.os }}-${{ hashFiles('rust-spike/bundled-db/tools/sources.json') }}
+      - name: Linux build dependencies already declared by the database proof
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bison flex libicu-dev zlib1g-dev libzstd-dev
+      - name: macOS build dependencies already declared by the database proof
+        if: runner.os == 'macOS'
+        run: |
+          brew list bison flex icu4c zstd >/dev/null || brew install bison flex icu4c zstd
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: Windows source build dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r rust-spike/bundled-db/tools/requirements-ci.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Hash-locked tool install failed' }
+          & C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed bison flex
+          if ($LASTEXITCODE -ne 0) { throw 'Declared parser build dependencies unavailable' }
+          $runnerPg = (Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+          if (-not $runnerPg) { throw 'Runner Postgres needed for the negative control' }
+          "MOSS_RUNNER_PG_BIN=$runnerPg\bin" >> $env:GITHUB_ENV
+      - name: Build pinned sources on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 rust-spike/bundled-db/tools/build-pg-bundle.py --scratch "$RUNNER_TEMP/phase7-pg" --out "$RUNNER_TEMP/pg-built"
+      - name: Build pinned sources on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $env:PATH += ';C:\msys64\usr\bin'
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" && python rust-spike/bundled-db/tools/build-pg-bundle.py --scratch `"$env:RUNNER_TEMP\phase7-pg`" --out `"$env:RUNNER_TEMP\pg-built`""
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned database build failed' }
+      - name: Relocate bundle and remove source build trees
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          shutil.move(root / 'pg-built', root / 'postgres relocated')
+          shutil.rmtree(root / 'phase7-pg/build')
+          with open(os.environ['GITHUB_PATH'], 'a') as f:
+              f.write(str(root / 'postgres relocated/bin') + '\n')
+      - name: phase7_pg_bundle real server, vector, dump and restore
+        shell: bash
+        run: python rust-spike/bundled-db/tools/phase7_pg_bundle.py --postgres "$RUNNER_TEMP/postgres relocated" --scratch "$RUNNER_TEMP/phase7-proof"
+      - name: Missing tools and runner fallback must fail
+        shell: bash
+        run: |
+          args=()
+          if [[ "$RUNNER_OS" == Windows ]]; then args+=(--runner-bin "$MOSS_RUNNER_PG_BIN"); fi
+          python rust-spike/bundled-db/tools/bundle-negative-controls.py --postgres "$RUNNER_TEMP/postgres relocated" --scratch "$RUNNER_TEMP/phase7-proof" "${args[@]}"
+      - name: Keep bundle and negative-control evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-pg-${{ runner.os }}
+          path: ${{ runner.temp }}/postgres relocated/bundle.json

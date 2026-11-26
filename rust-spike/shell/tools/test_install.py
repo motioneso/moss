@@ -111,7 +111,7 @@ class InstallTests(unittest.TestCase):
             shutil.copy2("/bin/true", dist / name)
         (dist / "web").mkdir()
         (dist / "web/index.html").write_text("page")
-        for name in ("bin/postgres", "bin/initdb", "bin/pg_ctl", "share/postgresql/extension/vector.control", "lib/postgresql/vector.so", "lib/postgresql/moss_nodump.so"):
+        for name in ("bin/postgres", "bin/initdb", "bin/pg_ctl", "bin/pg_dump", "bin/pg_restore", "share/postgresql/extension/vector.control", "lib/postgresql/vector.so", "lib/postgresql/moss_nodump.so"):
             file = pg / name
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_text("fixture")
@@ -121,6 +121,28 @@ class InstallTests(unittest.TestCase):
             load_stage()(dist, pg, target)
         self.assertFalse(target.exists())
         self.assertEqual(list(self.root.glob(".moss-stage-*")), [])
+
+    def test_stage_refuses_each_missing_backup_tool(self):
+        dist, pg = self.root / "dist", self.root / "pg"
+        dist.mkdir()
+        for name in ("moss-app", "moss-shell", "moss-db"):
+            shutil.copy2("/bin/true", dist / name)
+        (dist / "web").mkdir()
+        (dist / "web/index.html").write_text("page")
+        for name in ("bin/postgres", "bin/initdb", "bin/pg_ctl", "bin/pg_dump", "bin/pg_restore",
+                     "share/postgresql/extension/vector.control", "lib/postgresql/vector.so",
+                     "lib/postgresql/moss_nodump.so"):
+            file = pg / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("fixture")
+        for name in ("pg_dump", "pg_restore"):
+            with self.subTest(tool=name):
+                target = self.root / f"new-stage-{name}"
+                (pg / "bin" / name).unlink()
+                with self.assertRaisesRegex(ValueError, f"bin/{name}"):
+                    load_stage()(dist, pg, target)
+                self.assertFalse(target.exists())
+                (pg / "bin" / name).write_text("fixture")
 
     def test_runtime_executes_real_openssl_with_its_configuration(self):
         for name in ("moss-app", "moss-shell", "moss-db"):

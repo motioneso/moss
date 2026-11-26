@@ -18,53 +18,63 @@ permissions:
 jobs:
   supervisor:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
-      CARGO_HOME: ${{ github.workspace }}/.rust-sup/cargo
-      RUSTUP_HOME: ${{ github.workspace }}/.rust-sup/rustup
-      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-sup/target
+      CARGO_BUILD_JOBS: "1"
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - name: Keep file contents byte-exact on checkout
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
+      - name: Keep Rust build folders in runner scratch
+        shell: pwsh
+        run: |
+          "CARGO_HOME=$env:RUNNER_TEMP/rust-sup/cargo" >> $env:GITHUB_ENV
+          "RUSTUP_HOME=$env:RUNNER_TEMP/rust-sup/rustup" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$env:RUNNER_TEMP/rust-sup/target" >> $env:GITHUB_ENV
       - name: Provision the declared Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Build the database supervisor
         run: cargo +1.95.0 build --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --bin moss-db
-      - name: Make a database bundle that includes the vector extension
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/phase7-pg/downloads
+          key: phase7-pg-sources-${{ runner.os }}-${{ hashFiles('rust-spike/bundled-db/tools/sources.json') }}
+      - name: Build the same pinned source database as phase7_pg_bundle
         shell: pwsh
         run: |
-          $pg = $env:PGROOT
-          if (-not $pg) { $pg = (Get-ChildItem 'C:\Program Files\PostgreSQL' | Sort-Object Name | Select-Object -Last 1).FullName }
-          Write-Output "Postgres at $pg"
-          git clone --depth 1 --branch v0.8.0 https://github.com/pgvector/pgvector.git "$env:RUNNER_TEMP\pgvector"
-          $vcvars = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $env:PGROOT = $pg
-          cmd /c "`"$vcvars\VC\Auxiliary\Build\vcvars64.bat`" && cd /d `"$env:RUNNER_TEMP\pgvector`" && nmake /NOLOGO /F Makefile.win && nmake /NOLOGO /F Makefile.win install"
-          if ($LASTEXITCODE -ne 0) { throw 'pgvector build failed' }
-          New-Item -ItemType Directory -Path .rust-sup/bundle -Force | Out-Null
-          Copy-Item $pg .rust-sup/bundle/postgres -Recurse
+          python -m pip install --require-hashes --only-binary=:all: -r rust-spike/bundled-db/tools/requirements-ci.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Hash-locked tool install failed' }
+          & C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed bison flex
+          if ($LASTEXITCODE -ne 0) { throw 'Declared parser build dependencies unavailable' }
+          $env:PATH += ';C:\msys64\usr\bin'
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" && python rust-spike/bundled-db/tools/build-pg-bundle.py --scratch `"$env:RUNNER_TEMP\phase7-pg`" --out `"$env:RUNNER_TEMP\postgres`""
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned database build failed' }
       - name: Start, stop and restart the private database as a standard user
         shell: pwsh
         run: |
           $root = (Get-Location).Path
-          ./rust-spike/bundled-db/proof/windows/supervisor.ps1 -MossDb "$root\.rust-sup\target\debug\moss-db.exe" -Postgres "$root\.rust-sup\bundle\postgres" -Repo $root
+          ./rust-spike/bundled-db/proof/windows/supervisor.ps1 -MossDb "$env:CARGO_TARGET_DIR\debug\moss-db.exe" -Postgres "$env:RUNNER_TEMP\postgres" -Repo $root
       - name: Disk encryption check as administrator and as a standard user
         shell: pwsh
         run: |
           $root = (Get-Location).Path
-          ./rust-spike/bundled-db/proof/windows/at-rest.ps1 -MossDb "$root\.rust-sup\target\debug\moss-db.exe"
+          ./rust-spike/bundled-db/proof/windows/at-rest.ps1 -MossDb "$env:CARGO_TARGET_DIR\debug\moss-db.exe"
       - name: Build the server and the app's proof program
         run: |
           cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell -p moss-app
-          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app --no-run --message-format=json > .rust-sup/app-build.jsonl
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app --no-run --message-format=json > $env:RUNNER_TEMP/app-build.jsonl
       - name: App sets up, starts, stops and restarts the whole local server as a standard user
         shell: pwsh
         run: |
           $root = (Get-Location).Path
-          $bin = "$root\.rust-sup\target\debug"
-          $exe = Get-Content .rust-sup/app-build.jsonl | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} } |
+          $bin = "$env:CARGO_TARGET_DIR\debug"
+          $exe = Get-Content $env:RUNNER_TEMP/app-build.jsonl | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} } |
             Where-Object { $_.executable -and $_.target.name -eq 'moss-app' -and $_.profile.test } | Select-Object -Last 1
-          ./rust-spike/shell/tools/windows-lifecycle.ps1 -Bin $bin -Postgres "$root\.rust-sup\bundle\postgres" -Repo $root -TestExe $exe.executable -AppExe "$bin\moss-app.exe"
+          ./rust-spike/shell/tools/windows-lifecycle.ps1 -Bin $bin -Postgres "$env:RUNNER_TEMP\postgres" -Repo $root -TestExe $exe.executable -AppExe "$bin\moss-app.exe"
