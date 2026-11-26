@@ -89,6 +89,12 @@ def main():
     done = cli("choose-key-file", "--root", str(locked_root), "--key-file", str(chosen))
     assert done.returncode == 0, done.stdout + done.stderr
     print("headless key-file choice: ok")
+    # The driver compares resolved paths too: Windows canonical paths have a
+    # verbatim prefix, and a relative choice must survive recording on every OS.
+    relative_chosen = os.path.relpath(chosen, Path.cwd())
+    done = cli("choose-key-file", "--root", str(locked_root), "--key-file", relative_chosen)
+    assert done.returncode == 0, done.stdout + done.stderr
+    print("headless relative key-file choice: ok")
 
     # Headless setup writes the bundle's own master key to the chosen file, and
     # a start with no key store opens the bundle from that recorded file only.

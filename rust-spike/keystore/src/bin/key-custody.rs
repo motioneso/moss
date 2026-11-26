@@ -269,6 +269,10 @@ fn main() -> ExitCode {
         "choose-key-file" => {
             // Records the owner's headless setup choice. No key is made here.
             let path = PathBuf::from(arg(&args, "--key-file").unwrap_or("master.key"));
+            let path = match keystore::custody::headless_key_file_path(&root, &path) {
+                Ok(path) => path,
+                Err(error) => return fail(error),
+            };
             match keystore::custody::record_key_file_choice(&root, &path) {
                 Ok(()) => {
                     println!("key_file_choice={}", path.display());
