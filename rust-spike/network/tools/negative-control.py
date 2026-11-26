@@ -37,9 +37,9 @@ try:
     env = dict(os.environ)
     # Reuse compiled registry dependencies; path dependencies rebuild from the broken copy.
     env["CARGO_TARGET_DIR"] = str(root / "rust-spike/shell/target")
-    subprocess.run(["cargo", "+1.95.0", "build", "--offline", "--manifest-path", str(copy / "shell/Cargo.toml"), "-p", "moss-shell"], env=env, check=True)
+    subprocess.run(["cargo", "+1.95.0", "build", "--offline", "--manifest-path", str(copy / "shell/Cargo.toml"), "-p", "moss-server"], env=env, check=True)
     binary = scratch / "broken-shell"
-    shutil.copy2(root / "rust-spike/shell/target/debug/moss-shell", binary)
+    shutil.copy2(root / "rust-spike/shell/target/debug/moss-server", binary)
     env["JS44_SERVER_BIN"] = str(binary)
     env.pop("JS44_HOLD", None)
     env["JS44_PROOF_DIR"] = str(scratch / "live")

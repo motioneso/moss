@@ -183,7 +183,7 @@ try {
   await db.connect();
   const fd = openSync(logFile, "w", 0o600);
   server = spawn(
-    process.env.JS44_SERVER_BIN ?? join(root, "rust-spike/shell/target/debug/moss-shell"),
+    process.env.JS44_SERVER_BIN ?? join(root, "rust-spike/shell/target/debug/moss-server"),
     ["serve", "--network", configFile, "--web", process.env.JS44_WEB ?? "/tmp/js44-web"],
     { stdio: ["ignore", fd, fd], env: { PATH: process.env.PATH, DISPLAY: process.env.DISPLAY } }
   );

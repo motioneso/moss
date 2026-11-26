@@ -5,6 +5,6 @@ cd "$(dirname "$0")/../../.."
 : "${CARGO_HOME:?Use task-owned Rust directories}"
 : "${RUSTUP_HOME:?Use task-owned Rust directories}"
 : "${CARGO_TARGET_DIR:?Use task-owned Rust directories}"
-cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
+cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-server
 cargo +1.95.0 build --offline --locked --manifest-path rust-spike/network/Cargo.toml --bin moss-network
 pnpm exec tsx rust-spike/shell/tools/receipt-live.ts

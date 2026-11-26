@@ -35,7 +35,7 @@ cargo([
   "--manifest-path",
   "rust-spike/shell/Cargo.toml",
   "-p",
-  "moss-shell"
+  "moss-server"
 ]);
 cargo([
   "build",
@@ -86,7 +86,7 @@ cargo(
           JS325_DIR: process.env.JS325_DIR!
         }
       : {}),
-    JS170_SERVER: join(target, "debug/moss-shell"),
+    JS170_SERVER: join(target, "debug/moss-server"),
     JS170_CERTIFICATE: join(target, "debug/moss-network")
   }
 );

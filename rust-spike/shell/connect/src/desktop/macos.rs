@@ -33,6 +33,33 @@ unsafe extern "C-unwind" fn settings(_: *mut AnyObject, _: Sel, _: *mut AnyObjec
     }
 }
 
+unsafe extern "C-unwind" fn stop(_: *mut AnyObject, _: Sel, _: *mut AnyObject) {
+    if let Ok(events) = EVENTS.lock() {
+        if let Some(events) = events.as_ref() {
+            events(Action::Stop);
+        }
+    }
+}
+unsafe extern "C-unwind" fn quit(_: *mut AnyObject, _: Sel, _: *mut AnyObject) {
+    if let Ok(events) = EVENTS.lock() {
+        if let Some(events) = events.as_ref() {
+            events(Action::Quit);
+        }
+    }
+}
+unsafe extern "C-unwind" fn update(_: *mut AnyObject, _: Sel, menu: *mut AnyObject) {
+    let status = super::server_status();
+    let label = status
+        .as_ref()
+        .map(|s| s.1.as_str())
+        .unwrap_or("No local server");
+    let entry: *mut AnyObject = msg_send![menu, itemAtIndex: 1isize];
+    let _: () = msg_send![entry, setTitle: &*NSString::from_str(label)];
+    let stop: *mut AnyObject = msg_send![menu, itemAtIndex: 2isize];
+    let enabled = status.is_some_and(|s| s.2);
+    let _: () = msg_send![stop, setEnabled: enabled];
+}
+
 pub struct Tray {
     item: *mut AnyObject,
     target: *mut AnyObject,
@@ -74,6 +101,9 @@ pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
                             as unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject),
                     ),
                     (sel!(settings:), settings),
+                    (sel!(stop:), stop),
+                    (sel!(quit:), quit),
+                    (sel!(menuNeedsUpdate:), update),
                 ] {
                     let implementation = std::mem::transmute::<
                         unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject),
@@ -99,11 +129,18 @@ pub fn tray(action: impl Fn(Action) + Send + 'static) -> Option<Tray> {
         let menu: *mut AnyObject = msg_send![AnyClass::get(c"NSMenu")?, new];
         for (title, action) in [
             ("Open Moss", sel!(reveal:)),
+            ("No local server", sel!(nullAction:)),
+            ("Stop server", sel!(stop:)),
             ("Desktop settings", sel!(settings:)),
+            ("Quit app", sel!(quit:)),
         ] {
             let entry: *mut AnyObject = msg_send![menu, addItemWithTitle: &*NSString::from_str(title), action: action, keyEquivalent: &*NSString::from_str("")];
             let _: () = msg_send![entry, setTarget: target];
         }
+        let _: () = msg_send![menu, setAutoenablesItems: false];
+        let status: *mut AnyObject = msg_send![menu, itemAtIndex: 1isize];
+        let _: () = msg_send![status, setEnabled: false];
+        let _: () = msg_send![menu, setDelegate: target];
         let _: () = msg_send![item, setMenu: menu];
         *EVENTS.lock().ok()? = Some(Box::new(action));
         Some(Tray { item, target, menu })
@@ -475,7 +512,13 @@ pub fn set_login(
             Err(_) => Err("Cannot turn off start at login".into()),
         };
     }
-    let exe = std::env::current_exe().map_err(|_| "Cannot find this app")?;
+    let stable = moss_launcher::launcher(install);
+    let versioned = stable.is_file();
+    let exe = if versioned {
+        stable
+    } else {
+        std::env::current_exe().map_err(|_| "Cannot find this app")?
+    };
     let paths = [&exe, data, install];
     let args = paths
         .iter()
@@ -486,8 +529,13 @@ pub fn set_login(
                 .ok_or("The install path is not valid text")
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let program = if versioned {
+        format!("<string>{}</string><string>moss-app</string><string>--data</string><string>{}</string>", args[0], args[1])
+    } else {
+        format!("<string>{}</string><string>--data</string><string>{}</string><string>--install</string><string>{}</string>", args[0], args[1], args[2])
+    };
     let label = format!("app.moss.desktop.{:016x}", install_id(data));
-    let plist = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>Label</key><string>{label}</string><key>ProgramArguments</key><array><string>{}</string><string>--data</string><string>{}</string><string>--install</string><string>{}</string></array><key>RunAtLoad</key><true/><key>LimitLoadToSessionType</key><string>Aqua</string></dict></plist>", args[0], args[1], args[2]);
+    let plist = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>Label</key><string>{label}</string><key>ProgramArguments</key><array>{program}</array><key>RunAtLoad</key><true/><key>LimitLoadToSessionType</key><string>Aqua</string></dict></plist>");
     std::fs::create_dir_all(path.parent().ok_or("No login settings folder")?)
         .map_err(|_| "Cannot create login settings")?;
     write(&path, plist.as_bytes())

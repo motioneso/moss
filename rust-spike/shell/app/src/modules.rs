@@ -765,12 +765,12 @@ pub fn load_when_ready(
         match open(&path, database.clone()) {
             Ok(host) => {
                 *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(host);
-                eprintln!("moss-shell: module host is running");
+                eprintln!("moss-server: module host is running");
                 return;
             }
             Err(_) if !said => {
                 said = true;
-                eprintln!("moss-shell: waiting for the first module to be installed");
+                eprintln!("moss-server: waiting for the first module to be installed");
             }
             Err(_) => {}
         }

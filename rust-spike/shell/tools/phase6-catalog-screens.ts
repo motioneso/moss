@@ -56,7 +56,7 @@ const fixture = spawn(
       JS43_BOOTSTRAP_URL: urls.bootstrap,
       JS43_MIGRATION_URL: urls.migration,
       JS170_AUTH_URL: urls.auth,
-      JS170_SERVER: join(target, "debug/moss-shell"),
+      JS170_SERVER: join(target, "debug/moss-server"),
       JS170_CERTIFICATE: join(target, "debug/moss-network")
     }
   }

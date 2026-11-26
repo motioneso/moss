@@ -3362,6 +3362,7 @@ dependencies = [
  "block2",
  "gio",
  "libc",
+ "moss-launcher",
  "moss-network",
  "objc2",
  "objc2-foundation",
@@ -3537,6 +3538,16 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "moss-launcher"
+version = "0.0.0"
+dependencies = [
+ "moss-network",
+ "portability",
+ "serde_json",
  "uuid",
 ]
 
@@ -3733,7 +3744,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moss-shell"
+name = "moss-server"
 version = "0.0.0"
 dependencies = [
  "anyhow",

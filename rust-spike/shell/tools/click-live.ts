@@ -188,7 +188,7 @@ function moss(args: string[], log: string) {
 }
 async function startServer() {
   server = launch(
-    join(target, "debug/moss-shell"),
+    join(target, "debug/moss-server"),
     ["serve", "--instance", inst, "--web", web],
     "server.log"
   );

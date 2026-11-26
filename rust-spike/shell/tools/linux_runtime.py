@@ -53,7 +53,7 @@ def stage_runtime(install: Path, openssl: Path, ca_bundle: Path,
     if not locale.is_dir():
         raise ValueError("Build platform has no C.utf8 locale data for PostgreSQL")
     shutil.copytree(locale, runtime / "locale/C.utf8")
-    programs = [install / name for name in ("moss-app", "moss-shell", "moss-db")]
+    programs = [install / name for name in ("moss-app", "moss-server", "moss-db", "moss-launcher")]
     programs += [runtime / "bin/openssl"]
     # PostgreSQL extensions are dlopen inputs, so ldd on postgres alone is insufficient.
     programs += [path for path in (install / "postgres").rglob("*") if elf(path)]
@@ -118,9 +118,9 @@ if [ -d "$root/runtime/rootfs" ]; then
   export __EGL_VENDOR_LIBRARY_FILENAMES="$root/runtime/share/glvnd/egl_vendor.d/50_mesa.json"
 fi
 ''' + desktop_check + '''case "${1-}" in
-  moss-app|moss-shell|moss-db) program=$1; shift; exec "$root/$program" "$@" ;;
+  moss-app|moss-server|moss-db|moss-launcher) program=$1; shift; exec "$root/$program" "$@" ;;
   openssl) shift; exec "$root/runtime/bin/openssl" "$@" ;;
-  *) echo "usage: moss-run {moss-app|moss-shell|moss-db|openssl} [arguments...]" >&2; exit 2 ;;
+  *) echo "usage: moss-run {moss-app|moss-server|moss-db|moss-launcher|openssl} [arguments...]" >&2; exit 2 ;;
 esac
 ''')
     launcher.chmod(0o755)

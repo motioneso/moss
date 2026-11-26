@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][string]$Bin,        # folder holding moss-db.exe and moss-shell.exe
+    [Parameter(Mandatory)][string]$Bin,        # folder holding moss-db.exe and moss-server.exe
     [Parameter(Mandatory)][string]$Postgres,   # database bundle with the vector extension
     [Parameter(Mandatory)][string]$Repo,       # repository root
     [Parameter(Mandatory)][string]$TestExe,    # moss-app test program
@@ -15,7 +15,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') {
 $work = Join-Path $Bin 'lifecycle-proof'
 $install = Join-Path $work 'install'
 New-Item -ItemType Directory -Path $install -Force | Out-Null
-foreach ($name in 'moss-db.exe', 'moss-shell.exe') { Copy-Item (Join-Path $Bin $name) $install }
+foreach ($name in 'moss-db.exe', 'moss-server.exe') { Copy-Item (Join-Path $Bin $name) $install }
 if ($AppExe) { Copy-Item $AppExe $install }
 Copy-Item $Postgres (Join-Path $install 'postgres') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $install 'web') -Force | Out-Null
@@ -110,7 +110,7 @@ try {
     }
 } finally {
     if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
-    Get-Process postgres, moss-shell, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
+    Get-Process postgres, moss-server, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
     $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
     if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }
     Remove-LocalUser -Name $account

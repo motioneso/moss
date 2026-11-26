@@ -25,10 +25,10 @@ fn local_start_lock_errors_are_not_reported_as_a_busy_app() {
 #[test]
 fn server_program_uses_the_platform_executable_suffix() {
     let install = Path::new("installation with spaces");
-    let command = crate::launch::command(install, "moss-shell");
+    let command = crate::launch::command(install, "moss-server");
     let program = Path::new(command.get_program());
     assert_eq!(program.parent(), Some(install));
-    assert_eq!(program.file_stem().unwrap(), "moss-shell");
+    assert_eq!(program.file_stem().unwrap(), "moss-server");
     #[cfg(windows)]
     assert_eq!(program.extension().unwrap(), "exe");
     #[cfg(unix)]
@@ -248,7 +248,7 @@ async fn a_server_is_started_once_and_a_stopped_start_fails_fast() {
     let dir = scratch("start");
     let install = dir.join("install");
     crate::store::private_dir(&install).unwrap();
-    let shell = install.join("moss-shell");
+    let shell = install.join("moss-server");
     std::fs::write(
         &shell,
         "#!/bin/sh\necho started >> \"$3/starts\"\nsleep 1\n",
@@ -329,22 +329,31 @@ async fn stop_refuses_to_stop_the_database_without_a_reachable_server() {
 #[tokio::test]
 async fn stop_request_file_ends_only_the_server_it_names() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let origin = format!("https://127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let origin = format!(
+        "https://127.0.0.1:{}",
+        listener.local_addr().unwrap().port()
+    );
     let dir = scratch("stop-file");
     let certs = dir.join("certs");
     moss_network::tls::local_certificate(&certs, std::slice::from_ref(&origin)).unwrap();
     let acceptor =
-        moss_network::tls::acceptor(&certs.join("certificate.pem"), &certs.join("key.pem")).unwrap();
+        moss_network::tls::acceptor(&certs.join("certificate.pem"), &certs.join("key.pem"))
+            .unwrap();
     let folder = dir.clone();
     let mut served = tokio::spawn(async move {
         moss_network::tls::serve_in(listener, acceptor, moss(), Some(&folder)).await
     });
     super::request_stop_by_file(&dir, std::process::id() + 1).unwrap();
     assert!(
-        tokio::time::timeout(Duration::from_millis(900), &mut served).await.is_err(),
+        tokio::time::timeout(Duration::from_millis(900), &mut served)
+            .await
+            .is_err(),
         "a request for another process must not stop this server"
     );
-    assert!(!dir.join(moss_network::tls::STOP_FILE).exists(), "the request is consumed");
+    assert!(
+        !dir.join(moss_network::tls::STOP_FILE).exists(),
+        "the request is consumed"
+    );
     super::request_stop_by_file(&dir, std::process::id()).unwrap();
     let ended = tokio::time::timeout(Duration::from_secs(5), served).await;
     assert!(matches!(ended, Ok(Ok(Ok(())))), "the named server stops");

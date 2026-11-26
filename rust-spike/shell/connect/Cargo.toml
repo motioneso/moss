@@ -6,6 +6,7 @@ publish.workspace = true
 description = "The Moss desktop app: connects to a Moss server on this or another computer"
 
 [dependencies]
+moss-launcher = { path = "../launcher" }
 moss-network = { path = "../../network" }
 portability = { path = "../../portability" }
 serde = { version = "1", features = ["derive"] }

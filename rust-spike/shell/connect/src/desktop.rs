@@ -4,6 +4,15 @@ use crate::store::{private_dir, Store};
 use moss_network::config::{private_read, private_write};
 use serde::{Deserialize, Serialize};
 
+/// Latest TLS-checked local server state, shared with native tray menu callbacks.
+static SERVER: std::sync::Mutex<Option<(String, String, bool)>> = std::sync::Mutex::new(None);
+pub fn set_server_status(value: Option<(String, String, bool)>) {
+    *SERVER.lock().unwrap_or_else(|e| e.into_inner()) = value;
+}
+pub fn server_status() -> Option<(String, String, bool)> {
+    SERVER.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Preferences {
@@ -31,6 +40,10 @@ impl Preferences {
 }
 
 #[cfg(target_os = "linux")]
+#[path = "desktop/menu_linux.rs"]
+mod menu_linux;
+
+#[cfg(target_os = "linux")]
 mod linux {
     use super::*;
     use gio::glib::{variant::ToVariant, Variant};
@@ -44,12 +57,14 @@ mod linux {
       <method name="ContextMenu"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
       <property name="Category" type="s" access="read"/><property name="Id" type="s" access="read"/>
       <property name="Title" type="s" access="read"/><property name="Status" type="s" access="read"/>
+      <property name="Menu" type="o" access="read"/>
       <property name="IconName" type="s" access="read"/><property name="ItemIsMenu" type="b" access="read"/>
     </interface></node>"#;
 
     pub struct Tray {
         connection: gio::DBusConnection,
         registration: Option<gio::RegistrationId>,
+        menu: Option<gio::RegistrationId>,
         watcher: Option<gio::SignalSubscriptionId>,
         host: Option<gio::SignalSubscriptionId>,
     }
@@ -61,6 +76,9 @@ mod linux {
             }
             if let Some(id) = self.watcher.take() {
                 self.connection.signal_unsubscribe(id);
+            }
+            if let Some(id) = self.menu.take() {
+                let _ = self.connection.unregister_object(id);
             }
             if let Some(id) = self.registration.take() {
                 let _ = self.connection.unregister_object(id);
@@ -96,6 +114,7 @@ mod linux {
         let info = gio::DBusNodeInfo::for_xml(XML)
             .ok()?
             .lookup_interface(ITEM)?;
+        let menu = super::menu_linux::register(&connection, proxy.clone())?;
         let events = proxy.clone();
         let events_host = proxy.clone();
         let registration = connection
@@ -123,6 +142,9 @@ mod linux {
                     "Title" => "Moss".to_variant(),
                     "Status" => "Active".to_variant(),
                     "IconName" => "applications-office".to_variant(),
+                    "Menu" => gio::glib::variant::ObjectPath::try_from("/Menu")
+                        .unwrap()
+                        .to_variant(),
                     "ItemIsMenu" => false.to_variant(),
                     _ => "".to_variant(),
                 },
@@ -159,6 +181,7 @@ mod linux {
         let tray = Tray {
             connection,
             registration: Some(registration),
+            menu: Some(menu),
             watcher: Some(watcher),
             host: Some(host),
         };
@@ -372,14 +395,18 @@ mod linux {
             .map_err(|_| "Cannot create login settings")?;
         let launch = login_command(install)?;
         let data = quoted(&store.data)?;
-        let install = quoted(install)?;
+        let install_arg = if moss_launcher::launcher(install).is_file() {
+            String::new()
+        } else {
+            format!(" --install {}", quoted(install)?)
+        };
         let entry = gio::glib::KeyFile::new();
         entry.set_string("Desktop Entry", "Type", "Application");
         entry.set_string("Desktop Entry", "Name", "Moss");
         entry.set_string(
             "Desktop Entry",
             "Exec",
-            &format!("{launch} --data {data} --install {install}"),
+            &format!("{launch} --data {data}{install_arg}"),
         );
         entry.set_boolean("Desktop Entry", "Terminal", false);
         entry.set_boolean("Desktop Entry", "X-GNOME-Autostart-enabled", true);
@@ -388,7 +415,12 @@ mod linux {
     }
 
     pub(super) fn login_command(install: &Path) -> Result<String, String> {
-        if crate::launch::bundled_runtime(install) {
+        if moss_launcher::launcher(install).is_file() {
+            Ok(format!(
+                "{} moss-app",
+                quoted(&moss_launcher::launcher(install))?
+            ))
+        } else if crate::launch::bundled_runtime(install) {
             let launcher = install.join("moss-run");
             if !launcher.is_file() {
                 return Err("This copy of Moss is missing its runtime launcher".into());
@@ -443,6 +475,8 @@ mod native {
     pub fn tray(proxy: tao::event_loop::EventLoopProxy<crate::UserEvent>) -> Option<Tray> {
         os::tray(move |action| {
             let _ = proxy.send_event(match action {
+                identity::Action::Stop => crate::UserEvent::TrayStop,
+                identity::Action::Quit => crate::UserEvent::Quit,
                 identity::Action::Settings => crate::UserEvent::Desktop,
                 identity::Action::Unavailable => crate::UserEvent::TrayUnavailable,
                 identity::Action::Reveal => crate::UserEvent::Reveal,

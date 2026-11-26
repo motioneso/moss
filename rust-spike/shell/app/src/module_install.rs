@@ -1,4 +1,4 @@
-//! `moss-shell install-module`: puts signed modules from a registry into an instance, with no
+//! `moss-server install-module`: puts signed modules from a registry into an instance, with no
 //! hand-made setup. It prepares the module tables, records the instance owner in the instance's
 //! module settings and installs. A server running on the instance picks the result up by itself.
 use crate::modules;
@@ -14,7 +14,7 @@ use std::path::PathBuf;
 /// Environment variable carrying the elevated database URL for one install run.
 pub const INSTALL_URL_VARIABLE: &str = "MOSS_INSTALL_DATABASE_URL";
 
-const USAGE: &str = "usage: moss-shell install-module --instance DIR --registry-id ID \
+const USAGE: &str = "usage: moss-server install-module --instance DIR --registry-id ID \
 (--registry-folder DIR | --registry-url URL) --root-key KEY --first-party-key KEY \
 [--approve [--version V]| --list | --plan] [MODULE...]
   --list   prints the registry's modules as JSON and installs nothing

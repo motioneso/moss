@@ -21,7 +21,7 @@ cargo([
   "--manifest-path",
   "rust-spike/shell/Cargo.toml",
   "-p",
-  "moss-shell"
+  "moss-server"
 ]);
 cargo([
   "build",
@@ -59,7 +59,7 @@ cargo(
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,
     JS170_AUTH_URL: urls.auth,
-    JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
+    JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-server"),
     JS196_APP: join(process.env.CARGO_TARGET_DIR!, "debug/moss-app"),
     JS196_STUB: join(process.cwd(), "rust-spike/module-host/tools/notification-service-stub.py"),
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")

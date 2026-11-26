@@ -134,7 +134,7 @@ def prove():
         assert check["proof_database"]
         print("PASS: real initdb, schema migrations, pgvector and database write/read", flush=True)
         shell("umask 077; /moss/moss-run moss-db credentials --root /data/database > /data/credentials.json")
-        start("/moss/moss-run moss-shell serve --network /data/network.json --web /moss/web", "/data/server.log", "/data/server.pid")
+        start("/moss/moss-run moss-server serve --network /data/network.json --web /moss/web", "/data/server.log", "/data/server.pid")
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             try:
@@ -148,7 +148,7 @@ def prove():
             time.sleep(0.5)
         else:
             raise RuntimeError("HTTPS hello failed: " + shell("cat /data/server.log")[-1600:])
-        print("PASS: real moss-shell serves HTTPS hello with certificate verification", flush=True)
+        print("PASS: real moss-server serves HTTPS hello with certificate verification", flush=True)
         shell('kill -TERM "$(cat /data/server.pid)"')
         execute("/moss/moss-run", "moss-db", "stop", "--root", "/data/database")
         for process in processes:
@@ -162,7 +162,7 @@ def prove():
         assert saved and any(name.endswith("PG_VERSION") for name in saved)
         uninstall(case)
         assert tree_digest(case / "servers") == saved
-        assert not (case / "moss-shell").exists()
+        assert not (case / "moss-server").exists()
         print("PASS: uninstall removes programs and preserves every byte of the real instance", flush=True)
         print("NOT PROVEN: native WebKit app, desktop resources, cross-distribution ABI, public OS trust, updates, signing, full This computer UI", flush=True)
     finally:

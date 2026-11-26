@@ -11,7 +11,7 @@ export HERO_WEB="$CARGO_TARGET_DIR/hero-dist/web"
 rm -rf "$CARGO_TARGET_DIR/hero-dist"
 # Rust 1.95 is the toolchain the module gates use, and it has the wasm target.
 CARGO_TARGET_DIR="$CARGO_TARGET_DIR/shell-ui" rust-spike/shell/build.sh "$CARGO_TARGET_DIR/hero-dist"
-cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
+cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-server
 cargo +1.95.0 build --offline --locked --manifest-path rust-spike/network/Cargo.toml --bin moss-network
 modules/briefings/tools/build-component.sh "$CARGO_TARGET_DIR/module.wasm"
 cargo +1.95.0 run --locked --offline --manifest-path modules/briefings/host/Cargo.toml --bin briefings-package -- \

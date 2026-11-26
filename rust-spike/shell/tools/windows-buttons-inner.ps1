@@ -180,6 +180,6 @@ try {
     if ($script:noPort) { Log 'WINDOWS APP BUTTONS PROOF: NOT RUN, the web engine never opened its debugging port'; $script:exitCode = 3 } else { $script:exitCode = 1; throw }
 } finally {
     if (-not $app.HasExited) { & taskkill.exe /PID $app.Id /T /F | Out-Null }
-    Get-Process postgres, moss-shell, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Work*" } | Stop-Process -Force
+    Get-Process postgres, moss-server, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Work*" } | Stop-Process -Force
 }
 if ($script:exitCode) { exit $script:exitCode }

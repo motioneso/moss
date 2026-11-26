@@ -486,12 +486,12 @@ impl ToolTurn {
             .and_then(|n| n.parse::<u64>().ok())
             .is_some_and(|n| n > 0);
         if !valid_id || !self.used.insert(id.to_owned()) {
-            eprintln!("moss-shell: refused invalid or repeated chat call id");
+            eprintln!("moss-server: refused invalid or repeated chat call id");
             return Err("Tool call does not belong to this open turn".into());
         }
         let name = event["name"].as_str().unwrap_or_default();
         let module = self.offered.get(name).ok_or_else(|| {
-            eprintln!("moss-shell: refused unoffered chat tool");
+            eprintln!("moss-server: refused unoffered chat tool");
             "Tool was not offered for this turn".to_string()
         })?;
         let tool = name.replace('_', ".");

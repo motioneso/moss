@@ -7,7 +7,7 @@ Build with the repo's Rust toolchain:
 
 ```sh
 cargo +1.95.0 test --manifest-path rust-spike/network/Cargo.toml
-cargo +1.95.0 build --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
+cargo +1.95.0 build --manifest-path rust-spike/shell/Cargo.toml -p moss-server
 ```
 
 Keep configuration and credentials outside `~/Jarv1s`, vaults, agent homes and exports. Use a
@@ -56,7 +56,7 @@ the installer phase. Run the existing migrations through the installation databa
 
 ## First run and sharing
 
-Run `moss-shell serve --network <configuration> --web <built-shell-web-folder>` and visit a
+Run `moss-server serve --network <configuration> --web <built-shell-web-folder>` and visit a
 configured loopback address. Create the first administrator at `/setup`. Setup refuses remote
 peers and remote authorities, even with sharing enabled, and closes once an owner exists. Further
 account registration is deliberately closed at this entrypoint until People management is ported.

@@ -38,7 +38,7 @@ cargo([
   "--manifest-path",
   "rust-spike/shell/Cargo.toml",
   "-p",
-  "moss-shell"
+  "moss-server"
 ]);
 cargo([
   "build",
@@ -104,7 +104,7 @@ cargo(
     JS230_FAKE_GOOGLE: join(target, "debug/fake-google"),
     JS237_FAKE_MAIL: join(target, "debug/fake-mail"),
     JS270_FAKE_OUTLOOK: join(target, "debug/fake-outlook"),
-    JS170_SERVER: join(target, "debug/moss-shell"),
+    JS170_SERVER: join(target, "debug/moss-server"),
     JS170_CERTIFICATE: join(target, "debug/moss-network")
   }
 );
