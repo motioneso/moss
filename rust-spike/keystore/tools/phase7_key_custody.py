@@ -96,7 +96,7 @@ def main():
     headless.mkdir()
     (headless / "credentials.json").write_text(json.dumps(CREDS))
     key_file = scratch / "headless-master.key"
-    done = cli("setup-headless", "--root", str(headless), "--key-file", str(key_file))
+    done = cli("setup-headless", "--root", str(headless), "--key-file", str(key_file), "--mode", "missing")
     assert done.returncode == 0, done.stdout + done.stderr
     assert key_file.is_file() and not (headless / "credentials.json").exists()
     done = cli("start", "--root", str(headless), "--mode", "missing")
@@ -107,6 +107,15 @@ def main():
     root = scratch / "instance"
     (root / "nested").mkdir(parents=True)
     (root / "credentials.json").write_text(json.dumps(CREDS))
+    (root / "modules.json").write_text(json.dumps({
+        "data": "/tmp/data",
+        "connector_key": CREDS["connector_key"],
+        "ai_key": "test-module-ai-key-3456",
+        "producer_url": CREDS["app_url"],
+        "migrations_url": "postgres://m:test-migrations-secret-7890@127.0.0.1/db",
+        "worker_url": "postgres://w:test-worker-secret-2468@127.0.0.1/db",
+    }))
+    SECRETS.extend([b"test-module-ai-key-3456", b"test-migrations-secret-7890", b"test-worker-secret-2468"])
     extra = ["--leak-plaintext"] if args.negative_plaintext else []
     done = cli("migrate", "--root", str(root), "--mode", "working", *extra)
     # With --negative-plaintext this assertion must fail, which is the control working.

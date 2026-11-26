@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - "rust-spike/keystore/**"
+      - "rust-spike/shell/app/**"
+      - "packages/shared/src/app-map-desktop.ts"
+      - "tests/unit/app-map-integrity.test.ts"
+      - "tests/unit/ci-phase-deadlines.test.ts"
       - "rust-spike/network/**"
       - "rust-spike/portability/**"
       - "rust-spike/shell/connect/**"

@@ -219,7 +219,16 @@ fn main() -> ExitCode {
             // file, and the choice is recorded beside the bundle.
             let key_file = PathBuf::from(arg(&args, "--key-file").unwrap_or("master.key"));
             let credentials = std::fs::read(root.join("credentials.json")).unwrap_or_default();
-            match keystore::custody::set_up_headless(&root, &credentials, &key_file) {
+            let mut session = match store_for(mode) {
+                Ok(store) => store,
+                Err(error) => return fail(error),
+            };
+            match keystore::custody::set_up_headless(
+                &root,
+                &credentials,
+                &key_file,
+                session.as_mut(),
+            ) {
                 Ok(migration) => {
                     println!("words={}", migration.recovery.words().join(" "));
                     println!("bundle={}", migration.bundle_path.display());

@@ -9,17 +9,17 @@ pub fn service_name(instance: &str) -> String {
 }
 
 #[cfg(target_os = "linux")]
-pub fn platform_store() -> Box<dyn OsKeyStore> {
+pub fn platform_store() -> Box<dyn OsKeyStore + Send> {
     Box::new(linux::SecretServiceStore)
 }
 
 #[cfg(target_os = "macos")]
-pub fn platform_store() -> Box<dyn OsKeyStore> {
+pub fn platform_store() -> Box<dyn OsKeyStore + Send> {
     Box::new(macos::KeychainStore)
 }
 
 #[cfg(target_os = "windows")]
-pub fn platform_store() -> Box<dyn OsKeyStore> {
+pub fn platform_store() -> Box<dyn OsKeyStore + Send> {
     let dir = std::env::var_os("LOCALAPPDATA")
         .map(std::path::PathBuf::from)
         .unwrap_or_default()
@@ -28,7 +28,7 @@ pub fn platform_store() -> Box<dyn OsKeyStore> {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-pub fn platform_store() -> Box<dyn OsKeyStore> {
+pub fn platform_store() -> Box<dyn OsKeyStore + Send> {
     Box::new(UnsupportedStore)
 }
 

@@ -228,6 +228,17 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     result
 }
 
+/// Secrets the module settings used to hold in plain text. They now come from
+/// the wrapped credential bundle.
+#[derive(Clone)]
+pub struct ModuleSecrets {
+    pub connector_key: String,
+    pub ai_key: Option<String>,
+    pub producer_url: String,
+    pub migrations_url: Option<String>,
+    pub worker_url: Option<String>,
+}
+
 /// Whether these bytes are a wrapped key custody bundle, read from its own header.
 pub fn is_bundle(raw: &[u8]) -> bool {
     let Ok(bundle) = serde_json::from_slice::<serde_json::Value>(raw) else {
@@ -263,13 +274,17 @@ impl Config {
     /// The module secrets from the credentials, opening a wrapped bundle if
     /// present: connector key, module AI key if any, and the app address that
     /// the module settings used to repeat as their producer address.
-    pub fn module_secrets(&self) -> Result<(String, Option<String>, String), String> {
+    pub fn module_secrets(&self) -> Result<ModuleSecrets, String> {
         #[derive(Deserialize)]
         struct OnlyKeys {
             connector_key: String,
             #[serde(default)]
             module_ai_key: Option<String>,
             app_url: String,
+            #[serde(default)]
+            module_migrations_url: Option<String>,
+            #[serde(default)]
+            module_worker_url: Option<String>,
         }
         let raw = private_read(&self.credentials)?;
         let plain = if is_bundle(&raw) {
@@ -297,12 +312,18 @@ impl Config {
         };
         let parsed: OnlyKeys =
             serde_json::from_slice(&plain).map_err(|_| "Invalid credential file")?;
-        Ok((parsed.connector_key, parsed.module_ai_key, parsed.app_url))
+        Ok(ModuleSecrets {
+            connector_key: parsed.connector_key,
+            ai_key: parsed.module_ai_key,
+            producer_url: parsed.app_url,
+            migrations_url: parsed.module_migrations_url,
+            worker_url: parsed.module_worker_url,
+        })
     }
 
     /// The connector key from the credentials, opening a wrapped bundle if present.
     pub fn connector_key(&self) -> Result<String, String> {
-        Ok(self.module_secrets()?.0)
+        Ok(self.module_secrets()?.connector_key)
     }
 }
 

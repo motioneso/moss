@@ -73,6 +73,7 @@ enum UserEvent {
         result: Result<(), Problem>,
     },
     Connect(String),
+    RecoveryPending(Box<PendingCustody>),
     /// A server page failed to load; check whether the server is still there.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     Check(String),
@@ -81,6 +82,35 @@ enum UserEvent {
     WrongCertificate(String, Option<String>),
     /// A background result, dropped if the user has acted since it started.
     Later(u64, Box<UserEvent>),
+}
+
+/// A prepared migration whose plain file still stands. It only commits once
+/// the owner has checked the recovery words.
+struct PendingCustody {
+    prepared: keystore::custody::Prepared,
+    store: Box<dyn keystore::custody::OsKeyStore + Send>,
+    service: String,
+    id: String,
+    instance: String,
+}
+
+impl PendingCustody {
+    fn words(&self) -> Vec<String> {
+        self.prepared
+            .words()
+            .iter()
+            .map(|w| w.to_string())
+            .collect()
+    }
+    fn state(&self) -> Value {
+        json!({
+            "screen": "recovery-key",
+            "words": self.words(),
+            "ask": [4, 11, 19],
+            "instance": self.instance,
+            "id": self.id
+        })
+    }
 }
 
 struct Opened {
@@ -118,6 +148,7 @@ struct App {
     pending_stop: Option<String>,
     pending_recovery: Option<(Vec<String>, Vec<usize>, String)>,
     pending_custody: Option<(String, String)>,
+    pending_custody_state: Option<PendingCustody>,
     stopping: Option<String>,
     preferences: desktop::Preferences,
     last_notice: [Option<std::time::Instant>; 2],
@@ -142,7 +173,7 @@ fn custody_code(error: &keystore::custody::CustodyError) -> &'static str {
 fn custody_setup(
     folder: &std::path::Path,
     instance: &str,
-) -> Result<Option<(Vec<String>, Vec<usize>)>, Value> {
+) -> Result<Option<PendingCustody>, Value> {
     use keystore::custody::{prepare_instance, setup_route, SetupRoute};
     if folder.join(keystore::custody::BUNDLE_FILE).exists()
         && !folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
@@ -157,7 +188,8 @@ fn custody_setup(
         }
         return Ok(None);
     }
-    let mut store = keystore::platform::platform_store();
+    let mut store: Box<dyn keystore::custody::OsKeyStore + Send> =
+        keystore::platform::platform_store();
     match setup_route(true, store.probe()) {
         SetupRoute::OsStore => {}
         // The desktop app is a desktop session, so it never offers a key file.
@@ -183,25 +215,26 @@ fn custody_setup(
         }
     };
     // Point the server settings at the bundle before the old file is deleted.
+    // The old file still stands until the owner checks the words, so quitting
+    // here loses nothing and the next launch shows the words again.
     let network_file = folder.join(moss_network::instance::NETWORK_FILE);
     let saved = moss_network::config::Config::read(&network_file).and_then(|mut config| {
         config.credentials = prepared.bundle_path().to_path_buf();
         config.write(&network_file)
     });
     if let Err(detail) = saved {
-        // The old file still stands, so a retry loses nothing.
         let error = keystore::custody::CustodyError::Unavailable(detail);
         return Err(
             json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
         );
     }
-    let words: Vec<String> = prepared.words().iter().map(|w| w.to_string()).collect();
-    match prepared.commit() {
-        Ok(_) => Ok(Some((words, vec![4, 11, 19]))),
-        Err(error) => Err(
-            json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
-        ),
-    }
+    Ok(Some(PendingCustody {
+        prepared,
+        store,
+        service,
+        id: store::local_id(instance),
+        instance: instance.to_owned(),
+    }))
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -343,6 +376,7 @@ fn main() {
         screen: String::new(),
         pending_recovery: None,
         pending_custody: None,
+        pending_custody_state: None,
         pending_stop: None,
         stopping: None,
         preferences,
@@ -482,6 +516,14 @@ impl App {
                 if turn == self.turn {
                     self.handle(*event);
                 }
+            }
+            UserEvent::RecoveryPending(pending) => {
+                let state = pending.state();
+                self.pending_recovery =
+                    Some((pending.words(), vec![4, 11, 19], pending.id.clone()));
+                self.pending_custody = Some((pending.instance.clone(), pending.id.clone()));
+                self.pending_custody_state = Some(*pending);
+                self.show(state)
             }
             UserEvent::Show(state) => {
                 if state["screen"] == "recovery-key" {
@@ -772,10 +814,9 @@ impl App {
                 Ok(Ok(())) => {
                     let folder = store.instance_folder(&name);
                     match custody_setup(&folder, &name) {
-                        Ok(Some((words, ask))) => UserEvent::Show(json!({
-                            "screen": "recovery-key", "words": words, "ask": ask,
-                            "instance": name, "id": store::local_id(&name)
-                        })),
+                        Ok(Some(pending)) => {
+                            UserEvent::RecoveryPending(Box::new(pending))
+                        }
                         Ok(None) => UserEvent::Connect(store::local_id(&name)),
                         Err(mut state) => {
                             state["instance"] = json!(name);
@@ -849,12 +890,12 @@ impl App {
             if needs {
                 self.pending_custody = Some((name.clone(), id.clone()));
                 match custody_setup(&folder, &name) {
-                    Ok(Some((words, ask))) => {
-                        self.pending_recovery = Some((words.clone(), ask.clone(), id.clone()));
-                        return self.show(json!({
-                            "screen": "recovery-key", "words": words, "ask": ask,
-                            "instance": name, "id": id
-                        }));
+                    Ok(Some(pending)) => {
+                        let state = pending.state();
+                        self.pending_recovery =
+                            Some((pending.words(), vec![4, 11, 19], id.clone()));
+                        self.pending_custody_state = Some(pending);
+                        return self.show(state);
                     }
                     Ok(None) => {}
                     Err(state) => return self.show(state),
@@ -881,20 +922,40 @@ impl App {
                 }));
             }
         }
+        // The plain file is deleted only now, after the owner checked the words.
+        if let Some(mut pending) = self.pending_custody_state.take() {
+            let service = pending.service.clone();
+            if let Err(error) = pending
+                .prepared
+                .commit_with(pending.store.as_mut(), &service)
+            {
+                self.pending_custody = Some((pending.instance.clone(), pending.id.clone()));
+                return self.show(json!({
+                    "screen": "recovery-key", "code": custody_code(&error), "reason": error.reason(),
+                    "instance": pending.instance, "id": pending.id
+                }));
+            }
+        }
         self.pending_recovery = None;
         self.pending_custody = None;
         self.connect(id);
     }
 
     fn recovery_retry(&mut self) {
+        if let Some(pending) = &self.pending_custody_state {
+            let state = pending.state();
+            return self.show(state);
+        }
         let Some((name, id)) = self.pending_custody.clone() else {
             return;
         };
         let folder = self.store.instance_folder(&name);
         match custody_setup(&folder, &name) {
-            Ok(Some((words, ask))) => {
-                self.pending_recovery = Some((words.clone(), ask.clone(), id.clone()));
-                self.show(json!({"screen": "recovery-key", "words": words, "ask": ask, "instance": name, "id": id}))
+            Ok(Some(pending)) => {
+                let state = pending.state();
+                self.pending_recovery = Some((pending.words(), vec![4, 11, 19], id.clone()));
+                self.pending_custody_state = Some(pending);
+                self.show(state)
             }
             Ok(None) => self.connect(id),
             Err(state) => self.show(state),

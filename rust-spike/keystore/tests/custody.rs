@@ -92,7 +92,10 @@ fn desktop_missing_or_broken_store_stops_with_no_key_file_route() {
     );
     // Headless with a broken store may not. Broken stops everywhere.
     let broken = MemoryStore::new(FakeMode::Broken);
-    assert!(matches!(setup_route(false, broken.probe()), SetupRoute::Stop(_)));
+    assert!(matches!(
+        setup_route(false, broken.probe()),
+        SetupRoute::Stop(_)
+    ));
 }
 
 #[test]
@@ -134,8 +137,8 @@ fn migration_strips_module_settings_secrets_and_catches_nested_copies() {
     assert!(!modules.contains("test-connector-key-9012"), "{modules}");
     assert!(!modules.contains("test-ai-key-7890"), "{modules}");
     assert!(
-        modules.contains("migrations_url"),
-        "plain settings stay: {modules}"
+        !modules.contains("postgres://m:x@127.0.0.1/db"),
+        "database addresses move into the bundle: {modules}"
     );
     let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
     let words: Vec<String> = {
@@ -221,7 +224,9 @@ fn interrupted_migration_resumes_and_shows_fresh_words() {
     let master = start_gate(&store, "svc").unwrap();
     let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
     let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
-    assert!(String::from_utf8(payload).unwrap().contains("test-module-ai-key-3456"));
+    assert!(String::from_utf8(payload)
+        .unwrap()
+        .contains("test-module-ai-key-3456"));
 }
 
 #[test]
@@ -238,7 +243,47 @@ fn failed_bundle_write_on_retry_keeps_the_old_bundle_opening() {
     let master = start_gate(&store, "svc").unwrap();
     let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
     let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
-    assert!(String::from_utf8(payload).unwrap().contains("test-module-ai-key-3456"));
+    assert!(String::from_utf8(payload)
+        .unwrap()
+        .contains("test-module-ai-key-3456"));
     fs::remove_dir(dir.path().join("key-bundle.staging")).unwrap();
-    keystore::custody::prepare_instance(dir.path(), &mut store, "svc").unwrap().commit().unwrap();
+    keystore::custody::prepare_instance(dir.path(), &mut store, "svc")
+        .unwrap()
+        .commit()
+        .unwrap();
+}
+
+#[test]
+fn retry_through_a_different_store_keeps_the_module_ai_key() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","ai_key":"test-module-ai-key-3456"}"#).unwrap();
+    let mut first = MemoryStore::new(FakeMode::Working);
+    keystore::custody::prepare_instance(dir.path(), &mut first, "svc").unwrap();
+    // Settings were left whole by preparation, so a new store still finds them.
+    let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
+    assert!(modules.contains("test-module-ai-key-3456"), "{modules}");
+    let mut second = MemoryStore::new(FakeMode::Working);
+    let prepared = keystore::custody::prepare_instance(dir.path(), &mut second, "svc").unwrap();
+    prepared.commit_with(&mut second, "svc").unwrap();
+    let master = start_gate(&second, "svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
+    assert!(String::from_utf8(payload)
+        .unwrap()
+        .contains("test-module-ai-key-3456"));
+}
+
+#[test]
+fn headless_key_file_inside_the_instance_root_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut session = MemoryStore::new(FakeMode::Missing);
+    let inside = dir.path().join("master.key");
+    assert!(keystore::custody::set_up_headless(dir.path(), CREDS, &inside, &mut session).is_err());
+    let outside = dir.path().parent().unwrap().join("outside-master.key");
+    let root = dir.path().join("instance");
+    fs::create_dir(&root).unwrap();
+    keystore::custody::set_up_headless(&root, CREDS, &outside, &mut session).unwrap();
+    assert!(keystore::custody::recorded_key_file(&root).is_some());
+    let _ = fs::remove_file(outside);
 }

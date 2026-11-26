@@ -93,6 +93,36 @@ pub trait OsKeyStore {
     fn probe(&self) -> Result<(), CustodyError>;
 }
 
+impl OsKeyStore for Box<dyn OsKeyStore> {
+    fn store_master(&mut self, service: &str, master: &MasterKey) -> Result<(), CustodyError> {
+        self.as_mut().store_master(service, master)
+    }
+    fn load_master(&self, service: &str) -> Result<MasterKey, CustodyError> {
+        self.as_ref().load_master(service)
+    }
+    fn delete_master(&mut self, service: &str) -> Result<(), CustodyError> {
+        self.as_mut().delete_master(service)
+    }
+    fn probe(&self) -> Result<(), CustodyError> {
+        self.as_ref().probe()
+    }
+}
+
+impl OsKeyStore for Box<dyn OsKeyStore + Send> {
+    fn store_master(&mut self, service: &str, master: &MasterKey) -> Result<(), CustodyError> {
+        self.as_mut().store_master(service, master)
+    }
+    fn load_master(&self, service: &str) -> Result<MasterKey, CustodyError> {
+        self.as_ref().load_master(service)
+    }
+    fn delete_master(&mut self, service: &str) -> Result<(), CustodyError> {
+        self.as_mut().delete_master(service)
+    }
+    fn probe(&self) -> Result<(), CustodyError> {
+        self.as_ref().probe()
+    }
+}
+
 /// An in-memory store for tests and the runner. It can be made locked or missing.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FakeMode {
@@ -204,7 +234,26 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyError> {
     if written.is_err() {
         let _ = fs::remove_file(&staging);
     }
+    if written.is_ok() {
+        if let Some(parent) = path.parent() {
+            sync_folder(parent);
+        }
+    }
     written
+}
+
+/// Best-effort folder sync, so a rename or deletion survives a power loss.
+fn sync_folder(folder: &Path) {
+    #[cfg(unix)]
+    {
+        if let Ok(file) = fs::File::open(folder) {
+            let _ = file.sync_all();
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = folder;
+    }
 }
 
 /// Records the owner's headless key-file choice beside the bundle. The file itself
@@ -292,15 +341,22 @@ pub fn unwrap_with_recovery(
 }
 
 /// The master key a recovery key unwraps, so a restore can put it back in a store.
-pub fn master_from_recovery(bundle: &Value, recovery: &RecoveryKey) -> Result<MasterKey, CustodyError> {
+pub fn master_from_recovery(
+    bundle: &Value,
+    recovery: &RecoveryKey,
+) -> Result<MasterKey, CustodyError> {
     let header = header_of(bundle)?;
     let master_bytes = unseal(
         recovery.bytes(),
         header.as_bytes(),
-        bundle.get("masterByRecovery").ok_or_else(|| CustodyError::Damaged("no wrapped master key".into()))?,
+        bundle
+            .get("masterByRecovery")
+            .ok_or_else(|| CustodyError::Damaged("no wrapped master key".into()))?,
     )
     .ok_or(CustodyError::WrongWords)?;
-    let bytes: [u8; 32] = master_bytes.try_into().map_err(|_| CustodyError::WrongWords)?;
+    let bytes: [u8; 32] = master_bytes
+        .try_into()
+        .map_err(|_| CustodyError::WrongWords)?;
     Ok(MasterKey::from_bytes(bytes))
 }
 
@@ -359,11 +415,50 @@ pub fn set_up_headless(
     instance_root: &Path,
     credentials: &[u8],
     key_file: &Path,
+    session: &mut dyn OsKeyStore,
 ) -> Result<Migration, CustodyError> {
+    // A key file inside the instance root would travel with the bundle it opens.
+    let root = absolute_lexical(instance_root);
+    let chosen = absolute_lexical(key_file);
+    if chosen == root || chosen.starts_with(&root) {
+        return Err(CustodyError::Damaged(
+            "choose a key file outside the server folder".into(),
+        ));
+    }
+    // The route comes from the caller's real session store. A working store,
+    // a locked one and a broken one all stop this path.
+    match setup_route(false, session.probe()) {
+        SetupRoute::KeyFileChoice => {}
+        SetupRoute::OsStore => {
+            return Err(CustodyError::Unavailable(
+                "this machine has a key store, so the key file is not offered".into(),
+            ))
+        }
+        SetupRoute::Stop(error) => return Err(error),
+    }
     let mut store = KeyFileStore::new(key_file.to_path_buf());
     let prepared = prepare(instance_root, credentials, &mut store, "headless", false)?;
     record_key_file_choice(instance_root, key_file)?;
-    prepared.commit()
+    prepared.commit_with(&mut store, "headless")
+}
+
+fn absolute_lexical(path: &Path) -> PathBuf {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(path)
+    };
+    let mut out = PathBuf::new();
+    for part in absolute.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Whether this session may be offered the headless key file at all.
@@ -493,15 +588,21 @@ fn module_secret_values(instance_root: &Path, secrets: &mut Vec<Vec<u8>>) -> Mod
     let Some(object) = value.as_object() else {
         return found;
     };
-    for key in ["connector_key", "ai_key", "producer_url"] {
+    for key in [
+        "connector_key",
+        "ai_key",
+        "producer_url",
+        "migrations_url",
+        "worker_url",
+    ] {
         if let Some(removed) = object.get(key).cloned() {
             collect_leaves(&removed, secrets);
         }
     }
-    found.ai_key = object
-        .get("ai_key")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
+    let text = |key: &str| object.get(key).and_then(Value::as_str).map(str::to_owned);
+    found.ai_key = text("ai_key");
+    found.migrations_url = text("migrations_url");
+    found.worker_url = text("worker_url");
     found
 }
 
@@ -518,7 +619,13 @@ fn strip_module_secrets(instance_root: &Path) -> Result<(), CustodyError> {
         return Ok(());
     };
     let mut changed = false;
-    for key in ["connector_key", "ai_key", "producer_url"] {
+    for key in [
+        "connector_key",
+        "ai_key",
+        "producer_url",
+        "migrations_url",
+        "worker_url",
+    ] {
         changed |= object.remove(key).is_some();
     }
     if changed {
@@ -530,6 +637,8 @@ fn strip_module_secrets(instance_root: &Path) -> Result<(), CustodyError> {
 #[derive(Default)]
 struct ModuleSecrets {
     ai_key: Option<String>,
+    migrations_url: Option<String>,
+    worker_url: Option<String>,
 }
 
 pub struct Migration {
@@ -542,6 +651,9 @@ pub struct Prepared {
     recovery: RecoveryKey,
     bundle_path: PathBuf,
     legacy: PathBuf,
+    instance_root: PathBuf,
+    settings_original: Option<Vec<u8>>,
+    secrets: Vec<Vec<u8>>,
 }
 
 impl Prepared {
@@ -554,16 +666,86 @@ impl Prepared {
     pub fn bundle_path(&self) -> &Path {
         &self.bundle_path
     }
-    /// Deletes the old plaintext file. Call only once the server settings
-    /// point at the bundle, or when there are no server settings to update.
-    pub fn commit(self) -> Result<Migration, CustodyError> {
+    /// Finishes setup: strips the module settings, checks once more, and only
+    /// then deletes the old plaintext file. Call only once the server settings
+    /// point at the bundle and, in the desktop app, once the owner has checked
+    /// the recovery words. A failure restores the settings file, removes the
+    /// new bundle and drops its master from the store.
+    pub fn commit_with(
+        self,
+        store: &mut dyn OsKeyStore,
+        service: &str,
+    ) -> Result<Migration, CustodyError> {
+        let settings_path = self.instance_root.join("modules.json");
+        let finish = (|| -> Result<(), CustodyError> {
+            strip_module_secrets(&self.instance_root)?;
+            let hits: Vec<PathBuf> = find_plaintext(&self.instance_root, &self.secrets)
+                .into_iter()
+                .filter(|path| path != &self.legacy)
+                .collect();
+            if !hits.is_empty() {
+                return Err(CustodyError::Damaged(format!(
+                    "plaintext remains in {}",
+                    hits.iter()
+                        .map(|p| p.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )));
+            }
+            Ok(())
+        })();
+        if let Err(error) = finish {
+            // Roll the whole attempt back, so the disk matches the retry advice.
+            match &self.settings_original {
+                Some(bytes) => {
+                    let _ = write_private(&settings_path, bytes);
+                }
+                None => {
+                    let _ = fs::remove_file(&settings_path);
+                }
+            }
+            let _ = fs::remove_file(&self.bundle_path);
+            let _ = store.delete_master(service);
+            return Err(error);
+        }
         if self.legacy.exists() {
             fs::remove_file(&self.legacy).map_err(|e| CustodyError::Io(e.to_string()))?;
+            if let Some(parent) = self.legacy.parent() {
+                sync_folder(parent);
+            }
         }
         Ok(Migration {
             recovery: self.recovery,
             bundle_path: self.bundle_path,
         })
+    }
+
+    /// Commits without a store at hand. Callers that hold the store should use
+    /// `commit_with`, which can roll a failed finish all the way back.
+    pub fn commit(self) -> Result<Migration, CustodyError> {
+        let settings_path = self.instance_root.join("modules.json");
+        let _ = settings_path;
+        // The settings strip and final check still run here; only the store
+        // rollback is unavailable without the store.
+        let mut rollback = RollbackStore;
+        self.commit_with(&mut rollback, "")
+    }
+}
+
+struct RollbackStore;
+
+impl OsKeyStore for RollbackStore {
+    fn store_master(&mut self, _s: &str, _m: &MasterKey) -> Result<(), CustodyError> {
+        Ok(())
+    }
+    fn load_master(&self, _s: &str) -> Result<MasterKey, CustodyError> {
+        Err(CustodyError::NoSession)
+    }
+    fn delete_master(&mut self, _s: &str) -> Result<(), CustodyError> {
+        Ok(())
+    }
+    fn probe(&self) -> Result<(), CustodyError> {
+        Ok(())
     }
 }
 
@@ -597,11 +779,54 @@ fn prepare(
                 .and_then(Value::as_str)
                 .map(str::to_owned)
         });
+    let recovered_module = read_bundle(instance_root)
+        .ok()
+        .and_then(|bundle| {
+            store
+                .load_master(service)
+                .ok()
+                .and_then(|master| unwrap_with_master(&bundle, &master).ok())
+        })
+        .and_then(|payload| serde_json::from_slice::<Value>(&payload).ok());
+    let recovered_text = |key: &str| {
+        recovered_module
+            .as_ref()
+            .and_then(|value| value.get(key).and_then(Value::as_str).map(str::to_owned))
+    };
+    let module_secrets = ModuleSecrets {
+        ai_key: module_secrets
+            .ai_key
+            .clone()
+            .or_else(|| recovered_text("module_ai_key")),
+        migrations_url: module_secrets
+            .migrations_url
+            .clone()
+            .or_else(|| recovered_text("module_migrations_url")),
+        worker_url: module_secrets
+            .worker_url
+            .clone()
+            .or_else(|| recovered_text("module_worker_url")),
+    };
     let ai_key = module_secrets.ai_key.clone().or(recovered_ai);
-    if let (Some(object), Some(ai)) = (payload_value.as_object_mut(), &ai_key) {
-        object.insert("module_ai_key".to_string(), Value::String(ai.clone()));
+    if let Some(object) = payload_value.as_object_mut() {
+        if let Some(ai) = &ai_key {
+            object.insert("module_ai_key".to_string(), Value::String(ai.clone()));
+        }
+        if let Some(url) = &module_secrets.migrations_url {
+            object.insert(
+                "module_migrations_url".to_string(),
+                Value::String(url.clone()),
+            );
+        }
+        if let Some(url) = &module_secrets.worker_url {
+            object.insert("module_worker_url".to_string(), Value::String(url.clone()));
+        }
     }
-    let payload = if ai_key.is_some() && payload_value.is_object() {
+    let payload = if (ai_key.is_some()
+        || module_secrets.migrations_url.is_some()
+        || module_secrets.worker_url.is_some())
+        && payload_value.is_object()
+    {
         serde_json::to_vec(&payload_value).unwrap()
     } else {
         plaintext.to_vec()
@@ -646,25 +871,13 @@ fn prepare(
                 .join(", ")
         )));
     }
-    strip_module_secrets(instance_root)?;
-    let after_strip: Vec<PathBuf> = find_plaintext(instance_root, &secrets)
-        .into_iter()
-        .filter(|path| path != &legacy)
-        .collect();
-    if !after_strip.is_empty() {
-        return Err(CustodyError::Damaged(format!(
-            "plaintext remains in {}",
-            after_strip
-                .iter()
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )));
-    }
     Ok(Prepared {
         recovery,
         bundle_path,
         legacy,
+        instance_root: instance_root.to_path_buf(),
+        settings_original: fs::read(instance_root.join("modules.json")).ok(),
+        secrets,
     })
 }
 
@@ -679,7 +892,8 @@ pub fn migrate(
 ) -> Result<Migration, CustodyError> {
     let plaintext = fs::read(instance_root.join(LEGACY_CREDENTIALS))
         .map_err(|e| CustodyError::Io(e.to_string()))?;
-    prepare(instance_root, &plaintext, store, service, leak_plaintext)?.commit()
+    let prepared = prepare(instance_root, &plaintext, store, service, leak_plaintext)?;
+    prepared.commit_with(store, service)
 }
 
 /// Sets up a fresh instance. Wraps the credentials text and removes the plaintext file.
@@ -689,7 +903,8 @@ pub fn set_up_instance(
     store: &mut dyn OsKeyStore,
     service: &str,
 ) -> Result<Migration, CustodyError> {
-    prepare(instance_root, credentials, store, service, false)?.commit()
+    let prepared = prepare(instance_root, credentials, store, service, false)?;
+    prepared.commit_with(store, service)
 }
 
 /// Prepares a fresh instance without deleting the plaintext file yet, so the

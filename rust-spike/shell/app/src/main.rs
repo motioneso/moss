@@ -300,20 +300,28 @@ fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
             _ => {}
         }
     }
-    let folder = instance.ok_or("usage: moss-server migrate-keys --instance DIR [--key-file FILE]")?;
+    let folder =
+        instance.ok_or("usage: moss-server migrate-keys --instance DIR [--key-file FILE]")?;
     let network_file = folder.join("network.json");
     let mut config = moss_network::config::Config::read(&network_file)
         .map_err(|e| format!("cannot read the instance settings: {e}"))?;
     if !folder.join(keystore::custody::LEGACY_CREDENTIALS).exists() {
         return Err("this instance has no plain credentials file to migrate".into());
     }
-    let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "default".into());
+    let name = folder
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "default".into());
     let service = keystore::platform::service_name(&name);
     let platform = keystore::platform::platform_store();
     let prepared = match setup_route(false, platform.probe()) {
-        SetupRoute::OsStore => prepare_instance(&folder, &mut keystore::platform::platform_store(), &service),
+        SetupRoute::OsStore => {
+            let mut store = keystore::platform::platform_store();
+            prepare_instance(&folder, store.as_mut(), &service)
+        }
         SetupRoute::KeyFileChoice => {
-            let path = key_file.ok_or("no keychain session here. Name the key file to create with --key-file")?;
+            let path = key_file
+                .ok_or("no keychain session here. Name the key file to create with --key-file")?;
             let mut store = KeyFileStore::new(path.clone());
             let prepared = prepare_instance(&folder, &mut store, &service);
             if prepared.is_ok() {
@@ -326,11 +334,34 @@ fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
     }
     .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
     config.credentials = prepared.bundle_path().to_path_buf();
-    config.write(&network_file).map_err(|e| format!("cannot save the instance settings: {e}"))?;
+    config
+        .write(&network_file)
+        .map_err(|e| format!("cannot save the instance settings: {e}"))?;
     let words = prepared.words().join(" ");
-    prepared.commit().map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
     println!("Write these recovery words down. They are shown once:");
     println!("{words}");
+    // The plain file is deleted only after the owner confirms the copy.
+    // Quitting here leaves it standing, and running this again shows fresh words.
+    println!("When the words are written down, type SAVED and press Enter.");
+    let mut answer = String::new();
+    std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer)
+        .map_err(|e| format!("cannot read the confirmation: {e}"))?;
+    if answer.trim() != "SAVED" {
+        return Err(
+            "the words were not confirmed, so nothing was finished. Run this again when ready."
+                .into(),
+        );
+    }
+    // The store used to prepare is gone by now in the key-file branch, so the
+    // finish goes through the recorded store choice again.
+    let mut store: Box<dyn keystore::custody::OsKeyStore> =
+        match keystore::custody::recorded_key_file(&folder) {
+            Some(path) => Box::new(keystore::custody::KeyFileStore::new(path)),
+            None => keystore::platform::platform_store(),
+        };
+    prepared
+        .commit_with(store.as_mut(), &service)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
     Ok(())
 }
 
@@ -345,9 +376,13 @@ fn restore_keys(raw: Vec<String>) -> Result<(), String> {
         }
     }
     let folder = instance.ok_or("usage: moss-server restore-keys --instance DIR")?;
-    let name = folder.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "default".into());
+    let name = folder
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "default".into());
     let service = keystore::platform::service_name(&name);
-    let bundle = keystore::custody::read_bundle(&folder).map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    let bundle = keystore::custody::read_bundle(&folder)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
     let mut line = String::new();
     std::io::Read::read_to_string(&mut std::io::stdin(), &mut line)
         .map_err(|e| format!("cannot read the recovery words: {e}"))?;
@@ -375,11 +410,13 @@ fn supply_module_secrets_from_args() {
     let Ok(config) = moss_network::config::Config::read(&folder.join("network.json")) else {
         return;
     };
-    if let Ok((connector_key, ai_key, producer_url)) = config.module_secrets() {
+    if let Ok(secrets) = config.module_secrets() {
         modules::set_module_secrets(modules::ModuleSecrets {
-            connector_key,
-            ai_key,
-            producer_url,
+            connector_key: secrets.connector_key,
+            ai_key: secrets.ai_key,
+            producer_url: secrets.producer_url,
+            migrations_url: secrets.migrations_url,
+            worker_url: secrets.worker_url,
         });
     }
 }
@@ -450,11 +487,13 @@ fn main() {
         }
         let platform = config.platform().await?;
         // Module settings no longer hold their secrets after key custody.
-        if let Ok((connector_key, ai_key, producer_url)) = config.module_secrets() {
+        if let Ok(secrets) = config.module_secrets() {
             modules::set_module_secrets(modules::ModuleSecrets {
-                connector_key,
-                ai_key,
-                producer_url,
+                connector_key: secrets.connector_key,
+                ai_key: secrets.ai_key,
+                producer_url: secrets.producer_url,
+                migrations_url: secrets.migrations_url,
+                worker_url: secrets.worker_url,
             });
         }
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
