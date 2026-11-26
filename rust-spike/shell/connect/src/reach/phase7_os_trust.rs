@@ -70,7 +70,10 @@ async fn phase7_os_trust() {
 
     for name in ["wrong-host", "expired", "untrusted"] {
         let origin = server(name).await;
-        assert!(!has_os_trust(&origin).await);
+        assert!(
+            !has_os_trust(&origin).await,
+            "invalid {name} certificate selected OS trust"
+        );
         assert!(
             super::hello(&origin, "").await.is_err(),
             "invalid {name} certificate was accepted"

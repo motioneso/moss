@@ -80,9 +80,13 @@ def trusted_ca(folder, env):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--negative-control", action="store_true",
+    controls = parser.add_mutually_exclusive_group()
+    controls.add_argument("--negative-control", action="store_true",
                         help="disable OS verification in the source temporarily; require the same runner to fail")
+    controls.add_argument("--negative-accept-invalid", action="store_true",
+                          help="bypass OS validation temporarily; require the invalid-certificate assertion to fail")
     args = parser.parse_args()
+    mutation = args.negative_control or args.negative_accept_invalid
     env = os.environ.copy()
     if not env.get("RUSTUP_HOME") or not env.get("CARGO_TARGET_DIR"):
         parser.error("set RUSTUP_HOME and an isolated CARGO_TARGET_DIR explicitly")
@@ -105,11 +109,13 @@ def main():
         command = ["cargo", "+1.95.0", "test", "--locked", "--manifest-path", str(ROOT / "rust-spike/shell/Cargo.toml"),
                    "-p", "moss-app", "reach::phase7_os_trust::phase7_os_trust", "--", "--ignored", "--exact", "--nocapture", "--test-threads=1"]
         try:
-            if args.negative_control:
+            if mutation:
                 text = original.decode()
                 if text.count(marker) != 1:
                     raise RuntimeError("OS trust mutation marker must occur exactly once")
-                source.write_text(text.replace(marker, 'return Err(rustls::Error::General("OS trust disabled by negative control".into()));'))
+                replacement = ('return Err(rustls::Error::General("OS trust disabled by negative control".into()));'
+                               if args.negative_control else 'return Ok(ServerCertVerified::assertion());')
+                source.write_text(text.replace(marker, replacement))
             with trusted_ca(folder, env):
                 print("COMMAND:", shlex.join(command), flush=True)
                 process = subprocess.Popen(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -125,10 +131,14 @@ def main():
                     if code == 0 or "OS-trusted CA connects WITHOUT a pin" not in output or "test result: FAILED" not in output:
                         raise RuntimeError("negative control did not fail at the public CA connection assertion")
                     print("PASS: disabled OS trust made the public-CA connection fail", flush=True)
+                elif args.negative_accept_invalid:
+                    if code == 0 or "invalid wrong-host certificate selected OS trust" not in output or "test result: FAILED" not in output:
+                        raise RuntimeError("bypass control did not fail at the invalid-certificate assertion")
+                    print("PASS: bypassing OS validation made the invalid-certificate assertion fail", flush=True)
                 elif code:
                     return code
         finally:
-            if args.negative_control:
+            if mutation:
                 source.write_bytes(original)
     return 0
 
