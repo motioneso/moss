@@ -33,7 +33,11 @@ jobs:
       - name: Set isolated build and toolchain paths
         shell: bash
         run: |
-          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+          task_rustup_home="$HOME/.rustup"
+          if [ "$RUNNER_OS" = Windows ]; then
+            task_rustup_home="$(cygpath -m "$task_rustup_home")"
+          fi
+          echo "RUSTUP_HOME=$task_rustup_home" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-os-trust-target" >> "$GITHUB_ENV"
           if [ "$RUNNER_OS" = Windows ]; then
             echo 'C:/Program Files/Git/usr/bin' >> "$GITHUB_PATH"

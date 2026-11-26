@@ -22,14 +22,29 @@ def run(args, **kwargs):
     return subprocess.run([str(a) for a in args], check=True, **kwargs)
 
 
-def certificate(folder, name, *, ca=None, san="IP:127.0.0.1,DNS:localhost", days="2"):
+def certificate(folder, name, *, ca=None, san="IP:127.0.0.1,DNS:localhost", expired=False):
     key, pem = folder / f"{name}.key", folder / f"{name}.pem"
     csr = folder / f"{name}.csr"
     run(["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key,
          "-out", csr, "-subj", f"/CN={name}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     ext = folder / f"{name}.ext"
     ext.write_text("basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=" + san + "\n")
-    args = ["openssl", "x509", "-req", "-in", csr, "-out", pem, "-days", days,
+    if expired:
+        # New OpenSSL releases refuse negative -days. Use explicit historical dates instead.
+        index, serial = folder / "index", folder / "serial"
+        index.write_text("")
+        serial.write_text("1000\n")
+        config = folder / "ca.conf"
+        values = {"database": index, "serial": serial, "new_certs_dir": folder,
+                  "certificate": folder / f"{ca}.pem", "private_key": folder / f"{ca}.key"}
+        config.write_text("[ca]\ndefault_ca=issuer\n[issuer]\n" +
+                          "".join(f'{k}="{v.as_posix()}"\n' for k, v in values.items()) +
+                          "default_md=sha256\ndefault_days=2\npolicy=subject\n[subject]\ncommonName=supplied\n")
+        run(["openssl", "ca", "-batch", "-notext", "-config", config, "-in", csr,
+             "-out", pem, "-extfile", ext, "-startdate", "20200101000000Z", "-enddate", "20200102000000Z"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return
+    args = ["openssl", "x509", "-req", "-in", csr, "-out", pem, "-days", "2",
             "-extfile", ext, "-sha256"]
     args += ["-CA", folder / f"{ca}.pem", "-CAkey", folder / f"{ca}.key", "-CAcreateserial"] if ca else ["-signkey", key]
     run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -98,7 +113,7 @@ def main():
         for name in ["valid", "renewed"]:
             certificate(folder, name, ca="ca")
         certificate(folder, "wrong-host", ca="ca", san="DNS:other.invalid")
-        certificate(folder, "expired", ca="ca", days="-1")
+        certificate(folder, "expired", ca="ca", expired=True)
         certificate(folder, "untrusted", ca="unknown-ca")
         certificate(folder, "self-signed")
         certificate(folder, "changed-self-signed")
