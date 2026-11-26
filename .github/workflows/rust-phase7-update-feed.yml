@@ -6,7 +6,7 @@ on:
       - "rust-spike/module-host/src/trust*.rs"
       - ".github/workflows/rust-phase7-update-feed.yml"
   push:
-    branches: [task/430-rust-phase-7-part-7-signed-update-feed-a]
+    branches: [main]
     paths:
       - "rust-spike/app-update/**"
       - "rust-spike/module-host/src/trust*.rs"

@@ -33,7 +33,7 @@ fn private(path: &Path, value: &Value) {
     file.write_all(value.to_string().as_bytes()).unwrap();
 }
 #[test]
-#[ignore = "Only through verify-gate and the module bootstrap gate"]
+#[ignore = "Only through verify-gate and test:rust-phase7-update-feed"]
 fn phase7_update_feed_server_continuity() {
     assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
     let scratch = tempfile::tempdir().unwrap();
