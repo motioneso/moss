@@ -88,6 +88,9 @@ mod custody_tests {
         std::fs::create_dir(&instance).unwrap();
         let layout = Layout::create(&instance.join("database")).unwrap();
         let secret = password(&layout, crate::SUPERUSER).unwrap();
+        // Migration runs between supervisor lifetimes. Release the Windows
+        // ancestor pins before recording setup, then reopen the real reader.
+        drop(layout);
         std::fs::write(instance.join("credentials.json"), b"{}").unwrap();
         let key = scratch.path().join("headless.key");
         let mut store = KeyFileStore::new(key.clone());
@@ -97,6 +100,7 @@ mod custody_tests {
             .unwrap()
             .commit_with(&mut store, &service)
             .unwrap();
+        let layout = Layout::open(&instance.join("database")).unwrap();
         assert!(!layout.secrets.join(crate::SUPERUSER).exists());
         assert!(existing(&layout, crate::SUPERUSER).unwrap().expose() == secret.expose());
         assert!(password(&layout, crate::SUPERUSER).unwrap().expose() == secret.expose());
@@ -108,5 +112,6 @@ mod custody_tests {
         std::fs::remove_file(key).unwrap();
         assert!(password(&layout, crate::SUPERUSER).is_err());
         assert!(!layout.secrets.join(crate::SUPERUSER).exists());
+        drop(layout);
     }
 }
