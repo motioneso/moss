@@ -31,11 +31,12 @@ follow the phase 6 Settings layout: ruled rows, compact controls, no explanatory
 
 | Draft                  | Where                    | Phone            | Shared pieces for implementation                   |
 | ---------------------- | ------------------------ | ---------------- | -------------------------------------------------- |
-| M1 First run           | Desktop app              | No               | Card (interactive), Button, EmptyState             |
+| M1 First run           | Desktop app              | No               | Card (interactive), Button, Badge, EmptyState      |
 | M2 Recovery key        | Desktop app, first run   | No               | Field, Button                                      |
 | M3 Servers and tray    | Desktop app, OS tray     | No               | RowIndex, Indicator, Button, Menu, Dialog          |
 | M4 Sharing             | Settings / Sharing       | Yes              | RowIndex, Switch, Badge, Dialog, Button            |
 | M5 Backups and restore | Settings / Backups       | Yes (admin only) | RowIndex, Badge, Select, Dialog, Field, EmptyState |
+| M5 New computer        | Desktop app, first run   | No               | Field, Button                                      |
 | M6 Updates             | Desktop app and Settings | Version row only | Dialog, RowIndex, Switch, Button                   |
 | M7 Docker import       | Desktop app, first run   | No               | Field, Button, RowIndex                            |
 

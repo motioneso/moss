@@ -499,4 +499,7 @@ summary {
   .jds-btn {
     max-width: 100%;
   }
+  .desktop-only {
+    display: none;
+  }
 }

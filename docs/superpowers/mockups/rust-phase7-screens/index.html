@@ -63,9 +63,39 @@
                 </a>
               </div>
               <div class="more actions">
-                <a class="jds-btn jds-btn--secondary" href="#m5-restore">Restore a backup</a>
+                <a class="jds-btn jds-btn--secondary" href="#m5-new-machine">Restore a backup</a>
                 <a class="jds-btn jds-btn--secondary" href="#m7">Move from Docker</a>
               </div>
+            </div>
+          </div>
+          <div id="m1-disk" class="result">
+            <div class="section-label">
+              After setup <span class="meta">On, off or unknown</span>
+            </div>
+            <div class="entry">
+              <div><strong>Disk encryption</strong></div>
+              <span class="jds-badge jds-badge--pine">On</span>
+            </div>
+            <div class="entry">
+              <div><strong>Disk encryption</strong></div>
+              <div class="actions">
+                <span class="jds-badge jds-badge--amber">Off</span
+                ><a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m1-disk"
+                  >Open disk settings</a
+                >
+              </div>
+            </div>
+            <div class="entry">
+              <div><strong>Disk encryption</strong></div>
+              <div class="actions">
+                <span class="jds-badge jds-badge--neutral">Unknown</span
+                ><a class="jds-btn jds-btn--secondary jds-btn--sm" href="#m1-disk"
+                  >Open disk settings</a
+                >
+              </div>
+            </div>
+            <div class="actions">
+              <a class="jds-btn jds-btn--primary" href="#m2">Continue</a>
             </div>
           </div>
           <details class="variants">
@@ -171,9 +201,10 @@
             <div class="state-grid">
               <div>
                 <h3>Empty</h3>
-                <p role="status">No key store on this computer.</p>
+                <p role="status">No key store found.</p>
                 <div class="actions">
-                  <a class="jds-btn jds-btn--secondary" href="#m2">Keep the key in a file</a>
+                  <a class="jds-btn jds-btn--primary" href="#m2">Try again</a
+                  ><a class="jds-btn jds-btn--quiet" href="#m2">Open system settings</a>
                 </div>
               </div>
               <div>
@@ -533,6 +564,52 @@
               </div>
             </div>
           </div>
+          <div id="m5-new-machine" class="result desktop-only">
+            <div class="section-label">
+              New computer <span class="meta">From first run · Desktop only</span>
+            </div>
+            <div class="window">
+              <div class="window__bar"><span>Moss</span><span>Restore a backup</span></div>
+              <div class="window__body">
+                <div class="split">
+                  <div>
+                    <div class="entry">
+                      <div>
+                        <strong>Backup file</strong>
+                        <div class="meta">moss-backup-sunday.mossbak</div>
+                      </div>
+                      <button class="jds-btn jds-btn--secondary jds-btn--sm" type="button">
+                        Choose file
+                      </button>
+                    </div>
+                    <label class="field"
+                      >Recovery key
+                      <textarea class="jds-input" aria-label="Recovery key words"></textarea>
+                    </label>
+                    <div class="actions">
+                      <a class="jds-btn jds-btn--quiet" href="#m1">Back</a
+                      ><button class="jds-btn jds-btn--primary" type="button">Restore</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="section-label">This backup</div>
+                    <dl class="facts">
+                      <dt>From</dt>
+                      <dd>Moss on Study PC</dd>
+                      <dt>Made</dt>
+                      <dd>Sunday 03:00</dd>
+                      <dt>Version</dt>
+                      <dd>7.1.0</dd>
+                      <dt>Accounts</dt>
+                      <dd>2</dd>
+                      <dt>Restores to</dt>
+                      <dd>A new Moss on this computer</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <details class="variants">
             <summary>States</summary>
             <div class="state-grid">
@@ -574,7 +651,7 @@
             </div>
             <span class="where">Version row on phone</span>
           </header>
-          <div class="thirds">
+          <div class="thirds desktop-only">
             <div class="dialog-row">
               <div class="jds-dialog" role="dialog" aria-labelledby="upd-title">
                 <div class="jds-dialog__head">
@@ -624,11 +701,11 @@
                 <strong>Version</strong>
                 <div class="meta">7.1.0 · Up to date · Checked 09:40</div>
               </div>
-              <button class="jds-btn jds-btn--secondary jds-btn--sm" type="button">
+              <button class="jds-btn jds-btn--secondary jds-btn--sm desktop-only" type="button">
                 Check now
               </button>
             </div>
-            <div class="entry">
+            <div class="entry desktop-only">
               <div><strong>Update automatically</strong></div>
               <label class="jds-switch"
                 ><input type="checkbox" aria-label="Update automatically" checked /><span
