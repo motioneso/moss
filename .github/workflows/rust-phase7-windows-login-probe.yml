@@ -1,5 +1,6 @@
 name: Rust phase7 Windows registration probe
 on:
+  workflow_dispatch:
   pull_request:
     paths: [".github/workflows/rust-phase7-windows-login-probe.yml"]
 permissions:
