@@ -75,10 +75,16 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-Resolved 2026-11-26, JS-435: coordinator ruled no authorization prompt at startup. When a live
-firewall check cannot succeed silently, keep loopback only and record sharing as paused,
-preserving its rule/token. Sharing shows Paused and one Resume button; the owner authorizes a
-read-only live marker/current-port check there. Declined or failed checks stay paused.
+### JS-435: safely loading a new firewalld service — 2026-11-26
+
+The required Moss-owned service definition is written to disk, but firewalld's runtime service
+catalog does not load new definitions without a reload. Upstream implementation confirms that
+reload can discard unrelated runtime-only rules. A global reload would breach this task's
+ownership boundary. The startup prompt question is resolved in the phase 7 plan's rulings ledger.
+
+Options: coordinate preloading with the installer lane, or authorize a separate runtime-preservation
+design. Recommendation: coordinate preloading; do not silently reload the firewall. The firewalld
+path and final review are blocked on that decision. Asked in the task chat and via needs-ben.
 
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)

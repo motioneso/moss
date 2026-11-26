@@ -318,15 +318,36 @@ fn present_query(os: Os, linux: Linux, rule: &Rule) -> Option<(Vec<String>, Opti
 
 /// Runs a command and returns its exit code and output. `None` when it did not run or was killed.
 fn run_code(args: &[String]) -> Option<(i32, String)> {
-    let out = Command::new(&args[0])
+    use std::io::Read;
+    let mut child = Command::new(&args[0])
         .args(&args[1..])
         .stdin(Stdio::null())
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
         .ok()?;
-    Some((
-        out.status.code()?,
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-    ))
+    let mut pipe = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        pipe.by_ref().take(1_048_577).read_to_end(&mut bytes).ok()?;
+        (bytes.len() <= 1_048_576).then_some(bytes)
+    });
+    let start = Instant::now();
+    let code = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.code(),
+            Ok(None) if start.elapsed() < Duration::from_secs(30) => {
+                std::thread::sleep(Duration::from_millis(25))
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }?;
+    let bytes = reader.join().ok()??;
+    Some((code, String::from_utf8(bytes).ok()?))
 }
 
 fn output(args: &[String]) -> Option<(bool, String)> {
@@ -353,6 +374,11 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
         let (code, text) = run_code(query)?;
         match &needle {
             // A listing that failed to run says nothing about the rule.
+            Some(needle) if os == Os::Linux && linux == Linux::Ufw => (code == 0
+                && text.starts_with("Added user rules"))
+            .then(|| !ufw_lines(&text, rule).is_empty()),
+            Some(_) if os == Os::Mac => (code == 0 && text.starts_with("ALF:"))
+                .then(|| mac_path_present(&text, &rule.program)),
             Some(needle) => (code == 0).then(|| text.contains(needle)),
             // netsh answers 0 for a match and 1 for none. Any other code means it could not say.
             None if os == Os::Windows => match code {
@@ -551,16 +577,34 @@ fn windows_lookup(code: i32, text: &str, rule: &Rule) -> Result<bool, &'static s
 }
 
 /// Whether `ufw show added` text proves the rules on the port are Moss's.
-fn ufw_marker(text: &str, rule: &Rule) -> bool {
-    let needle = format!("allow {}/tcp", rule.port);
-    let lines: Vec<&str> = text.lines().filter(|l| l.contains(&needle)).collect();
-    // Every rule on the port must carry the marker, or nothing is deleted.
-    !lines.is_empty() && lines.iter().all(|l| l.contains(&rule.name))
+fn ufw_lines<'a>(text: &'a str, rule: &Rule) -> Vec<&'a str> {
+    let command = format!("ufw allow {}/tcp", rule.port);
+    text.lines()
+        .filter(|line| *line == command || line.starts_with(&format!("{command} comment ")))
+        .collect()
 }
 
-/// Whether the macOS application firewall listing proves Moss may remove its own entry.
+fn ufw_marker(text: &str, rule: &Rule) -> bool {
+    let lines = ufw_lines(text, rule);
+    !lines.is_empty()
+        && lines.iter().all(|line| {
+            line.split_once(" comment ").is_some_and(|(_, comment)| {
+                comment == rule.name || comment == format!("'{}'", rule.name)
+            })
+        })
+}
+
+fn mac_path_present(text: &str, program: &Path) -> bool {
+    text.lines().any(|line| {
+        line.split_once(':').is_some_and(|(index, path)| {
+            index.trim().parse::<u32>().is_ok() && path.trim() == program.to_string_lossy()
+        })
+    })
+}
+
+/// Only the exact application path and a record saying Moss added it allow removal.
 fn mac_marker(text: &str, rule: &Rule) -> bool {
-    rule.entry_added == Some(true) && text.contains(&rule.program.display().to_string())
+    rule.entry_added == Some(true) && mac_path_present(text, &rule.program)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -605,7 +649,19 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
             windows_lookup(code, &text, rule)
         }
         (Os::Linux, Linux::Ufw) => match run_code(&cmd(&["ufw", "show", "added"])) {
-            Some((0, text)) => Ok(ufw_marker(&text, rule)),
+            Some((0, text)) if text.starts_with("Added user rules") => {
+                let marked = ufw_marker(&text, rule);
+                if !marked
+                    && ufw_lines(&text, rule)
+                        .iter()
+                        .any(|line| line.contains(&rule.name))
+                {
+                    // Our rule mixed with a foreign selector is ambiguous; retain the record.
+                    Err(UNREADABLE)
+                } else {
+                    Ok(marked)
+                }
+            }
             _ => Err(UNREADABLE),
         },
         (Os::Linux, Linux::Firewalld) => {
@@ -631,7 +687,7 @@ fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
                 Some(true) => {}
             }
             match run_code(&cmd(&[SOCKET_FILTER, "--listapps"])) {
-                Some((0, text)) => Ok(mac_marker(&text, rule)),
+                Some((0, text)) if text.starts_with("ALF:") => Ok(mac_marker(&text, rule)),
                 _ => Err(UNREADABLE),
             }
         }
@@ -1376,16 +1432,25 @@ mod tests {
         assert!(!ufw_marker(ufw_foreign, &owned));
         assert!(!ufw_marker(&format!("{ufw_good}\n{ufw_foreign}"), &owned));
         assert!(!ufw_marker("", &owned));
+        assert!(!ufw_marker(&format!("{ufw_good}-foreign"), &owned));
+        assert!(!ufw_marker(
+            &format!("ufw allow 15198/tcp comment {}", owned.name),
+            &owned
+        ));
 
         let mut mac = owned.clone();
         mac.entry_added = Some(true);
-        assert!(mac_marker(&program, &mac));
+        assert!(mac_marker(
+            &format!("ALF: total number of apps = 1\n1 : {program}\n"),
+            &mac
+        ));
         mac.entry_added = Some(false);
         assert!(!mac_marker(&program, &mac));
         mac.entry_added = None;
         assert!(!mac_marker(&program, &mac));
         mac.entry_added = Some(true);
         assert!(!mac_marker("/usr/bin/true", &mac));
+        assert!(!mac_marker(&format!("1 : {program}.foreign"), &mac));
 
         assert!(service_file_is_ours(&service_xml(&owned).unwrap(), &owned));
         let bad_token = service_xml(&owned)

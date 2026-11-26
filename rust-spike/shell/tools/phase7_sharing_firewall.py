@@ -31,6 +31,8 @@ import platform
 import queue
 import shutil
 import socket
+import shlex
+import uuid
 import subprocess
 import sys
 import threading
@@ -66,6 +68,7 @@ def say(*parts):
 
 def run(args, check=True, **kwargs):
     say('COMMAND:', subprocess.list2cmdline([str(a) for a in args]))
+    kwargs.setdefault("timeout", 30)
     result = subprocess.run([str(a) for a in args], capture_output=True, text=True, **kwargs)
     say('EXIT:', result.returncode)
     if result.stdout.strip():
@@ -86,6 +89,59 @@ def expect(condition, label):
     if not condition:
         raise AssertionError(label)
     say('PASS:', label)
+
+
+def ufw_added():
+    text = sudo(['ufw', 'show', 'added']).stdout
+    expect(text.startswith('Added user rules'), 'ufw gave a readable rule listing')
+    return [shlex.split(line) for line in text.splitlines() if line.startswith('ufw ')]
+
+
+def remove_ufw_plant(port, marker):
+    selected = [parts for parts in ufw_added() if parts[:3] == ['ufw', 'allow', f'{port}/tcp']]
+    if not selected:
+        return
+    expect(all(parts == ['ufw', 'allow', f'{port}/tcp', 'comment', marker] for parts in selected),
+           'every rule selected for cleanup carries the exact runner marker')
+    sudo(['ufw', 'delete', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(port)])
+
+
+def windows_rule(name):
+    shown = run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', f'name={name}', 'verbose'], check=False)
+    if shown.returncode == 1 and shown.stdout.strip() == 'No rules match the specified criteria.':
+        return None
+    expect(shown.returncode == 0, 'Windows rule lookup succeeded')
+    expect(shown.stdout.count('Rule Name:') == 1, 'Windows lookup returned exactly one rule')
+    fields = {}
+    for line in shown.stdout.splitlines():
+        if ':' in line:
+            key, value = line.split(':', 1)
+            fields[key.strip()] = value.strip()
+    expect(fields.get('Rule Name') == name, 'Windows returned the requested rule name')
+    return fields
+
+
+def windows_port_unused(port):
+    text = run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', 'name=all', 'verbose']).stdout
+    return all(value.strip() != str(port) for line in text.splitlines() if ':' in line
+               for key, value in [line.split(':', 1)] if key.strip() == 'LocalPort')
+
+
+def remove_windows_plant(name, marker, port, program):
+    fields = windows_rule(name)
+    if fields is None:
+        return
+    expect(fields.get('Description') == marker and fields.get('LocalPort') == str(port)
+           and fields.get('Program', '').lower() == str(program).lower(), 'Windows cleanup owns the exact rule')
+    run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', f'name={name}',
+         'protocol=TCP', f'localport={port}', f'program={program}'])
+
+
+def mac_apps():
+    text = sudo([SOCKET_FILTER, '--listapps']).stdout
+    expect(text.startswith('ALF:'), 'macOS returned an application listing')
+    return [line.split(':', 1)[1].strip() for line in text.splitlines()
+            if ':' in line and line.split(':', 1)[0].strip().isdigit()]
 
 
 class Probe:
@@ -131,7 +187,11 @@ class World:
 
     def __init__(self, folder, binary, port):
         self.folder, self.binary, self.port = folder, binary, port
+        self.plant_marker = "moss-runner-" + uuid.uuid4().hex
+        self.other_name = self.plant_marker + "-other"
+        self.other_program = binary.with_name("foreign-probe" + binary.suffix)
         self.rule_name = f'moss-{folder.name}'
+        self.cleanup_record = None
         self.namespace = None
         self.address = None
         self.planted_other = False
@@ -140,16 +200,16 @@ class World:
 
     def set_up_client(self):
         if SYSTEM == 'Linux':
-            self.namespace = 'mossclient'
-            sudo(['ip', 'netns', 'del', self.namespace], check=False)
-            sudo(['ip', 'link', 'del', 'vmoss0'], check=False)
+            self.namespace = 'moss' + uuid.uuid4().hex[:8]
+            self.veth = 'ms' + uuid.uuid4().hex[:7]
+            self.peer = self.veth + 'p'
             sudo(['ip', 'netns', 'add', self.namespace])
-            sudo(['ip', 'link', 'add', 'vmoss0', 'type', 'veth', 'peer', 'name', 'vmoss1'])
-            sudo(['ip', 'link', 'set', 'vmoss1', 'netns', self.namespace])
-            sudo(['ip', 'addr', 'add', '10.77.0.1/24', 'dev', 'vmoss0'])
-            sudo(['ip', 'link', 'set', 'vmoss0', 'up'])
-            sudo(['ip', 'netns', 'exec', self.namespace, 'ip', 'addr', 'add', '10.77.0.2/24', 'dev', 'vmoss1'])
-            sudo(['ip', 'netns', 'exec', self.namespace, 'ip', 'link', 'set', 'vmoss1', 'up'])
+            sudo(['ip', 'link', 'add', self.veth, 'type', 'veth', 'peer', 'name', self.peer])
+            sudo(['ip', 'link', 'set', self.peer, 'netns', self.namespace])
+            sudo(['ip', 'addr', 'add', '10.77.0.1/24', 'dev', self.veth])
+            sudo(['ip', 'link', 'set', self.veth, 'up'])
+            sudo(['ip', 'netns', 'exec', self.namespace, 'ip', 'addr', 'add', '10.77.0.2/24', 'dev', self.peer])
+            sudo(['ip', 'netns', 'exec', self.namespace, 'ip', 'link', 'set', self.peer, 'up'])
             sudo(['ip', 'netns', 'exec', self.namespace, 'ip', 'link', 'set', 'lo', 'up'])
             self.address = '10.77.0.1'
         else:
@@ -163,7 +223,7 @@ class World:
     def tear_down_client(self):
         if self.namespace:
             sudo(['ip', 'netns', 'del', self.namespace], check=False)
-            sudo(['ip', 'link', 'del', 'vmoss0'], check=False)
+            sudo(['ip', 'link', 'del', self.veth], check=False)
 
     def reach(self, host):
         code = CLIENT
@@ -179,34 +239,32 @@ class World:
 
     def rule_present(self):
         if SYSTEM == 'Linux':
-            out = sudo(['ufw', 'status'], check=False).stdout
+            out = sudo(['ufw', 'status']).stdout
             return f'{self.port}/tcp' in out
         if SYSTEM == 'Windows':
-            shown = run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', 'name=all', 'verbose'], check=False).stdout
-            block = ''
-            for line in shown.splitlines() + ['Rule Name: end']:
-                if line.startswith('Rule Name:'):
-                    first = block.splitlines()[0] if block else ''
-                    name = first.split(':', 1)[1].strip() if ':' in first else ''
-                    # Only Moss's marker name counts, never the runner's bare-prefix plant.
-                    if name.startswith(f'{self.rule_name}-') and str(self.port) in block and 'sharing_probe' in block:
-                        return True
-                    block = line + '\n'
-                else:
-                    block += line + '\n'
-            return False
-        out = sudo([SOCKET_FILTER, '--listapps'], check=False).stdout
-        return 'sharing_probe' in out
+            record = self.moss_record() or self.cleanup_record
+            if not record:
+                return False
+            rule = record['rule']
+            fields = windows_rule(rule['name'])
+            if fields is None:
+                return False
+            expect(fields.get('Description') == rule['token']
+                   and fields.get('LocalPort') == str(rule['port'])
+                   and fields.get('Program', '').lower() == str(rule['program']).lower(),
+                   'the live Moss rule has its exact marker, port and program')
+            return True
+        return str(self.binary) in mac_apps()
 
     def moss_record(self):
         try:
             return json.loads((self.folder / 'firewall.json').read_text())
-        except Exception:
+        except FileNotFoundError:
             return None
 
     def cleanup_moss_rule(self):
         """Deletes a Moss rule only when the record's marker is on the live rule."""
-        record = self.moss_record()
+        record = self.moss_record() or self.cleanup_record
         if not record:
             say('CLEANUP: no Moss record, so no rule is deleted by the runner')
             return
@@ -214,87 +272,73 @@ class World:
         marker = rule.get('name', '')
         token = rule.get('token', '')
         if SYSTEM == 'Linux':
-            added = sudo(['ufw', 'show', 'added'], check=False).stdout
-            lines = [line for line in added.splitlines() if f'{self.port}/tcp' in line]
-            if marker and any(marker in line for line in lines):
-                sudo(['ufw', 'delete', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(self.port)], check=False)
-            else:
-                say('CLEANUP: no Moss marker on the live rule, so nothing is deleted')
+            if marker and token:
+                remove_ufw_plant(rule['port'], marker)
         elif SYSTEM == 'Windows':
-            shown = run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', f'name={marker}', 'verbose'], check=False)
-            if token and token in shown.stdout:
-                run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', f'name={marker}'], check=False)
-            else:
-                say('CLEANUP: no Moss marker on the live rule, so nothing is deleted')
-        else:
-            if rule.get('entry_added') is True and not record.get('preexisting'):
-                sudo([SOCKET_FILTER, '--remove', str(self.binary)], check=False)
-            else:
-                say('CLEANUP: the record does not show Moss added the entry, so nothing is deleted')
+            if marker and token:
+                remove_windows_plant(marker, token, rule['port'], rule['program'])
+        elif rule.get('entry_added') is True and not record.get('preexisting'):
+            if str(self.binary) in mac_apps():
+                sudo([SOCKET_FILTER, '--remove', str(self.binary)])
 
     def remove_same_port_foreign(self):
-        """Deletes only the runner's own same-port plant, proven by its comment marker."""
-        if not self.planted_same_port:
-            return
-        self.planted_same_port = False
-        marker = f'moss-runner-foreign-{self.port}'
-        added = sudo(['ufw', 'show', 'added'], check=False).stdout
-        if marker in added:
-            sudo(['ufw', 'delete', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(self.port)], check=False)
+        if self.planted_same_port:
+            remove_ufw_plant(self.port, self.plant_marker + '-same-port')
+            self.planted_same_port = False
 
     def remove_same_name_plant(self):
-        """Deletes only the runner's own same-name plant, proven by its other port."""
-        if not self.planted_same_name:
-            return
-        self.planted_same_name = False
-        if self.same_name_present():
-            run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', f'name={self.rule_name}'], check=False)
+        if self.planted_same_name:
+            remove_windows_plant(self.rule_name, self.plant_marker, self.port + 2, self.same_program)
+            self.planted_same_name = False
 
     # Rules planted by someone else. Moss must leave every one of them alone.
     def plant_other(self):
-        """A rule with another name (Windows) or another port or program."""
-        if self.other_present():
-            say('FAIL: a rule for the second test is already in the firewall, not touching it')
-            sys.exit(1)
-        self.planted_other = True
+        expect(not self.other_present(), 'foreign plant selector is unused')
         if SYSTEM == 'Windows':
-            run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Moss-other-instance', 'dir=in',
-                 'action=allow', 'protocol=TCP', f'localport={self.port}', f'program={self.binary}', 'enable=yes'])
+            expect(windows_port_unused(self.port + 1), 'foreign plant port is unused')
+            run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', f'name={self.other_name}', 'dir=in',
+                 'action=allow', 'protocol=TCP', f'localport={self.port + 1}', f'program={self.binary}',
+                 f'description={self.plant_marker}', 'enable=yes'])
         elif SYSTEM == 'Linux':
             sudo(['ufw', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(self.port + 1),
-                  'comment', f'moss-runner-other-{self.port + 1}'])
+                  'comment', self.plant_marker + '-other'])
         else:
-            sudo([SOCKET_FILTER, '--add', '/usr/bin/true'], check=False)
+            shutil.copy2(self.binary, self.other_program)
+            sudo([SOCKET_FILTER, '--add', str(self.other_program)])
+        self.planted_other = True
 
     def other_present(self):
         if SYSTEM == 'Windows':
-            return run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', 'name=Moss-other-instance'], check=False).returncode == 0
+            return windows_rule(self.other_name) is not None
         if SYSTEM == 'Linux':
-            return f'{self.port + 1}/tcp' in sudo(['ufw', 'status'], check=False).stdout
-        return '/usr/bin/true' in sudo([SOCKET_FILTER, '--listapps'], check=False).stdout
+            return any(parts[:3] == ['ufw', 'allow', f'{self.port + 1}/tcp'] for parts in ufw_added())
+        return str(self.other_program) in mac_apps()
 
     def remove_other(self):
         if not self.planted_other:
             return
         if SYSTEM == 'Windows':
-            run(['netsh', 'advfirewall', 'firewall', 'delete', 'rule', 'name=Moss-other-instance'], check=False)
+            remove_windows_plant(self.other_name, self.plant_marker, self.port + 1, self.binary)
         elif SYSTEM == 'Linux':
-            marker = f'moss-runner-other-{self.port + 1}'
-            if marker in sudo(['ufw', 'show', 'added'], check=False).stdout:
-                sudo(['ufw', 'delete', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(self.port + 1)], check=False)
-        else:
-            sudo([SOCKET_FILTER, '--remove', '/usr/bin/true'], check=False)
+            remove_ufw_plant(self.port + 1, self.plant_marker + '-other')
+        elif str(self.other_program) in mac_apps():
+            sudo([SOCKET_FILTER, '--remove', str(self.other_program)])
+        self.planted_other = False
+        if self.other_program.exists():
+            self.other_program.unlink()
 
     def plant_same_name(self):
-        """Windows: a rule holding the bare instance prefix, with another program and port."""
-        self.planted_same_name = True
-        other = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'notepad.exe')
+        expect(windows_rule(self.rule_name) is None, 'bare-prefix plant name is unused')
+        # No other rule may use the plant's port.
+        expect(windows_port_unused(self.port + 2), 'same-name plant port is unused')
+        self.same_program = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32', 'notepad.exe')
         run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', f'name={self.rule_name}', 'dir=in',
-             'action=allow', 'protocol=TCP', f'localport={self.port + 2}', f'program={other}', 'enable=yes'])
+             'action=allow', 'protocol=TCP', f'localport={self.port + 2}', f'program={self.same_program}',
+             f'description={self.plant_marker}', 'enable=yes'])
+        self.planted_same_name = True
 
     def same_name_present(self):
-        result = run(['netsh', 'advfirewall', 'firewall', 'show', 'rule', f'name={self.rule_name}'], check=False)
-        return result.returncode == 0 and str(self.port + 2) in result.stdout
+        return windows_rule(self.rule_name) is not None
 
     def record_present(self):
         return (self.folder / 'firewall.json').exists()
@@ -370,7 +414,7 @@ def main():
             probe.send('answer decline')
         if SYSTEM == 'Linux':
             sudo(['ufw', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(args.port),
-                  'comment', f'moss-runner-foreign-{args.port}'])
+                  'comment', world.plant_marker + '-same-port'])
             world.planted_same_port = True
             probe.send('answer approve')
             expect(probe.send('on') == 'Ok(())', 'a rule that already opens the port: sharing turns on')
@@ -402,17 +446,20 @@ def main():
         expect(world.second_client() == 'ANSWERED', 'sharing on: the second client is answered')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'sharing on: this computer is answered')
 
+        world.cleanup_record = world.moss_record()
         expect(probe.send('off') == 'Ok(())', 'sharing turns off')
         expect(world.second_client() != 'ANSWERED', 'after off: the second client is refused')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'after off: this computer still reaches the server')
         expect(not world.rule_present(), 'the firewall rule is gone after off')
         expect(not world.record_present(), 'the instance record is gone after off')
+        world.cleanup_record = None
         expect(probe.send('restart-check') == 'false', 'after off: a restart would not listen beyond loopback')
         expect(world.other_present(), 'a rule planted by someone else survives on and off')
 
         probe.send('answer approve')
         expect(probe.send('on') == 'Ok(())', 'sharing turns on again')
         expect(world.rule_present(), 'the rule is back')
+        world.cleanup_record = world.moss_record()
         probe.stop()
         probe = None
         # What uninstalling an instance runs after its server has stopped.
@@ -428,11 +475,15 @@ def main():
     finally:
         if probe:
             probe.stop()
-        world.cleanup_moss_rule()
-        world.remove_same_port_foreign()
-        world.remove_same_name_plant()
-        world.remove_other()
-        world.tear_down_client()
+        failures = []
+        for cleanup in [world.cleanup_moss_rule, world.remove_same_port_foreign,
+                        world.remove_same_name_plant, world.remove_other, world.tear_down_client]:
+            try:
+                cleanup()
+            except Exception as failure:
+                failures.append(str(failure))
+        if failures:
+            raise AssertionError('Cleanup refused: ' + '; '.join(failures))
 
 
 if __name__ == '__main__':

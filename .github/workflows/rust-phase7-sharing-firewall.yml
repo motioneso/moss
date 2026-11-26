@@ -5,6 +5,7 @@ on:
       - "rust-spike/network/**"
       - "rust-spike/shell/app/**"
       - "rust-spike/shell/tools/phase7_sharing_firewall.py"
+      - "rust-spike/shell/tools/test_phase7_sharing_firewall.py"
       - ".github/workflows/rust-phase7-sharing-firewall.yml"
   workflow_dispatch:
 permissions:
@@ -40,6 +41,8 @@ jobs:
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Firewall rule and listener unit tests
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml --lib firewall -- --test-threads=1
+      - name: Runner cleanup ownership tests
+        run: python3 rust-spike/shell/tools/test_phase7_sharing_firewall.py
       - name: Build the probe server
         run: cargo +1.95.0 build --locked --manifest-path rust-spike/network/Cargo.toml --examples
       - name: Turn the Linux firewall on, denying incoming connections
