@@ -47,13 +47,12 @@ impl Control {
                 return Err(Failure::Save);
             }
             if self.switch.set(true).await.is_err() {
+                // The rule goes even when the setting cannot be put back.
+                let closed = self.firewall.close().await;
                 if save(previous).is_err() {
                     return Err(Failure::Save);
                 }
-                self.firewall
-                    .close()
-                    .await
-                    .map_err(|_| Failure::Firewall(Refusal::Stuck))?;
+                closed.map_err(|_| Failure::Firewall(Refusal::Stuck))?;
                 return Err(Failure::Switch);
             }
             policy.set_sharing(true);

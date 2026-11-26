@@ -249,7 +249,7 @@ pub async fn serve_switched(
     let (tx, mut accepted) = tokio::sync::mpsc::channel(64);
     let binder = listening.binder.clone();
     let mut switch = listening.switch;
-    let mut bound = listening.sharing;
+    let mut bound = Some(listening.sharing);
     let mut sockets: Vec<_> = listening
         .listeners
         .into_iter()
@@ -265,7 +265,7 @@ pub async fn serve_switched(
             Some(_) = connections.join_next(), if !connections.is_empty() => {},
             Some((sharing, reply)) = switch.recv() => {
                 // A request for the state already held changes nothing.
-                if sharing == bound {
+                if Some(sharing) == bound {
                     let _ = reply.send(Ok(()));
                     continue;
                 }
@@ -279,11 +279,15 @@ pub async fn serve_switched(
                     None => Err("This server cannot change its sockets".to_owned()),
                 };
                 match result {
-                    Ok(next) => { sockets = next; bound = sharing; let _ = reply.send(Ok(())); }
+                    Ok(next) => { sockets = next; bound = Some(sharing); let _ = reply.send(Ok(())); }
                     Err(reason) => {
                         // Return to the earlier state rather than stop accepting.
                         if let Some(binder) = &binder {
-                            if let Ok(back) = rebind(binder, bound, &tx).await { sockets = back; }
+                            // With no sockets left, the held state is unknown and the next request rebinds.
+                            let held = bound.take();
+                            if let Some(held) = held {
+                                if let Ok(back) = rebind(binder, held, &tx).await { sockets = back; bound = Some(held); }
+                            }
                         }
                         let _ = reply.send(Err(reason));
                     }

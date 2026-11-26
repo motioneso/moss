@@ -210,7 +210,10 @@ fn present_query(os: Os, linux: Linux, rule: &Rule) -> Option<(Vec<String>, Opti
                 ]),
                 None,
             )),
-            Linux::Ufw => Some((cmd(&["ufw", "show", "added"]), Some(format!("{port}/tcp")))),
+            Linux::Ufw => Some((
+                cmd(&["ufw", "show", "added"]),
+                Some(format!("allow {port}/tcp")),
+            )),
             Linux::Nothing => None,
         },
     }
@@ -556,7 +559,8 @@ fn wait(mut command: Command) -> Result<bool, Refusal> {
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(Refusal::Declined);
+                // The helper may have changed the firewall before it was stopped.
+                return Err(Refusal::Stuck);
             }
         }
     };
@@ -574,7 +578,12 @@ fn wait(mut command: Command) -> Result<bool, Refusal> {
         Some(EXIT_STUCK) => Err(Refusal::Stuck),
         // The macOS prompt reports a cancelled dialog as error -128.
         Some(1) if note.contains("-128") => Err(Refusal::Declined),
-        Some(1) if cfg!(target_os = "macos") => Err(Refusal::Failed),
+        // `do shell script` ends its error text with the helper's own exit code.
+        Some(1) if cfg!(target_os = "macos") => match note.trim_end().rsplit_once('(') {
+            Some((_, tail)) if tail.starts_with("5)") => Ok(true),
+            Some((_, tail)) if tail.starts_with("4)") => Err(Refusal::Stuck),
+            _ => Err(Refusal::Failed),
+        },
         _ => Err(Refusal::Declined),
     }
 }
