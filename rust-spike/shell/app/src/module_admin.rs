@@ -173,6 +173,13 @@ fn run(
     let output = command
         .output()
         .map_err(|_| "Cannot start the installer".to_owned())?;
+    // The real-server fixture needs the full helper error chain, including successful
+    // refresh commands that report individual update failures. Never change the API error.
+    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some()
+        && extra.iter().any(|arg| arg == "--refresh-policy")
+    {
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+    }
     if output.status.success() {
         return String::from_utf8(output.stdout).map_err(|_| "Unreadable installer output".into());
     }
