@@ -288,7 +288,7 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
             // netsh answers 0 for a match and 1 for none. Any other code means it could not say.
             None if os == Os::Windows => match code {
                 0 => Some(true),
-                1 => Some(false),
+                1 if text.contains("No rules match") => Some(false),
                 _ => None,
             },
             // Firewalld answers 0 for yes and 1 for no. Any other code means it could not say.
@@ -312,6 +312,9 @@ fn exists(os: Os, linux: Linux, rule: &Rule) -> Option<bool> {
 /// when the rule was already open before an add, which then leaves it as it found it.
 pub fn apply(action: Action, rule: &Rule) -> Result<bool, &'static str> {
     rule.check()?;
+    if this_os() == Os::Linux && action == Action::Remove && rule.manager.is_none() {
+        return Err("The firewall could not be read");
+    }
     let linux = if this_os() == Os::Linux {
         match rule.manager.as_deref() {
             Some("ufw") => Linux::Ufw,
@@ -340,34 +343,9 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
         return Err(NO_MANAGER);
     }
     let queryable = present_query(os, linux, rule).is_some();
-    if os == Os::Windows && action == Action::Remove {
-        if let Some(token) = &rule.token {
-            // Only a rule that carries Moss's token is deleted. Anything else is left in place.
-            let verbose = cmd(&[
-                "netsh",
-                "advfirewall",
-                "firewall",
-                "show",
-                "rule",
-                &format!("name={}", rule.name),
-                "verbose",
-            ]);
-            match run_code(&verbose) {
-                Some((0, text)) if text.contains(token.as_str()) => {}
-                Some((0, _)) | Some((1, _)) => return Ok(false),
-                _ => return Err("The firewall could not be read"),
-            }
-        }
-    }
-    if linux == Linux::Ufw && os == Os::Linux && action == Action::Remove {
-        if let Some(token) = &rule.token {
-            // Only a rule whose comment carries Moss's token is deleted.
-            match run_code(&cmd(&["ufw", "show", "added"])) {
-                Some((0, text)) if text.contains(token.as_str()) => {}
-                Some((0, _)) => return Ok(false),
-                _ => return Err("The firewall could not be read"),
-            }
-        }
+    if action == Action::Remove && !owned(os, linux, rule)? {
+        // Not Moss's rule, or already gone. Nothing is deleted.
+        return Ok(false);
     }
     if action == Action::Add {
         match (os, linux) {
@@ -383,11 +361,12 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
                 Some(_) => return Err(FOREIGN),
                 None => return Err("The firewall could not be read"),
             },
-            _ => {
-                if exists(os, linux, rule) == Some(true) {
-                    return Ok(true);
-                }
-            }
+            // The add and any rollback only touch a rule known to be absent before.
+            _ => match exists(os, linux, rule) {
+                Some(true) => return Ok(true),
+                Some(false) => {}
+                None => return Err("The firewall could not be read"),
+            },
         }
     }
     for step in plan(os, linux, action, rule) {
@@ -408,6 +387,49 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
         }
         Action::Remove if present != Some(false) => Err("The firewall did not keep the change"),
         _ => Ok(false),
+    }
+}
+
+/// Whether the one rule a remove would delete carries Moss's token. Where the firewall holds no
+/// marker (firewalld, macOS), the record proves ownership: removal only runs for a rule that was
+/// absent before Moss added it. A failed read is an error, never "gone".
+fn owned(os: Os, linux: Linux, rule: &Rule) -> Result<bool, &'static str> {
+    const UNREADABLE: &str = "The firewall could not be read";
+    match (os, linux) {
+        (Os::Windows, _) => {
+            let token = rule.token.as_deref().ok_or(UNREADABLE)?;
+            let verbose = cmd(&[
+                "netsh",
+                "advfirewall",
+                "firewall",
+                "show",
+                "rule",
+                &format!("name={}", rule.name),
+                "verbose",
+            ]);
+            match run_code(&verbose) {
+                // Exactly one rule holds the name and it carries the token.
+                Some((0, text)) => {
+                    Ok(text.matches("Rule Name:").count() == 1 && text.contains(token))
+                }
+                Some((1, text)) if text.contains("No rules match") => Ok(false),
+                _ => Err(UNREADABLE),
+            }
+        }
+        (Os::Linux, Linux::Ufw) => {
+            let token = rule.token.as_deref().ok_or(UNREADABLE)?;
+            let needle = format!("allow {}/tcp", rule.port);
+            match run_code(&cmd(&["ufw", "show", "added"])) {
+                Some((0, text)) => {
+                    let lines: Vec<&str> = text.lines().filter(|l| l.contains(&needle)).collect();
+                    // Every rule on the port must be Moss's, or nothing is deleted.
+                    Ok(!lines.is_empty() && lines.iter().all(|l| l.contains(token)))
+                }
+                _ => Err(UNREADABLE),
+            }
+        }
+        (Os::Linux, Linux::Firewalld) if rule.manager.is_none() => Err(UNREADABLE),
+        _ => Ok(true),
     }
 }
 
@@ -533,6 +555,20 @@ impl Firewall {
                 .map_err(|_| Refusal::Failed),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(_) => Err(Refusal::Failed),
+        }
+    }
+
+    /// Whether the rule the record describes is still Moss's own. Only Windows can say, by the
+    /// token in the rule. Where nothing can be checked this is true.
+    pub fn rule_intact(&self) -> bool {
+        match self.recorded() {
+            Ok(Some(record)) if record.confirmed => {
+                if this_os() != Os::Windows || record.preexisting {
+                    return true;
+                }
+                owned(Os::Windows, Linux::Nothing, &record.rule) == Ok(true)
+            }
+            _ => false,
         }
     }
 

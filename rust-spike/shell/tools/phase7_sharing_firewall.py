@@ -190,6 +190,9 @@ class World:
     # Rules planted by someone else. Moss must leave every one of them alone.
     def plant_other(self):
         """A rule with another name (Windows) or another port or program."""
+        if self.other_present():
+            say('FAIL: a rule for the second test is already in the firewall, not touching it')
+            sys.exit(1)
         self.planted_other = True
         if SYSTEM == 'Windows':
             run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 'name=Moss-other-instance', 'dir=in',

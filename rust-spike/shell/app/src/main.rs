@@ -333,14 +333,24 @@ fn main() {
     });
     let prepared = runtime.block_on(async {
         let mut config = Config::read(&args.network)?;
-        // Saved sharing never reopens the network without a firewall manager to verify it.
-        if config.sharing
-            && std::env::var_os(firewall::STAND_IN_ENV).is_none()
-            && firewall::manager_missing()
-        {
-            eprintln!("moss-server: no supported firewall manager found, so sharing is turned off");
-            config.sharing = false;
-            let _ = config.write(&args.network);
+        let folder = args
+            .instance
+            .clone()
+            .or_else(|| args.network.parent().map(Path::to_path_buf))
+            .ok_or("The network file needs a folder")?;
+        let firewall = firewall::Firewall::new(
+            &folder,
+            std::env::current_exe().map_err(|_| "Cannot find the server program")?,
+        );
+        // Saved sharing reopens the network only when the firewall can still be trusted. A
+        // missing Linux manager or a replaced Windows rule turns sharing off first.
+        if config.sharing && std::env::var_os(firewall::STAND_IN_ENV).is_none() {
+            let manager_gone = firewall::manager_missing();
+            if manager_gone || !firewall.rule_intact() {
+                eprintln!("moss-server: the firewall check failed, so sharing is turned off");
+                config.sharing = false;
+                let _ = config.write(&args.network);
+            }
         }
         let platform = config.platform().await?;
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
@@ -351,17 +361,9 @@ fn main() {
             Some(folder) => Some(running_record(folder, &config, port)?),
             None => None,
         };
-        let folder = args
-            .instance
-            .clone()
-            .or_else(|| args.network.parent().map(Path::to_path_buf))
-            .ok_or("The network file needs a folder")?;
         let control = moss_network::sharing::Control {
             switch,
-            firewall: firewall::Firewall::new(
-                &folder,
-                std::env::current_exe().map_err(|_| "Cannot find the server program")?,
-            ),
+            firewall,
             port,
         };
         let network = Network::new(platform.clone(), config, args.network, Some(control))?;
