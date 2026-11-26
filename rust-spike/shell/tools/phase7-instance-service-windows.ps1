@@ -13,6 +13,8 @@ try {
         & icacls $path /grant ('*' + $user.SID.Value + ':(OI)(CI)M') /Q
         if ($LASTEXITCODE -ne 0) { throw 'Could not grant fixture access' }
     }
+    $temp = Join-Path $work 'temp'
+    New-Item -ItemType Directory $temp | Out-Null
     $credential = [pscredential]::new("$env:COMPUTERNAME\$account", $password)
     $python = (Get-Command python.exe).Source
     $runner = Join-Path $Repo 'rust-spike/shell/tools/phase7_instance_service.py'
@@ -23,7 +25,7 @@ try {
         $arguments = '"{0}" --bin "{1}" --postgres "{2}" --scratch "{3}" --port 5198' -f $runner, $Bin, $Postgres, (Join-Path $work $suffix)
         if ($negative) { $arguments += ' --negative-app-only' }
         Write-Host "COMMAND: python $arguments"
-        $process = Start-Process $python -Credential $credential -LoadUserProfile -WorkingDirectory $work -ArgumentList $arguments -Environment @{RUSTUP_HOME=$env:RUSTUP_HOME} -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+        $process = Start-Process $python -Credential $credential -LoadUserProfile -WorkingDirectory $work -ArgumentList $arguments -Environment @{RUSTUP_HOME=$env:RUSTUP_HOME; TEMP=$temp; TMP=$temp} -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
         if (-not $process.WaitForExit(900000)) { $process.Kill($true); throw 'Service proof exceeded its deadline' }
         Get-Content $out -Tail 80
         Get-Content $err -Tail 40

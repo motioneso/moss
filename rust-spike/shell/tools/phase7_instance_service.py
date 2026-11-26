@@ -40,6 +40,36 @@ def service_name(folder):
     return f'moss-server-{value:016x}'
 
 
+def database_failure_summary(folder):
+    """Only fixed labels and numeric OS codes: never dump credential-bearing DB output."""
+    for relative in ('database', 'database/moss-db.lock', 'database/initdb-unfinished',
+                     'database/db/PG_VERSION', 'database/logs/initdb.log', 'database/logs/postgres.log'):
+        print('DATABASE CHECK:', relative, (folder / relative).exists(), flush=True)
+    stages = ('crash-dump protection', 'Postgres bundle', 'lock file', 'initdb failed',
+              'initdb:', 'superuser password', 'first-run marker', 'start postgres',
+              'postgres exited during start', 'migrations:', 'private', 'elevated',
+              'access', 'Access', 'denied', 'reparse', 'DACL', 'unambiguous')
+    log = folder / 'database.log'
+    if log.exists():
+        for line in log.read_text(errors='replace').splitlines():
+            try:
+                value = json.loads(line)
+            except ValueError:
+                continue
+            error = value.get('error', '')
+            if isinstance(error, str):
+                print('DATABASE ERROR LABELS:', [stage for stage in stages if stage in error],
+                      'OS codes:', re.findall(r'os error (\d+)', error), flush=True)
+    # initdb has not run schema SQL. Match fixed phrases only, never its arbitrary output.
+    log = folder / 'database/logs/initdb.log'
+    if log.exists():
+        text = log.read_text(errors='replace').lower()
+        labels = ('permission denied', 'access is denied', 'could not create', 'could not open',
+                  'could not execute', 'no such file', 'not found', 'invalid locale',
+                  'icu', 'error', 'fatal', 'success')
+        print('INITDB LABELS:', [label for label in labels if label in text], flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bin', type=Path, required=True)
@@ -89,7 +119,11 @@ def main():
     assert old.is_dir() and (programs / 'current').read_text().strip() == '7.1.0'
     print('PASS: side-by-side versions retained and current selected', flush=True)
     folder = args.scratch / 'instance with spaces'
-    command([args.bin / 'examples' / ('instance-fixture' + suffix), install, folder, str(args.port)])
+    try:
+        command([args.bin / 'examples' / ('instance-fixture' + suffix), install, folder, str(args.port)])
+    except subprocess.CalledProcessError:
+        database_failure_summary(folder)
+        raise
     launcher = programs / ('moss-launcher' + suffix)
     name = service_name(folder.resolve())
     if os.name == 'nt':
