@@ -121,6 +121,7 @@ fn phase6_module_policy() {
     let mut command = Command::new(std::env::var("JS170_SERVER").unwrap());
     command
         .env("MOSS_DB_PROGRAM", &supervisor)
+        .env("JS426_REFRESH_DIAGNOSTICS", "1")
         .arg("serve")
         .arg("--instance")
         .arg(root)
@@ -396,7 +397,16 @@ fn phase6_module_policy() {
                 .unwrap()
                 .iter()
                 .all(|s| s["error"].is_null()),
-            "refresh source failed: {response:?}"
+            "refresh source failed (registry serial {}): {response:?}\n{}",
+            serde_json::from_slice::<Value>(&fs::read(registry.join("index.json")).unwrap())
+                .unwrap()["serial"],
+            fs::read_to_string(root.join("server.log"))
+                .unwrap()
+                .lines()
+                .rev()
+                .take(30)
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     };
     let policy = |automatic: bool, quiet: bool| {
