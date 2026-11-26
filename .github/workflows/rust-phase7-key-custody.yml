@@ -1,0 +1,58 @@
+name: Rust phase7_key_custody
+on:
+  pull_request:
+    paths:
+      - "rust-spike/keystore/**"
+      - "rust-spike/network/**"
+      - "rust-spike/portability/**"
+      - "rust-spike/shell/connect/**"
+      - ".github/workflows/rust-phase7-key-custody.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_key_custody:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Select task-owned Rust paths
+        shell: bash
+        run: |
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-key-custody/target" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+      - name: Provision declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Key custody unit tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p keystore --test custody -- --test-threads=1
+      - name: Build key custody driver
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/Cargo.toml -p keystore --bin key-custody
+      - name: phase7_key_custody
+        shell: bash
+        run: python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-proof"
+      - name: Negative control must fail
+        shell: bash
+        run: |
+          set +e
+          python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-negative" --negative-plaintext > "$RUNNER_TEMP/key-custody-negative.log" 2>&1
+          code=$?
+          echo "Negative control script exit: $code"
+          cat "$RUNNER_TEMP/key-custody-negative.log"
+          test "$code" -ne 0
+          grep -q "app_keystore_unavailable\|plaintext\|AssertionError" "$RUNNER_TEMP/key-custody-negative.log"

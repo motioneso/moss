@@ -99,8 +99,31 @@ impl Config {
             auth_secret: String,
             connector_key: String,
         }
-        let c: Credentials = serde_json::from_slice(&private_read(&self.credentials)?)
-            .map_err(|_| "Invalid credential file")?;
+        let raw = private_read(&self.credentials)?;
+        // A wrapped key bundle holds the same credentials with no plaintext. A locked
+        // key store refuses to start with that reason.
+        let plain: Vec<u8> = if raw.windows(24).any(|w| w == b"moss-key-custody-bundle") {
+            let bundle: serde_json::Value =
+                serde_json::from_slice(&raw).map_err(|_| "Invalid credential file")?;
+            let instance = self
+                .credentials
+                .parent()
+                .and_then(|f| f.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "default".into());
+            let store = keystore::platform::platform_store();
+            let service = keystore::platform::service_name(&instance);
+            let key_file = std::env::var_os("MOSS_KEY_FILE").map(std::path::PathBuf::from);
+            let master =
+                keystore::custody::load_master(store.as_ref(), &service, key_file.as_deref())
+                    .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+            keystore::custody::unwrap_with_master(&bundle, &master)
+                .map_err(|e| format!("{}: {}", e.code(), e.reason()))?
+        } else {
+            raw
+        };
+        let c: Credentials =
+            serde_json::from_slice(&plain).map_err(|_| "Invalid credential file")?;
         if c.auth_secret.len() < 32 {
             return Err("The session signing secret needs at least thirty-two characters".into());
         }

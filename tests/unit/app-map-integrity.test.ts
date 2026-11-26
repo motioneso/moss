@@ -128,7 +128,8 @@ describe("app-map integrity and truthfulness", () => {
       "rust-module-detail",
       "rust-sign-in",
       "rust-today",
-      "rust-desktop-connect"
+      "rust-desktop-connect",
+      "rust-desktop-recovery-key"
     ]);
     expect(rustMap.settings.map((entry) => entry.id)).toEqual([
       "rust-module-account-switch",
