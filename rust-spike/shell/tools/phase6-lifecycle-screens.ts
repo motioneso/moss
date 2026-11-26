@@ -197,12 +197,31 @@ try {
     assert.equal((await saved(page)).stage, "reviewed");
     await fits(page);
     await page.screenshot({ path: join(out, `${width}-update-review.png`) });
+    // Exercise the real WASM startup with a cold cache and delayed transport.
+    const startupNetwork = await page.context().newCDPSession(page);
+    await startupNetwork.send("Network.enable");
+    await startupNetwork.send("Network.setCacheDisabled", { cacheDisabled: true });
+    await startupNetwork.send("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 50,
+      downloadThroughput: 4 * 1024 * 1024,
+      uploadThroughput: -1
+    });
     await dialog.getByRole("button", { name: "Skip", exact: true }).click();
     await expect(page).toHaveURL(`${origin}/settings/modules`);
     // URL commitment precedes the new document's WASM startup. Reloading here
     // can abort compilation and report a pageerror from the discarded document.
     await expect(page.getByRole("heading", { name: "Modules", exact: true })).toBeVisible();
     await page.reload();
+    await expect(page.getByRole("heading", { name: "Modules", exact: true })).toBeVisible();
+    await startupNetwork.send("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1
+    });
+    await startupNetwork.send("Network.setCacheDisabled", { cacheDisabled: false });
+    await startupNetwork.detach();
     const skipped = await (await admin.request.get(`${origin}/api/modules/catalog`)).json();
     assert.equal(
       skipped.modules.find((m: { id: string }) => m.id === module).skippedDigest,
