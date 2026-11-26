@@ -130,39 +130,62 @@ struct Args {
     install: PathBuf,
 }
 
+fn custody_code(error: &keystore::custody::CustodyError) -> &'static str {
+    match error {
+        keystore::custody::CustodyError::Locked => "app_keystore_locked",
+        _ => "app_keystore_unavailable",
+    }
+}
 
 /// Sets up key custody for one instance. Ok(Some) holds the recovery words to show.
 /// Ok(None) means custody was already set up. Err holds the recovery-key problem screen.
-fn custody_setup(folder: &std::path::Path, instance: &str) -> Result<Option<(Vec<String>, Vec<usize>)>, Value> {
+fn custody_setup(
+    folder: &std::path::Path,
+    instance: &str,
+) -> Result<Option<(Vec<String>, Vec<usize>)>, Value> {
     use keystore::custody::{set_up_instance, setup_route, SetupRoute};
     if folder.join(keystore::custody::BUNDLE_FILE).exists() {
         return Ok(None);
     }
-    let credentials = std::fs::read(folder.join(keystore::custody::LEGACY_CREDENTIALS)).unwrap_or_default();
+    let credentials =
+        std::fs::read(folder.join(keystore::custody::LEGACY_CREDENTIALS)).unwrap_or_default();
     let mut store = keystore::platform::platform_store();
     match setup_route(true, store.probe()) {
         SetupRoute::OsStore => {}
         // The desktop app is a desktop session, so it never offers a key file.
         SetupRoute::KeyFileChoice => {
             let error = keystore::custody::CustodyError::Unavailable("no key store".into());
-            return Err(json!({"screen": "recovery-key", "code": error.code(), "reason": error.reason()}));
+            return Err(
+                json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
+            );
         }
         SetupRoute::Stop(error) => {
-            return Err(json!({"screen": "recovery-key", "code": error.code(), "reason": error.reason()}));
+            return Err(
+                json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
+            );
         }
     }
     let service = keystore::platform::service_name(instance);
     match set_up_instance(folder, &credentials, store.as_mut(), &service) {
         Ok(migration) => {
             // Point the server config at the wrapped bundle from now on.
-            if let Ok(mut config) = moss_network::config::Config::read(&folder.join(moss_network::instance::NETWORK_FILE)) {
+            if let Ok(mut config) = moss_network::config::Config::read(
+                &folder.join(moss_network::instance::NETWORK_FILE),
+            ) {
                 config.credentials = migration.bundle_path.clone();
                 let _ = config.write(&folder.join(moss_network::instance::NETWORK_FILE));
             }
-            let words: Vec<String> = migration.recovery.words().iter().map(|w| w.to_string()).collect();
+            let words: Vec<String> = migration
+                .recovery
+                .words()
+                .iter()
+                .map(|w| w.to_string())
+                .collect();
             Ok(Some((words, vec![4, 11, 19])))
         }
-        Err(error) => Err(json!({"screen": "recovery-key", "code": error.code(), "reason": error.reason()})),
+        Err(error) => Err(
+            json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}),
+        ),
     }
 }
 
@@ -447,14 +470,28 @@ impl App {
             }
             UserEvent::Show(state) => {
                 if state["screen"] == "recovery-key" {
-                    if let (Some(words), Some(id)) = (state["words"].as_array(), state["id"].as_str()) {
-                        let words: Vec<String> = words.iter().filter_map(|w| w.as_str().map(str::to_owned)).collect();
-                        let ask: Vec<usize> = state["ask"].as_array().map(|a| a.iter().filter_map(|v| v.as_u64().map(|n| n as usize)).collect()).unwrap_or_else(|| vec![4, 11, 19]);
+                    if let (Some(words), Some(id)) =
+                        (state["words"].as_array(), state["id"].as_str())
+                    {
+                        let words: Vec<String> = words
+                            .iter()
+                            .filter_map(|w| w.as_str().map(str::to_owned))
+                            .collect();
+                        let ask: Vec<usize> = state["ask"]
+                            .as_array()
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_u64().map(|n| n as usize))
+                                    .collect()
+                            })
+                            .unwrap_or_else(|| vec![4, 11, 19]);
                         self.pending_recovery = Some((words, ask, id.to_owned()));
                         if let Some(instance) = state["instance"].as_str() {
                             self.pending_custody = Some((instance.to_owned(), id.to_owned()));
                         }
-                    } else if let (Some(instance), Some(id)) = (state["instance"].as_str(), state["id"].as_str()) {
+                    } else if let (Some(instance), Some(id)) =
+                        (state["instance"].as_str(), state["id"].as_str())
+                    {
                         self.pending_custody = Some((instance.to_owned(), id.to_owned()));
                     }
                 }
@@ -712,6 +749,7 @@ impl App {
         self.runtime.spawn(async move {
             let made = tokio::task::spawn_blocking({
                 let name = name.clone();
+                let store = store.clone();
                 move || provision::create_instance(&store, &install, &name)
             })
             .await;
@@ -784,7 +822,12 @@ impl App {
     fn choose(&mut self, id: String) {
         self.servers.last = Some(id.clone());
         self.save();
-        if let Some(Target::Local { folder, instance: name, .. }) = self.store.find(&self.servers, &id) {
+        if let Some(Target::Local {
+            folder,
+            instance: name,
+            ..
+        }) = self.store.find(&self.servers, &id)
+        {
             let needs = folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
                 && !folder.join(keystore::custody::BUNDLE_FILE).exists();
             if needs {
@@ -806,10 +849,15 @@ impl App {
     }
 
     fn recovery_check(&mut self, message: &Value) {
-        let Some((words, ask, id)) = self.pending_recovery.clone() else { return };
+        let Some((words, ask, id)) = self.pending_recovery.clone() else {
+            return;
+        };
         let checked = message.get("checked").cloned().unwrap_or(Value::Null);
         for position in &ask {
-            let typed = checked.get(position.to_string()).and_then(Value::as_str).unwrap_or("");
+            let typed = checked
+                .get(position.to_string())
+                .and_then(Value::as_str)
+                .unwrap_or("");
             if typed.trim().to_ascii_lowercase() != words[position - 1] {
                 return self.show(json!({
                     "screen": "recovery-key", "words": words, "ask": ask,
@@ -823,7 +871,9 @@ impl App {
     }
 
     fn recovery_retry(&mut self) {
-        let Some((name, id)) = self.pending_custody.clone() else { return };
+        let Some((name, id)) = self.pending_custody.clone() else {
+            return;
+        };
         let folder = self.store.instance_folder(&name);
         match custody_setup(&folder, &name) {
             Ok(Some((words, ask))) => {
