@@ -33,7 +33,7 @@ def stage(dist: Path, postgres: Path, out: Path, server_runtime: bool = False,
     for name in ("moss-app", "moss-shell", "moss-db"):
         if not (dist / name).is_file() or not os.access(dist / name, os.X_OK):
             raise ValueError(f"Missing executable: {name}")
-    for name in ("bin/postgres", "bin/initdb", "bin/pg_ctl", "share/postgresql/extension/vector.control", "lib/postgresql/vector.so", "lib/postgresql/moss_nodump.so"):
+    for name in ("bin/postgres", "bin/initdb", "bin/pg_ctl", "bin/pg_dump", "bin/pg_restore", "share/postgresql/extension/vector.control", "lib/postgresql/vector.so", "lib/postgresql/moss_nodump.so"):
         if not (postgres / name).is_file():
             raise ValueError(f"Incomplete Phase 1 PostgreSQL bundle: {name}")
     if not (dist / "web/index.html").is_file():
