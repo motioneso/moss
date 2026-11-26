@@ -845,7 +845,13 @@ impl Installer {
             match result {
                 Ok(Some(approval)) => report.pending.push((id.clone(), approval)),
                 Ok(None) => (),
-                Err(error) => report.failures.push((id.clone(), error.to_string())),
+                Err(error) => {
+                    // Preserve the private cause before reducing it to the public failure category.
+                    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+                        eprintln!("Module {id} update failed: {error:#}");
+                    }
+                    report.failures.push((id.clone(), error.to_string()));
+                }
             }
         }
         Ok(report)

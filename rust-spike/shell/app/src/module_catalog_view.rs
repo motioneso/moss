@@ -76,7 +76,14 @@ async fn read(
     .await
     {
         Ok(Ok(view)) => ([(header::CACHE_CONTROL, "no-store")], Json(view)).into_response(),
-        _ => unavailable(),
+        Ok(Err(error)) => {
+            module_admin::test_diagnostic("Catalog view failed", error);
+            unavailable()
+        }
+        Err(error) => {
+            module_admin::test_diagnostic("Catalog view task failed", error);
+            unavailable()
+        }
     }
 }
 fn project(
