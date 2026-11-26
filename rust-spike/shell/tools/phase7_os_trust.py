@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove OS trust with a disposable CA; restore trust settings and any mutation on exit.
+"""Prove OS trust with a disposable CA; revoke test trust and restore any mutation on exit.
 
 Linux uses SSL_CERT_FILE/SSL_CERT_DIR (the platform loader's process-local root store).
 macOS uses a temporary user keychain (CI may opt into administrator trust settings to avoid
@@ -9,6 +9,7 @@ GUI authorization). Windows uses CurrentUser\\Root locally and LocalMachine\\Roo
 import argparse
 import contextlib
 import hashlib
+import json
 import os
 from pathlib import Path
 import shlex
@@ -75,7 +76,13 @@ def trusted_ca(folder, env, ci_system_trust=False):
             yield
         finally:
             try:
-                run([*security, "remove-trusted-cert", *domain, ca])
+                if ci_system_trust:
+                    # Removing the final admin entry requires interactive authorization on macOS.
+                    # A deny entry revokes this root without that prompt; only deny metadata remains
+                    # on the disposable runner after its temporary keychain is deleted.
+                    run([*security, "add-trusted-cert", *domain, "-r", "deny", "-k", keychain, ca])
+                else:
+                    run([*security, "remove-trusted-cert", *domain, ca])
             finally:
                 try:
                     run(["security", "list-keychains", "-d", "user", "-s", *previous])
@@ -93,8 +100,16 @@ def trusted_ca(folder, env, ci_system_trust=False):
     else:
         empty = folder / "empty-roots"
         empty.mkdir()
+        previous = {key: env.get(key) for key in ("SSL_CERT_FILE", "SSL_CERT_DIR")}
         env.update(SSL_CERT_FILE=str(ca), SSL_CERT_DIR=str(empty))
-        yield
+        try:
+            yield
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
 
 
 def main():
@@ -129,8 +144,8 @@ def main():
         source = ROOT / "rust-spike/shell/connect/src/reach.rs"
         original = source.read_bytes()
         marker = "return platform.verify_server_cert(end_entity, intermediates, server_name, ocsp, now);"
-        command = ["cargo", "+1.95.0", "test", "--locked", "--manifest-path", str(ROOT / "rust-spike/shell/Cargo.toml"),
-                   "-p", "moss-app", "reach::phase7_os_trust::phase7_os_trust", "--", "--ignored", "--exact", "--nocapture", "--test-threads=1"]
+        build_command = ["cargo", "+1.95.0", "test", "--locked", "--manifest-path", str(ROOT / "rust-spike/shell/Cargo.toml"),
+                         "-p", "moss-app", "--no-run", "--message-format=json"]
         try:
             if mutation:
                 text = original.decode()
@@ -138,9 +153,27 @@ def main():
                     raise RuntimeError("OS trust mutation marker must occur exactly once")
                 replacement = ('return Err(rustls::Error::General("OS trust disabled by negative control".into()));'
                                if args.negative_control else 'return Ok(ServerCertVerified::assertion());')
-                source.write_text(text.replace(marker, replacement))
+                source.write_bytes(text.replace(marker, replacement).encode())
+            # Build before enrolling the test CA. Cargo downloads must use normal system trust,
+            # while only the test executable gets the process-local Linux fixture root store.
+            print("BUILD_COMMAND:", shlex.join(build_command), flush=True)
+            build = subprocess.run(build_command, env=env, text=True, stdout=subprocess.PIPE)
+            executable = None
+            for line in build.stdout.splitlines():
+                event = json.loads(line)
+                if event.get("reason") == "compiler-message":
+                    print(event["message"].get("rendered", ""), end="", flush=True)
+                if (event.get("reason") == "compiler-artifact" and event["target"]["name"] == "moss-app"
+                        and event["profile"]["test"] and event.get("executable")):
+                    executable = event["executable"]
+            print(f"BUILD_EXIT={build.returncode}", flush=True)
+            if build.returncode:
+                return build.returncode
+            if not executable:
+                raise RuntimeError("Cargo did not report the moss-app test executable")
+            command = [executable, "reach::phase7_os_trust::phase7_os_trust", "--ignored", "--exact", "--nocapture", "--test-threads=1"]
             with trusted_ca(folder, env, args.ci_system_trust):
-                print("COMMAND:", shlex.join(command), flush=True)
+                print("TEST_COMMAND:", shlex.join(command), flush=True)
                 process = subprocess.Popen(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 output = []
                 for line in process.stdout:
@@ -148,7 +181,7 @@ def main():
                     print(line, end="", flush=True)
                 code = process.wait()
                 output = "".join(output)
-                print(f"CARGO_EXIT={code}", flush=True)
+                print(f"TEST_EXIT={code}", flush=True)
                 if args.negative_control:
                     # A compile/tool failure does not count: the successful-connection assertion must fail.
                     if code == 0 or "OS-trusted CA connects WITHOUT a pin" not in output or "test result: FAILED" not in output:
@@ -160,6 +193,14 @@ def main():
                     print("PASS: bypassing OS validation made the invalid-certificate assertion fail", flush=True)
                 elif code:
                     return code
+            if not mutation:
+                cleanup_command = [executable, "reach::phase7_os_trust::phase7_os_trust_after_cleanup",
+                                   "--ignored", "--exact", "--nocapture", "--test-threads=1"]
+                print("CLEANUP_COMMAND:", shlex.join(cleanup_command), flush=True)
+                cleanup = subprocess.run(cleanup_command, env=env)
+                print(f"CLEANUP_EXIT={cleanup.returncode}", flush=True)
+                if cleanup.returncode:
+                    return cleanup.returncode
         finally:
             if mutation:
                 source.write_bytes(original)

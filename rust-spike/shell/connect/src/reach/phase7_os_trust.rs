@@ -105,3 +105,14 @@ async fn phase7_os_trust() {
     ));
     println!("PASS: changed self-signed certificate retains app_certificate_changed; OS trust cannot override pins");
 }
+
+#[tokio::test]
+#[ignore = "runner invokes this only after revoking its disposable CA"]
+async fn phase7_os_trust_after_cleanup() {
+    let origin = server("valid").await;
+    assert!(
+        !has_os_trust(&origin).await,
+        "disposable CA is still trusted after cleanup"
+    );
+    println!("PASS: disposable CA is no longer trusted after cleanup");
+}
