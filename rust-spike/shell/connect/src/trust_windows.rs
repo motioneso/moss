@@ -1,4 +1,5 @@
-//! Windows (WebView2) certificate pinning for a server's web view.
+//! Windows (WebView2) trust for a server's web view. Public-mode profiles use OS trust
+//! and cancel every certificate-error event; the exception below applies only to pinned profiles.
 //!
 //! WebView2 raises a server-certificate-error event only when the system does not already trust
 //! the certificate. The handler allows the pinned certificate and cancels everything else, so a
@@ -33,6 +34,7 @@ pub fn install(
         opened.certificate.clone(),
         opened.origin.clone(),
     );
+    let os_trust = opened.os_trust;
     let wrong = proxy.clone();
     let handler = ServerCertificateErrorDetectedEventHandler::create(Box::new(move |_, args| {
         let Some(args) = args else { return Ok(()) };
@@ -44,12 +46,17 @@ pub fn install(
             let mut pem = PWSTR::null();
             args.ServerCertificate()?.ToPemEncoding(&mut pem)?;
             let presented = der_from_pem(&take_pwstr(pem));
-            if presented.as_deref() == Some(pinned.as_slice()) && is_ours(&uri, &origin) {
+            if !os_trust
+                && presented.as_deref() == Some(pinned.as_slice())
+                && is_ours(&uri, &origin)
+            {
                 args.SetAction(COREWEBVIEW2_SERVER_CERTIFICATE_ERROR_ACTION_ALWAYS_ALLOW)?;
                 return Ok(());
             }
             args.SetAction(COREWEBVIEW2_SERVER_CERTIFICATE_ERROR_ACTION_CANCEL)?;
-            if is_ours(&uri, &origin) {
+            if os_trust {
+                let _ = wrong.send_event(UserEvent::Check(id.clone()));
+            } else if is_ours(&uri, &origin) {
                 let fingerprint = presented.map(|der| moss_network::instance::fingerprint(&der));
                 let _ = wrong.send_event(UserEvent::WrongCertificate(id.clone(), fingerprint));
             }

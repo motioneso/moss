@@ -1,0 +1,61 @@
+name: Rust phase7 OS certificate trust
+on:
+  pull_request:
+    paths:
+      - "rust-spike/shell/connect/**"
+      - "rust-spike/shell/Cargo.*"
+      - "rust-spike/shell/tools/phase7_os_trust.py"
+      - ".github/workflows/rust-phase7-os-trust.yml"
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+jobs:
+  phase7_os_trust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Set isolated build and toolchain paths
+        shell: bash
+        run: |
+          task_rustup_home="$HOME/.rustup"
+          if [ "$RUNNER_OS" = Windows ]; then
+            task_rustup_home="$(cygpath -m "$task_rustup_home")"
+          fi
+          echo "RUSTUP_HOME=$task_rustup_home" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-os-trust-target" >> "$GITHUB_ENV"
+          if [ "$RUNNER_OS" = Windows ]; then
+            echo 'C:/Program Files/Git/usr/bin' >> "$GITHUB_PATH"
+          fi
+      - name: Provision declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev
+      - name: Public CA through OS trust, invalid certificates and unchanged pins
+        run: python rust-spike/shell/tools/phase7_os_trust.py ${{ runner.os != 'Linux' && '--ci-system-trust' || '' }}
+      - name: Negative control — disabled OS trust must fail the same connection
+        run: python rust-spike/shell/tools/phase7_os_trust.py --negative-control ${{ runner.os != 'Linux' && '--ci-system-trust' || '' }}
+      - name: Security control — accepting invalid certificates must fail
+        run: python rust-spike/shell/tools/phase7_os_trust.py --negative-accept-invalid ${{ runner.os != 'Linux' && '--ci-system-trust' || '' }}
+      # Existing macOS alive() is a stub on main; process lifecycle belongs to part 2.
+      # Keep TLS regressions without masking that unrelated baseline failure.
+      - name: Existing native connection regressions
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app reach::tests -- --nocapture --test-threads=1 ${{ runner.os == 'macOS' && '--skip running_file_is_trusted_only_when_current_and_private' || '' }}
