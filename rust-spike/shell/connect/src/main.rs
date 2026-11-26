@@ -144,7 +144,9 @@ fn custody_setup(
     instance: &str,
 ) -> Result<Option<(Vec<String>, Vec<usize>)>, Value> {
     use keystore::custody::{set_up_instance, setup_route, SetupRoute};
-    if folder.join(keystore::custody::BUNDLE_FILE).exists() {
+    if folder.join(keystore::custody::BUNDLE_FILE).exists()
+        && !folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
+    {
         return Ok(None);
     }
     let credentials =
@@ -169,11 +171,14 @@ fn custody_setup(
     match set_up_instance(folder, &credentials, store.as_mut(), &service) {
         Ok(migration) => {
             // Point the server config at the wrapped bundle from now on.
-            if let Ok(mut config) = moss_network::config::Config::read(
-                &folder.join(moss_network::instance::NETWORK_FILE),
-            ) {
+            let network_file = folder.join(moss_network::instance::NETWORK_FILE);
+            let saved = moss_network::config::Config::read(&network_file).and_then(|mut config| {
                 config.credentials = migration.bundle_path.clone();
-                let _ = config.write(&folder.join(moss_network::instance::NETWORK_FILE));
+                config.write(&network_file)
+            });
+            if let Err(detail) = saved {
+                let error = keystore::custody::CustodyError::Unavailable(detail);
+                return Err(json!({"screen": "recovery-key", "code": custody_code(&error), "reason": error.reason()}));
             }
             let words: Vec<String> = migration
                 .recovery

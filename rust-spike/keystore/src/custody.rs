@@ -167,13 +167,47 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| CustodyError::Io(e.to_string()))?;
     }
-    fs::write(path, bytes).map_err(|e| CustodyError::Io(e.to_string()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    if fs::symlink_metadata(path).map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+        return Err(CustodyError::Damaged("a link is in the way of a private file".into()));
     }
-    Ok(())
+    let staging = path.with_extension("staging");
+    let _ = fs::remove_file(&staging);
+    let written = (|| -> Result<(), CustodyError> {
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&staging).map_err(|e| CustodyError::Io(e.to_string()))?;
+        use std::io::Write;
+        file.write_all(bytes).map_err(|e| CustodyError::Io(e.to_string()))?;
+        file.sync_all().map_err(|e| CustodyError::Io(e.to_string()))?;
+        drop(file);
+        fs::rename(&staging, path).map_err(|e| CustodyError::Io(e.to_string()))
+    })();
+    if written.is_err() {
+        let _ = fs::remove_file(&staging);
+    }
+    written
+}
+
+/// Records the owner's headless key-file choice beside the bundle. The file itself
+/// lives outside the instance root, where setup chose it.
+pub fn record_key_file_choice(instance_root: &Path, key_file: &Path) -> Result<(), CustodyError> {
+    let body = json!({ "kind": "moss-key-file-choice", "path": key_file.display().to_string() });
+    write_private(&instance_root.join("key-file-choice.json"), &serde_json::to_vec_pretty(&body).unwrap())
+}
+
+/// The recorded key file for this instance, if the owner chose one at setup.
+pub fn recorded_key_file(instance_root: &Path) -> Option<PathBuf> {
+    let body = fs::read(instance_root.join("key-file-choice.json")).ok()?;
+    let value: Value = serde_json::from_slice(&body).ok()?;
+    if value.get("kind").and_then(Value::as_str) != Some("moss-key-file-choice") {
+        return None;
+    }
+    value.get("path").and_then(Value::as_str).map(PathBuf::from).filter(|p| p.is_absolute())
 }
 
 /// Wraps credentials with the master key. The recovery key wraps the master key.
@@ -341,24 +375,42 @@ pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
     hits
 }
 
-fn secret_values(credentials: &[u8]) -> Vec<Vec<u8>> {
-    let Ok(value) = serde_json::from_slice::<Value>(credentials) else {
-        return vec![credentials.to_vec()];
-    };
-    let mut out = Vec::new();
-    if let Some(object) = value.as_object() {
-        for value in object.values() {
-            if let Some(text) = value.as_str() {
-                if text.len() >= 8 {
-                    out.push(text.as_bytes().to_vec());
-                }
-            }
-        }
+fn collect_leaves(value: &Value, out: &mut Vec<Vec<u8>>) {
+    match value {
+        Value::String(text) if text.len() >= 4 => out.push(text.as_bytes().to_vec()),
+        Value::Array(items) => items.iter().for_each(|item| collect_leaves(item, out)),
+        Value::Object(object) => object.values().for_each(|item| collect_leaves(item, out)),
+        _ => {}
     }
-    if out.is_empty() {
-        out.push(credentials.to_vec());
+}
+
+fn secret_values(credentials: &[u8]) -> Vec<Vec<u8>> {
+    let mut out = vec![credentials.to_vec()];
+    if let Ok(value) = serde_json::from_slice::<Value>(credentials) {
+        collect_leaves(&value, &mut out);
     }
     out
+}
+
+/// Removes secret fields from the module settings file in the same folder, so no
+/// plain copy of a bundled secret stays under the instance root. The server takes
+/// the connector key from the wrapped bundle at start instead.
+fn strip_module_secrets(instance_root: &Path, secrets: &mut Vec<Vec<u8>>) -> Result<(), CustodyError> {
+    let path = instance_root.join("modules.json");
+    let Ok(bytes) = fs::read(&path) else { return Ok(()) };
+    let Ok(mut value) = serde_json::from_slice::<Value>(&bytes) else { return Ok(()) };
+    let Some(object) = value.as_object_mut() else { return Ok(()) };
+    for key in ["connector_key", "ai_key"] {
+        if let Some(removed) = object.get(key).cloned() {
+            collect_leaves(&removed, secrets);
+        }
+    }
+    let removed_connector = object.remove("connector_key");
+    let removed_ai = object.remove("ai_key");
+    if removed_connector.is_none() && removed_ai.is_none() {
+        return Ok(());
+    }
+    write_private(&path, &serde_json::to_vec_pretty(&value).unwrap())
 }
 
 pub struct Migration {
@@ -377,7 +429,8 @@ pub fn migrate(
 ) -> Result<Migration, CustodyError> {
     let legacy = instance_root.join(LEGACY_CREDENTIALS);
     let plaintext = fs::read(&legacy).map_err(|e| CustodyError::Io(e.to_string()))?;
-    let secrets = secret_values(&plaintext);
+    let mut secrets = secret_values(&plaintext);
+    strip_module_secrets(instance_root, &mut secrets)?;
     let master = MasterKey::generate();
     let recovery = RecoveryKey::generate();
     let bundle = wrap_bundle(&master, &recovery, &plaintext);
@@ -386,22 +439,27 @@ pub fn migrate(
     write_private(&bundle_path, &serde_json::to_vec_pretty(&bundle).unwrap())?;
     if leak_plaintext {
         // Negative control only. The runner must catch this copy.
-        let _ = fs::write(
-            instance_root.join("credentials-plaintext-copy.json"),
-            &plaintext,
-        );
+        let _ = fs::write(instance_root.join("credentials-plaintext-copy.json"), &plaintext);
     }
-    fs::remove_file(&legacy).map_err(|e| CustodyError::Io(e.to_string()))?;
-    let hits = find_plaintext(instance_root, &secrets);
-    if !hits.is_empty() {
+    // Everything is checked while the old file still stands, so a failure can be retried.
+    let opened = unwrap_with_master(&bundle, &master)?;
+    if opened != plaintext {
+        let _ = fs::remove_file(&bundle_path);
+        return Err(CustodyError::Damaged("the new bundle does not hold the credentials".into()));
+    }
+    let remaining: Vec<PathBuf> = find_plaintext(instance_root, &secrets)
+        .into_iter()
+        .filter(|path| path != &legacy)
+        .collect();
+    if !remaining.is_empty() {
+        let _ = fs::remove_file(&bundle_path);
+        let _ = store.delete_master(service);
         return Err(CustodyError::Damaged(format!(
             "plaintext remains in {}",
-            hits.iter()
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
+            remaining.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
         )));
     }
+    fs::remove_file(&legacy).map_err(|e| CustodyError::Io(e.to_string()))?;
     Ok(Migration {
         recovery,
         bundle_path,
@@ -415,7 +473,8 @@ pub fn set_up_instance(
     store: &mut dyn OsKeyStore,
     service: &str,
 ) -> Result<Migration, CustodyError> {
-    let secrets = secret_values(credentials);
+    let mut secrets = secret_values(credentials);
+    strip_module_secrets(instance_root, &mut secrets)?;
     let master = MasterKey::generate();
     let recovery = RecoveryKey::generate();
     let bundle = wrap_bundle(&master, &recovery, credentials);

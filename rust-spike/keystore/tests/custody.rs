@@ -114,3 +114,31 @@ fn master_key_restores_bundle_after_migration() {
         CREDS
     );
 }
+
+#[test]
+fn migration_strips_module_settings_secrets_and_catches_nested_copies() {
+    let dir = tempfile::tempdir().unwrap();
+    let nested: &[u8] = br#"{"app_url":"postgres://app:x@127.0.0.1/db","auth_secret":"test-auth-secret-5678-abcd","connector_key":"test-connector-key-9012","extra":{"inner":"nested-secret-value-3456"}}"#;
+    fs::write(dir.path().join("credentials.json"), nested).unwrap();
+    fs::write(
+        dir.path().join("modules.json"),
+        br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","ai_key":"test-ai-key-7890","migrations_url":"postgres://m:x@127.0.0.1/db"}"#,
+    )
+    .unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    migrate(dir.path(), &mut store, "svc", false).unwrap();
+    let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
+    assert!(!modules.contains("test-connector-key-9012"), "{modules}");
+    assert!(!modules.contains("test-ai-key-7890"), "{modules}");
+    assert!(modules.contains("migrations_url"), "plain settings stay: {modules}");
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let words: Vec<String> = {
+        // The nested value is inside the wrapped bundle, not on disk.
+        let master = start_gate(&store, "svc").unwrap();
+        let plain = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
+        assert!(String::from_utf8(plain).unwrap().contains("nested-secret-value-3456"));
+        Vec::new()
+    };
+    let _ = words;
+    assert!(find_plaintext(dir.path(), &[b"nested-secret-value-3456".to_vec()]).is_empty());
+}

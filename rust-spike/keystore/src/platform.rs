@@ -119,8 +119,9 @@ mod linux {
                     "no default key store collection".into(),
                 ));
             }
-            // A locked collection refuses to start.
-            let locked = connection
+            // A locked collection refuses to start. A failed read is unavailable,
+            // never unlocked.
+            let locked_reply = connection
                 .call_method(
                     Some(SERVICE),
                     path.as_str(),
@@ -128,10 +129,15 @@ mod linux {
                     "Get",
                     &("org.freedesktop.Secret.Collection", "Locked"),
                 )
+                .map_err(locked_or_unavailable)?;
+            let locked = locked_reply
+                .body()
+                .deserialize::<OwnedValue>()
                 .ok()
-                .and_then(|r| r.body().deserialize::<OwnedValue>().ok())
                 .and_then(|v| bool::try_from(v).ok())
-                .unwrap_or(false);
+                .ok_or_else(|| {
+                    CustodyError::Unavailable("the key store did not report its locked state".into())
+                })?;
             if locked {
                 return Err(CustodyError::Locked);
             }

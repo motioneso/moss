@@ -105,7 +105,10 @@ fn load_fake(mode: &str, root: &Path) -> FileFakeStore {
         .unwrap_or_else(|| root.to_path_buf());
     FileFakeStore {
         mode,
-        path: state_dir.join(".fake-keystore-state"),
+        path: state_dir.join(format!(
+            ".fake-keystore-{}",
+            root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "instance".into())
+        )),
     }
 }
 
@@ -207,6 +210,20 @@ fn main() -> ExitCode {
                 Err(error) => fail(error),
             }
         }
+        "choose-key-file" => {
+            // Records the owner's headless setup choice. No key is made here.
+            let path = PathBuf::from(arg(&args, "--key-file").unwrap_or("master.key"));
+            match keystore::custody::record_key_file_choice(&root, &path) {
+                Ok(()) => {
+                    println!("key_file_choice={}", path.display());
+                    match keystore::custody::recorded_key_file(&root) {
+                        Some(recorded) if recorded == path => ExitCode::SUCCESS,
+                        _ => fail(CustodyError::Damaged("the key-file choice was not recorded".into())),
+                    }
+                }
+                Err(error) => fail(error),
+            }
+        }
         "make-key-file" => {
             let master = keystore::custody::MasterKey::generate();
             let path = PathBuf::from(arg(&args, "--key-file").unwrap_or("master.key"));
@@ -225,8 +242,7 @@ fn main() -> ExitCode {
             match probe {
                 Err(error) => {
                     println!("platform=unavailable");
-                    println!("code={}", error.code());
-                    ExitCode::SUCCESS
+                    fail(error)
                 }
                 Ok(()) => {
                     let stored = store.store_master(&service, &master).and_then(|()| {

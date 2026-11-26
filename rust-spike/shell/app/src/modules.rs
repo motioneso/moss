@@ -60,6 +60,9 @@ pub struct Settings {
     pub(crate) migrations_url: String,
     pub(crate) producer_url: String,
     pub(crate) worker_url: String,
+    /// Absent after key custody strips it from this file. The server then supplies
+    /// the key from the wrapped bundle through the override below.
+    #[serde(default)]
     pub(crate) connector_key: String,
     /// Opens stored AI provider credentials. Absent means module AI fails closed.
     #[serde(default)]
@@ -334,10 +337,22 @@ pub struct ServerModules {
     pub application: Arc<Application>,
 }
 
+static CONNECTOR_KEY_OVERRIDE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Supplies the connector key from the wrapped credential bundle at server start.
+pub fn set_connector_key_override(key: String) {
+    let _ = CONNECTOR_KEY_OVERRIDE.set(key);
+}
+
 pub fn read_settings(path: &Path) -> Result<Settings> {
-    let settings: Settings = serde_json::from_slice(
+    let mut settings: Settings = serde_json::from_slice(
         &moss_network::config::private_read(path).map_err(anyhow::Error::msg)?,
     )?;
+    if settings.connector_key.is_empty() {
+        if let Some(key) = CONNECTOR_KEY_OVERRIDE.get() {
+            settings.connector_key = key.clone();
+        }
+    }
     anyhow::ensure!(
         settings.data.is_absolute(),
         "Module data needs an absolute path"

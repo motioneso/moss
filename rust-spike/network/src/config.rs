@@ -102,23 +102,25 @@ impl Config {
         let raw = private_read(&self.credentials)?;
         // A wrapped key bundle holds the same credentials with no plaintext. A locked
         // key store refuses to start with that reason.
-        let plain: Vec<u8> = if raw.windows(24).any(|w| w == b"moss-key-custody-bundle") {
-            let bundle: serde_json::Value =
-                serde_json::from_slice(&raw).map_err(|_| "Invalid credential file")?;
+        let plain: Vec<u8> = if is_bundle(&raw) {
             let instance = self
                 .credentials
                 .parent()
                 .and_then(|f| f.file_name())
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "default".into());
+            let root = self.credentials.parent().map(|f| f.to_path_buf()).unwrap_or_default();
+            // Only a key file the owner recorded at setup counts. An environment
+            // setting on its own never unlocks a desktop server from a plain file.
+            let recorded = keystore::custody::recorded_key_file(&root);
+            let env_path = std::env::var_os("MOSS_KEY_FILE").map(std::path::PathBuf::from);
+            let key_file = match (&recorded, &env_path) {
+                (Some(recorded), Some(env)) if recorded == env => Some(recorded.clone()),
+                (Some(recorded), None) => Some(recorded.clone()),
+                _ => None,
+            };
             let store = keystore::platform::platform_store();
-            let service = keystore::platform::service_name(&instance);
-            let key_file = std::env::var_os("MOSS_KEY_FILE").map(std::path::PathBuf::from);
-            let master =
-                keystore::custody::load_master(store.as_ref(), &service, key_file.as_deref())
-                    .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
-            keystore::custody::unwrap_with_master(&bundle, &master)
-                .map_err(|e| format!("{}: {}", e.code(), e.reason()))?
+            open_bundle_credentials(&raw, store.as_ref(), &keystore::platform::service_name(&instance), key_file.as_deref())?
         } else {
             raw
         };
@@ -215,4 +217,83 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         let _ = fs::remove_file(tmp);
     }
     result
+}
+
+/// Whether these bytes are a wrapped key custody bundle, read from its own header.
+pub fn is_bundle(raw: &[u8]) -> bool {
+    let Ok(bundle) = serde_json::from_slice::<serde_json::Value>(raw) else {
+        return false;
+    };
+    let Some(header) = bundle.get("header").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(header)
+        .map(|header| header.get("kind").and_then(serde_json::Value::as_str) == Some("moss-key-custody-bundle"))
+        .unwrap_or(false)
+}
+
+/// Opens wrapped bundle credentials with a key store. A locked store refuses.
+pub fn open_bundle_credentials(
+    raw: &[u8],
+    store: &dyn keystore::custody::OsKeyStore,
+    service: &str,
+    key_file: Option<&Path>,
+) -> Result<Vec<u8>, String> {
+    let bundle: serde_json::Value =
+        serde_json::from_slice(raw).map_err(|_| "Invalid credential file")?;
+    let master = keystore::custody::load_master(store, service, key_file)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    keystore::custody::unwrap_with_master(&bundle, &master)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))
+}
+
+impl Config {
+    /// The connector key from the credentials, opening a wrapped bundle if present.
+    pub fn connector_key(&self) -> Result<String, String> {
+        #[derive(Deserialize)]
+        struct OnlyKey {
+            connector_key: String,
+        }
+        let raw = private_read(&self.credentials)?;
+        let plain = if is_bundle(&raw) {
+            let instance = self
+                .credentials
+                .parent()
+                .and_then(|f| f.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "default".into());
+            let root = self.credentials.parent().map(|f| f.to_path_buf()).unwrap_or_default();
+            let key_file = keystore::custody::recorded_key_file(&root);
+            let store = keystore::platform::platform_store();
+            open_bundle_credentials(&raw, store.as_ref(), &keystore::platform::service_name(&instance), key_file.as_deref())?
+        } else {
+            raw
+        };
+        let parsed: OnlyKey =
+            serde_json::from_slice(&plain).map_err(|_| "Invalid credential file")?;
+        Ok(parsed.connector_key)
+    }
+}
+
+#[cfg(test)]
+mod custody_tests {
+    use super::*;
+    use keystore::custody::{MemoryStore, FakeMode, MasterKey, wrap_bundle, OsKeyStore};
+    use keystore::recovery::RecoveryKey;
+
+    #[test]
+    fn bundle_is_recognised_and_locked_store_refuses() {
+        let creds = br#"{"app_url":"x","auth_url":"y","auth_secret":"z","connector_key":"k"}"#;
+        assert!(!is_bundle(creds));
+        let master = MasterKey::generate();
+        let bundle = wrap_bundle(&master, &RecoveryKey::generate(), creds);
+        let raw = serde_json::to_vec(&bundle).unwrap();
+        assert!(is_bundle(&raw));
+        let mut store = MemoryStore::new(FakeMode::Working);
+        store.store_master("svc", &master).unwrap();
+        assert_eq!(open_bundle_credentials(&raw, &store, "svc", None).unwrap(), creds);
+        let locked = MemoryStore::new(FakeMode::Locked);
+        let error = open_bundle_credentials(&raw, &locked, "svc", None).unwrap_err();
+        assert!(error.starts_with("app_keystore_locked"), "{error}");
+    }
 }

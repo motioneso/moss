@@ -328,6 +328,10 @@ fn main() {
     let prepared = runtime.block_on(async {
         let config = Config::read(&args.network)?;
         let platform = config.platform().await?;
+        // Module settings no longer hold the connector key after key custody.
+        if let Ok(key) = config.connector_key() {
+            modules::set_connector_key_override(key);
+        }
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
         let listener = tokio::net::TcpListener::bind(config.listen)
             .await

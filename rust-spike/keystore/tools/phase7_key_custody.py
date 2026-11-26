@@ -82,6 +82,9 @@ def main():
     # Headless Linux with no keychain session may choose a key file.
     done = cli("probe", "--root", str(scratch), "--mode", "missing", "--session", "headless")
     assert done.returncode == 0 and "route=key-file-choice" in done.stdout, done.stdout
+    chosen = scratch / "chosen-master.key"
+    done = cli("choose-key-file", "--root", str(locked_root), "--key-file", str(chosen))
+    assert done.returncode == 0, done.stdout + done.stderr
     print("headless key-file choice: ok")
 
     # 3. Migration removes the plaintext file and leaves no plaintext under the root.
@@ -106,7 +109,14 @@ def main():
     assert len(words.split()) == 24, words
     done = cli("recover", "--root", str(root), "--words", words)
     assert done.returncode == 0 and "restored=true" in done.stdout, done.stdout + done.stderr
-    wrong = " ".join(["abandon"] * 24)
+    # Valid but wrong words come from a second real setup in this run.
+    other = scratch / "other-instance"
+    other.mkdir()
+    (other / "credentials.json").write_text(json.dumps(CREDS))
+    done_other = cli("migrate", "--root", str(other), "--mode", "working")
+    assert done_other.returncode == 0, done_other.stdout + done_other.stderr
+    wrong = [line[len("words="):] for line in done_other.stdout.splitlines() if line.startswith("words=")][0]
+    assert wrong != words and len(wrong.split()) == 24
     done = cli("recover", "--root", str(root), "--words", wrong)
     assert done.returncode == 3, done.stdout + done.stderr
     print("recovery words restore, wrong words refused: ok")
@@ -116,11 +126,34 @@ def main():
     assert done.returncode == 0 and "started=true" in done.stdout, done.stdout + done.stderr
     print("start with working store: ok")
 
-    # 6. Real operating system key store smoke, where the runner has one.
+    # 6. Real operating system key store. macOS and Windows runners have one, so
+    # there it must store and reload. Linux CI has no Secret Service session, so
+    # there an unavailable answer is reported, not passed off as working.
+    import sys as _sys
     done = cli("platform-smoke", "--root", str(scratch))
-    assert done.returncode == 0, done.stdout + done.stderr
-    platform = [line for line in done.stdout.splitlines() if line.startswith("platform=")]
-    print(f"platform key store: {platform[0] if platform else 'unknown'}")
+    if _sys.platform in ("darwin", "win32"):
+        assert done.returncode == 0 and "platform=working" in done.stdout, done.stdout + done.stderr
+        plat_root = scratch / "platform-instance"
+        plat_root.mkdir()
+        (plat_root / "credentials.json").write_text(json.dumps(CREDS))
+        done = cli("migrate", "--root", str(plat_root), "--mode", "platform")
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert not (plat_root / "credentials.json").exists()
+        done = cli("start", "--root", str(plat_root), "--mode", "platform")
+        assert done.returncode == 0 and "started=true" in done.stdout, done.stdout + done.stderr
+        print("platform key store migration and start: ok")
+    else:
+        print(f"platform key store smoke exit {done.returncode} on this Linux runner")
+    # No credential secret may sit anywhere in the scratch area, in any file.
+    hits = []
+    for path in sorted(scratch.rglob("*")):
+        # The locked fixture never migrated, so its untouched starting file stays.
+        if locked_root in path.parents:
+            continue
+        if path.is_file() and any(secret in path.read_bytes() for secret in SECRETS):
+            hits.append(str(path))
+    assert not hits, f"plaintext credential secrets in scratch: {hits}"
+    print("whole scratch byte search: ok")
 
     print("phase7_key_custody: PASS")
     return 0
