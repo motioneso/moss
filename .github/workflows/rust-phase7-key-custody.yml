@@ -41,6 +41,8 @@ jobs:
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Key custody unit tests
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p keystore --test custody -- --test-threads=1
+      - name: Server bundle unlock tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml -p moss-network --lib custody -- --test-threads=1
       - name: Build key custody driver
         run: cargo +1.95.0 build --locked --manifest-path rust-spike/Cargo.toml -p keystore --bin key-custody
       - name: phase7_key_custody
