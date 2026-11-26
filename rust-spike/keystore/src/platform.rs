@@ -265,7 +265,7 @@ mod macos {
 
     pub struct KeychainStore;
 
-    fn map(error: security_framework::error::Error) -> CustodyError {
+    fn map(error: security_framework::base::Error) -> CustodyError {
         let code = error.code();
         // errSecInteractionNotAllowed and errSecAuthFailed mean the Keychain is locked.
         if code == -25308 || code == -25293 {
