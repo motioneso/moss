@@ -160,7 +160,12 @@ def mac_apps():
 
 class Probe:
     def __init__(self, binary, folder, cert, key, port, mode):
-        env = dict(os.environ, MOSS_FIREWALL_STAND_IN=str(binary), PROBE_STAND_IN=mode)
+        env = dict(os.environ)
+        if mode == 'native':
+            env.pop('MOSS_FIREWALL_STAND_IN', None)
+            env.pop('PROBE_STAND_IN', None)
+        else:
+            env.update(MOSS_FIREWALL_STAND_IN=str(binary), PROBE_STAND_IN=mode)
         self.diagnostic = folder / 'helper-diagnostic.txt'
         env['PROBE_DIAGNOSTICS'] = str(self.diagnostic)
         self.process = subprocess.Popen(
@@ -403,6 +408,32 @@ def mac_disabled(binary, scratch, port):
         sudo([SOCKET_FILTER, '--setglobalstate', 'on'])
 
 
+def windows_native(binary, scratch, port):
+    """An admin CI runner exercises the actual RunAs launcher without a prompt stand-in."""
+    folder = scratch / ('instance-native-' + uuid.uuid4().hex[:8])
+    folder.mkdir(parents=True)
+    cert, key = make_certificate(folder)
+    world = World(folder, binary, port)
+    probe = None
+    try:
+        expect(not world.rule_present(), 'native Windows selector is unused')
+        world.set_up_client()
+        probe = Probe(binary, folder, cert, key, port, 'native')
+        expect(probe.send('on') == 'Ok(())', 'real Windows RunAs confirms sharing on')
+        expect(world.rule_present(), 'real Windows launcher adds the marked rule')
+        expect(probe.send('restart-check') == 'true', 'Windows silently confirms the live marker')
+        expect(world.second_client() == 'ANSWERED', 'real Windows launcher opens the listener')
+        expect(probe.send('off') == 'Ok(())', 'real Windows RunAs turns sharing off')
+        expect(not world.rule_present() and not world.record_present(), 'real Windows off removes rule and record')
+        expect(world.second_client() != 'ANSWERED', 'real Windows off returns to loopback')
+        say('WINDOWS NATIVE RUNAS: PASS')
+    finally:
+        if probe:
+            probe.stop()
+        world.cleanup_moss_rule()
+        world.tear_down_client()
+
+
 def firewalld_services(binary, scratch, port, negative):
     """Installer file exists, but runtime catalog lacks it: runtime must never reload."""
     folder = scratch / ('instance-fwd-' + uuid.uuid4().hex[:8])
@@ -470,6 +501,18 @@ def firewalld_services(binary, scratch, port, negative):
             assigned = sudo(['firewall-cmd', *permanent, '--list-services']).stdout.split()
             expect(service not in assigned, 'the firewall rule is gone after off')
         expect(sudo(['cat', destination]).stdout == xml, 'off preserves the unassigned installer service')
+        if not negative:
+            expect(probe.send('on') == 'Ok(())', 'firewalld sharing turns on for missing-file proof')
+            before = world.moss_record()
+            expect(sudo(['cat', destination]).stdout == xml, 'missing-file fixture owns the service definition')
+            sudo(['rm', destination])
+            try:
+                expect(probe.send('off').startswith('Err('), 'missing file with live assignment refuses cleanup')
+                expect(world.moss_record() == before, 'missing file with live assignment retains the record')
+                expect(world.second_client() != 'ANSWERED', 'failed cleanup still binds loopback only')
+            finally:
+                sudo(['install', '-m', '644', source, destination])
+            expect(probe.send('off') == 'Ok(())', 'restored marker allows verified cleanup')
         probe.send('answer approve')
         expect(probe.send('on') == 'Ok(())', 'firewalld sharing turns on for uninstall proof')
         probe.stop()
@@ -510,11 +553,16 @@ def main():
     parser.add_argument('--negative-swallow-remove', action='store_true')
     parser.add_argument('--firewalld-services', action='store_true')
     parser.add_argument('--mac-firewall-disabled', action='store_true')
+    parser.add_argument('--windows-native', action='store_true')
     args = parser.parse_args()
     suffix = '.exe' if SYSTEM == 'Windows' else ''
     binary = (Path(args.bin) / 'examples' / f'sharing_probe{suffix}').resolve()
     scratch = Path(args.scratch)
     shutil.rmtree(scratch, ignore_errors=True)
+    if args.windows_native:
+        expect(SYSTEM == 'Windows', 'the real RunAs proof runs on Windows')
+        windows_native(binary, scratch, args.port)
+        return
     if args.mac_firewall_disabled:
         expect(SYSTEM == 'Darwin', 'the disabled application-firewall proof runs on macOS')
         mac_disabled(binary, scratch, args.port)

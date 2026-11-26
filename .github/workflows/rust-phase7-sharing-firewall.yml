@@ -83,6 +83,10 @@ jobs:
           tail -30 "$RUNNER_TEMP/sharing-negative.log"
           test "$code" -eq 1
           grep -q "FAIL: the firewall rule is gone after off" "$RUNNER_TEMP/sharing-negative.log"
+      - name: Windows real RunAs launcher without a prompt stand-in
+        if: runner.os == 'Windows'
+        shell: bash
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-native-windows" --port 5198 --windows-native
       - name: Provision the supported firewalld manager for its unloaded-service proof
         if: runner.os == 'Linux'
         run: |
