@@ -417,10 +417,12 @@ fn run_selected(
         let updates = application
             .installer
             .update(&access, &catalog, policy.quiet_time)?;
-        println!(
-            "{}",
-            serde_json::json!({"refreshed": true, "failed": updates.failures.len()})
-        );
+        let mut report = serde_json::json!({"refreshed": true, "failed": updates.failures.len()});
+        // Private subprocess output only: the refresh endpoint never returns these details.
+        if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+            report["failures"] = serde_json::to_value(&updates.failures)?;
+        }
+        println!("{report}");
         return Ok(());
     }
     let installed_modules: std::collections::BTreeMap<_, _> = application

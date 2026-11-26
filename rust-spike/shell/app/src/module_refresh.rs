@@ -73,9 +73,20 @@ async fn pass(admin: &Admin, slot: &modules::Slot, access: AccessContext) -> Res
                 // The serving host deliberately cannot provision module roles.
                 let result = module_admin::run_json(&instance, &source, &["--refresh-policy".into()], &[], &access.actor_user_id().to_string())
                     .map_err(anyhow::Error::msg)?;
+                if result["failed"].as_u64() != Some(0)
+                    && std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some()
+                {
+                    eprintln!("Module source {} update failures: {}", source.id, result);
+                }
                 anyhow::ensure!(result["failed"].as_u64() == Some(0), "Some updates need attention");
                 Ok(())
             })();
+            // The real-server fixture opts in to private stderr diagnostics; API errors stay safe.
+            if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+                if let Err(error) = &result {
+                    eprintln!("Module source {} refresh failed: {error:#}", source.id);
+                }
+            }
             report.sources.push(SourceResult { id: source.id, error: result.err().map(|_| "The registry or its updates could not be refreshed; saved installed modules remain available. Check the source and try again") });
         }
         Ok(report)
