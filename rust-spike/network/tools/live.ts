@@ -279,26 +279,7 @@ try {
   if (process.env.JS435_BROWSER === "1") {
     // A real authenticated browser against the production server and isolated gate database.
     // Keep its session file private; never log or commit it.
-    const separator = localCookie.indexOf("=");
-    writeFileSync(
-      join(out, "browser-state.json"),
-      JSON.stringify({
-        cookies: [
-          {
-            name: localCookie.slice(0, separator),
-            value: localCookie.slice(separator + 1),
-            domain: "127.0.0.1",
-            path: "/",
-            expires: -1,
-            httpOnly: true,
-            secure: true,
-            sameSite: "Lax"
-          }
-        ],
-        origins: []
-      }),
-      { mode: 0o600 }
-    );
+    writeFileSync(join(out, "browser-cookies.txt"), `Cookie: ${localCookie}`, { mode: 0o600 });
     writeFileSync(join(out, "browser-ready"), local, { mode: 0o600 });
     console.log("READY sharing browser proof; server and database are isolated");
     for (let i = 0; i < 1200 && !existsSync(join(out, "browser-finished")); i++) await delay(1000);
