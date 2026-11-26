@@ -4,6 +4,12 @@ use std::path::PathBuf;
 #[cfg(windows)]
 use std::process::Command;
 use std::process::Stdio;
+struct Cleanup<'a>(&'a std::path::Path, &'a std::path::Path);
+impl Drop for Cleanup<'_> {
+    fn drop(&mut self) {
+        let _ = moss_launcher::database::stop_database(self.0, self.1);
+    }
+}
 fn main() {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     let install = PathBuf::from(&args[0]);
@@ -48,6 +54,7 @@ fn main() {
         moss_launcher::runtime::command(&install, "openssl"),
     )
     .unwrap();
+    let _cleanup = Cleanup(&install, &folder);
     moss_launcher::database::ensure_database(&install, &folder, true).unwrap();
     let output = moss_launcher::runtime::command(&install, "moss-db")
         .args(["credentials", "--root"])

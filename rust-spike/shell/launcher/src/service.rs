@@ -259,6 +259,16 @@ fn service_lock(folder: &Path) -> Result<std::fs::File, String> {
         .map_err(|_| REMEDY.into())
 }
 
+struct DatabaseGuard<'a> {
+    install: &'a Path,
+    folder: &'a Path,
+}
+impl Drop for DatabaseGuard<'_> {
+    fn drop(&mut self) {
+        let _ = crate::database::stop_database(self.install, self.folder);
+    }
+}
+
 /// Login action. The service, never the desktop app, brings the database back first.
 pub fn run(install: &Path, folder: &Path) -> Result<(), String> {
     let folder = canonical(folder)?;
@@ -273,6 +283,10 @@ pub fn run(install: &Path, folder: &Path) -> Result<(), String> {
         &folder.join("service.pid"),
         std::process::id().to_string().as_bytes(),
     )?;
+    let _database = DatabaseGuard {
+        install,
+        folder: &folder,
+    };
     crate::database::ensure_database(install, &folder, false).map_err(|_| REMEDY)?;
     let mut options = std::fs::OpenOptions::new();
     options.create(true).append(true);
@@ -287,7 +301,13 @@ pub fn run(install: &Path, folder: &Path) -> Result<(), String> {
     if folder.join(STOPPED).exists() {
         return crate::database::stop_database(install, &folder).map_err(|_| REMEDY.into());
     }
-    let mut child = crate::runtime::command(install, "moss-server")
+    let mut command = crate::runtime::command(install, "moss-server");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let mut child = command
         .arg("--instance")
         .arg(&folder)
         .arg("--web")

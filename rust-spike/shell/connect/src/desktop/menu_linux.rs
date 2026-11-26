@@ -19,7 +19,7 @@ fn entries() -> Vec<(i32, HashMap<String, Variant>)> {
     [
         (1, "Open Moss", true),
         (2, label, false),
-        (3, "Stop server", status.is_some_and(|s| s.2)),
+        (3, "Stop server", status.as_ref().is_some_and(|s| s.2)),
         (4, "Desktop settings", true),
         (5, "Quit app", true),
     ]

@@ -94,7 +94,7 @@ def main():
     name = service_name(folder.resolve())
     if os.name == 'nt':
         # Rust canonical paths use the extended-length prefix on Windows.
-        name = service_name(Path('\\\\?\\' + str(folder.resolve())))
+        name = service_name(Path(chr(92) * 2 + '?' + chr(92) + str(folder.resolve())))
     url = f'https://127.0.0.1:{args.port}/api/hello'
     def answering():
         try:

@@ -1,4 +1,5 @@
 //! Small stable entrypoint: no window, server implementation or private data in this program.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 use std::path::PathBuf;
 fn run() -> Result<(), String> {
     let mut args = std::env::args_os().skip(1);

@@ -11,7 +11,7 @@ is a separate program that connects to a server on this or another computer. Rep
 | ---------- | -------------------------------------------------------------------------------------------------------------- |
 | `contract` | JSON shapes the UI reads, the `ShellData` trait the server calls, and `StubShellData` (feature `stub`)         |
 | `ui`       | Leptos client-side app compiled to wasm: frame and navigation, Today, chat drawer                              |
-| `app`      | `moss-server`: the server; axum routes for the UI and its `/api/*` calls behind `moss-network`                  |
+| `app`      | `moss-server`: the server; axum routes for the UI and its `/api/*` calls behind `moss-network`                 |
 | `connect`  | `moss-app`: the desktop app; server list, certificate pins, local start, tao + wry window                      |
 | `assets`   | `index.html` and the script that copies the current app's CSS, fonts, textures and theme boot script unchanged |
 
@@ -233,3 +233,49 @@ qualified. This checkpoint only qualifies a synthetic assembly fixture.
 the actual HTTPS executable with a synthetic signed Wasm module and an overdue schedule.
 It is not proof of real reminder producers, native banners, background notifications after
 app quit, or a second device. Those remain the next qualification work.
+
+### Program versions and instance services (phase 7, part 2)
+
+Builds now produce `moss-server` and `moss-launcher` alongside `moss-app` and `moss-db`.
+The `moss-shell-contract` and `moss-shell-ui` library/package names are unchanged.
+Stage an unsigned payload as above, then install each program version apart from instance data:
+
+```sh
+python3 rust-spike/shell/tools/install-version.py --staged "$STAGED" --programs "$PROGRAMS" --version 7.1.0
+"$PROGRAMS/moss-launcher" moss-app --data "$DATA"
+```
+
+`$PROGRAMS/current` holds one version name. The stable launcher resolves it under
+`versions/`; installing another version retains the old folder. Never pass a saved old
+`--install` folder to the stable launcher. The app's own login entry also uses this launcher.
+This is the unsigned program layout seam, not a native package or updater.
+
+For each local instance the app installs a separate systemd **user** unit on Linux, a
+LaunchAgent on macOS, or a separate **HKCU Run login item** on Windows. The Windows task brief
+allows a login item or service; this uses a login item rather than the plan's suggested Task
+Scheduler task so no batch-logon permission or saved password is needed. The server login
+entry is independent of the desktop app's login preference. No product command needs admin.
+
+Stop writes the instance's `service-stopped` marker, disables its login start, and waits for
+the service to finish both the server and its database. App reopen, reconnect and a queued
+login action respect that marker. Only Start clears it. The service error is
+`app_server_service_failed`: check sign-in services, then press Start.
+
+```sh
+"$PROGRAMS/moss-launcher" service-start "$INSTANCE"
+"$PROGRAMS/moss-launcher" service-stop "$INSTANCE"
+"$PROGRAMS/moss-launcher" service-remove "$INSTANCE"
+```
+
+Remove registrations before removing program files. Different canonical instance folders get
+different stable service names, even when both are called `default`. Desktop development
+fixtures without a launcher retain direct process startup.
+
+The `phase7_instance_service` runner requires built app/server/launcher/database programs,
+the `instance-fixture` example and the pinned PostgreSQL bundle. It uses a fresh scratch
+folder, a real database and `/api/hello`; it never launches the desktop app in its positive
+proof. CI restarts Linux's user manager, reloads the saved macOS login agent, or replays the
+Windows login startup processor as a standard user. The app-only negative control registers
+only the desktop app and must fail the same independent server-registration assertion.
+On a working computer use `--local-lifecycle-only`; the full manager restart is restricted
+to disposable CI because it would otherwise stop unrelated user services.

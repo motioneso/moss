@@ -109,10 +109,12 @@ jobs:
         shell: bash
         run: |
           set +e
-          python3 rust-spike/shell/tools/phase7_instance_service.py --bin "$CARGO_TARGET_DIR/debug" --postgres "$RUNNER_TEMP/postgres relocated" --scratch "$RUNNER_TEMP/service-negative" --port 5198 --negative-app-only
+          python3 rust-spike/shell/tools/phase7_instance_service.py --bin "$CARGO_TARGET_DIR/debug" --postgres "$RUNNER_TEMP/postgres relocated" --scratch "$RUNNER_TEMP/service-negative" --port 5198 --negative-app-only > "$RUNNER_TEMP/service-negative.log" 2>&1
           code=$?
           echo "Negative control exit: $code (expected 1)"
+          tail -40 "$RUNNER_TEMP/service-negative.log"
           test "$code" -eq 1
+          python3 -c 'import os; from pathlib import Path; assert "server login registration exists independently of app autostart" in (Path(os.environ["RUNNER_TEMP"]) / "service-negative.log").read_text()'
       - name: Native Windows service proof as an ordinary user
         if: runner.os == 'Windows'
         shell: pwsh
