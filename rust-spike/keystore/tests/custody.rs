@@ -305,3 +305,28 @@ fn headless_key_file_inside_the_instance_root_is_refused() {
     assert!(keystore::custody::recorded_key_file(&root).is_some());
     let _ = fs::remove_file(outside);
 }
+
+#[test]
+fn migration_moves_the_nested_embeddings_key_into_the_bundle() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    fs::write(dir.path().join("modules.json"), br#"{"data":"/tmp/data","connector_key":"test-connector-key-9012","embeddings":{"url":"https://example.invalid/v1","model":"test-model","api_key":"test-embeddings-key-1357"}}"#).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    migrate(dir.path(), &mut store, "svc", false)
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
+    let modules = fs::read_to_string(dir.path().join("modules.json")).unwrap();
+    assert!(!modules.contains("test-embeddings-key-1357"), "{modules}");
+    assert!(
+        modules.contains("test-model"),
+        "plain model settings stay: {modules}"
+    );
+    let master = start_gate(&store, "svc").unwrap();
+    let bundle = keystore::custody::read_bundle(dir.path()).unwrap();
+    let payload = keystore::custody::unwrap_with_master(&bundle, &master).unwrap();
+    assert!(String::from_utf8(payload)
+        .unwrap()
+        .contains("test-embeddings-key-1357"));
+    assert!(find_plaintext(dir.path(), &[b"test-embeddings-key-1357".to_vec()]).is_empty());
+}

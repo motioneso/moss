@@ -929,6 +929,14 @@ impl App {
                 .prepared
                 .commit_with(pending.store.as_mut(), &service)
             {
+                // The finish rolled the bundle back. Point the settings at
+                // the plain file again, so a normal start stays retryable.
+                let folder = self.store.instance_folder(&pending.instance);
+                let network_file = folder.join(moss_network::instance::NETWORK_FILE);
+                if let Ok(mut config) = moss_network::config::Config::read(&network_file) {
+                    config.credentials = folder.join(keystore::custody::LEGACY_CREDENTIALS);
+                    let _ = config.write(&network_file);
+                }
                 self.pending_custody = Some((pending.instance.clone(), pending.id.clone()));
                 return self.show(json!({
                     "screen": "recovery-key", "code": custody_code(&error), "reason": error.reason(),

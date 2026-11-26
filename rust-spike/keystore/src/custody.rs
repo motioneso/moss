@@ -624,6 +624,16 @@ fn module_secret_values(instance_root: &Path, secrets: &mut Vec<Vec<u8>>) -> Mod
             collect_leaves(&removed, secrets);
         }
     }
+    if let Some(embeddings) = object.get("embeddings") {
+        // Only the key is a secret. The endpoint and model stay plain.
+        if let Some(key) = embeddings.get("api_key").cloned() {
+            collect_leaves(&key, secrets);
+        }
+        found.embeddings_api_key = embeddings
+            .get("api_key")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+    }
     let text = |key: &str| object.get(key).and_then(Value::as_str).map(str::to_owned);
     found.ai_key = text("ai_key");
     found.migrations_url = text("migrations_url");
@@ -653,6 +663,9 @@ fn strip_module_secrets(instance_root: &Path) -> Result<(), CustodyError> {
     ] {
         changed |= object.remove(key).is_some();
     }
+    if let Some(embeddings) = object.get_mut("embeddings").and_then(Value::as_object_mut) {
+        changed |= embeddings.remove("api_key").is_some();
+    }
     if changed {
         write_private(&path, &serde_json::to_vec_pretty(&value).unwrap())?;
     }
@@ -664,6 +677,7 @@ struct ModuleSecrets {
     ai_key: Option<String>,
     migrations_url: Option<String>,
     worker_url: Option<String>,
+    embeddings_api_key: Option<String>,
 }
 
 pub struct Migration {
@@ -815,6 +829,10 @@ fn prepare(
             .worker_url
             .clone()
             .or_else(|| recovered_text("module_worker_url")),
+        embeddings_api_key: module_secrets
+            .embeddings_api_key
+            .clone()
+            .or_else(|| recovered_text("module_embeddings_key")),
     };
     let ai_key = module_secrets.ai_key.clone().or(recovered_ai);
     if let Some(object) = payload_value.as_object_mut() {
@@ -830,10 +848,17 @@ fn prepare(
         if let Some(url) = &module_secrets.worker_url {
             object.insert("module_worker_url".to_string(), Value::String(url.clone()));
         }
+        if let Some(key) = &module_secrets.embeddings_api_key {
+            object.insert(
+                "module_embeddings_key".to_string(),
+                Value::String(key.clone()),
+            );
+        }
     }
     let payload = if (ai_key.is_some()
         || module_secrets.migrations_url.is_some()
-        || module_secrets.worker_url.is_some())
+        || module_secrets.worker_url.is_some()
+        || module_secrets.embeddings_api_key.is_some())
         && payload_value.is_object()
     {
         serde_json::to_vec(&payload_value).unwrap()

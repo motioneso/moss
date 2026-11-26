@@ -314,7 +314,14 @@ fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
         .unwrap_or_else(|| "default".into());
     let service = keystore::platform::service_name(&name);
     let platform = keystore::platform::platform_store();
-    let prepared = match setup_route(false, platform.probe()) {
+    // The key file belongs to a headless server. A graphical login is a
+    // desktop session even when its key store cannot be reached, and there
+    // the brief forbids offering the file at all.
+    let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    let desktop_session = matches!(session_type.as_str(), "x11" | "wayland" | "mir")
+        || std::env::var_os("XDG_CURRENT_DESKTOP").is_some()
+        || std::env::var_os("DESKTOP_SESSION").is_some();
+    let prepared = match setup_route(desktop_session, platform.probe()) {
         SetupRoute::OsStore => {
             let mut store = keystore::platform::platform_store();
             prepare_instance(&folder, store.as_mut(), &service)
@@ -359,9 +366,15 @@ fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
             Some(path) => Box::new(keystore::custody::KeyFileStore::new(path)),
             None => keystore::platform::platform_store(),
         };
-    prepared
-        .commit_with(store.as_mut(), &service)
-        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    if let Err(error) = prepared.commit_with(store.as_mut(), &service) {
+        // The finish rolled the bundle back. Point the settings at the plain
+        // file again, so the usual start path stays retryable.
+        let mut config = moss_network::config::Config::read(&network_file)
+            .map_err(|e| format!("cannot read the instance settings: {e}"))?;
+        config.credentials = folder.join(keystore::custody::LEGACY_CREDENTIALS);
+        let _ = config.write(&network_file);
+        return Err(format!("{}: {}", error.code(), error.reason()));
+    }
     Ok(())
 }
 
@@ -417,6 +430,7 @@ fn supply_module_secrets_from_args() {
             producer_url: secrets.producer_url,
             migrations_url: secrets.migrations_url,
             worker_url: secrets.worker_url,
+            embeddings_api_key: secrets.embeddings_api_key,
         });
     }
 }
@@ -495,6 +509,7 @@ fn main() {
                 producer_url: secrets.producer_url,
                 migrations_url: secrets.migrations_url,
                 worker_url: secrets.worker_url,
+                embeddings_api_key: secrets.embeddings_api_key,
             });
         }
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;

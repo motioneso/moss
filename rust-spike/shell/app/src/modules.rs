@@ -350,6 +350,7 @@ pub struct ModuleSecrets {
     pub producer_url: String,
     pub migrations_url: Option<String>,
     pub worker_url: Option<String>,
+    pub embeddings_api_key: Option<String>,
 }
 
 static MODULE_SECRETS: std::sync::OnceLock<ModuleSecrets> = std::sync::OnceLock::new();
@@ -364,6 +365,7 @@ pub fn set_connector_key_override(key: String) {
     set_module_secrets(ModuleSecrets {
         connector_key: key,
         ai_key: None,
+        embeddings_api_key: None,
         producer_url: String::new(),
         migrations_url: None,
         worker_url: None,
@@ -392,6 +394,13 @@ pub fn read_settings(path: &Path) -> Result<Settings> {
         if settings.worker_url.is_empty() {
             if let Some(url) = &secrets.worker_url {
                 settings.worker_url = url.clone();
+            }
+        }
+        if let (Some(embeddings), Some(key)) =
+            (settings.embeddings.as_mut(), &secrets.embeddings_api_key)
+        {
+            if embeddings.api_key.is_empty() {
+                embeddings.api_key = key.clone();
             }
         }
     }

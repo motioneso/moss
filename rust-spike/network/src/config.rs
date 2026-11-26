@@ -231,6 +231,7 @@ pub struct ModuleSecrets {
     pub producer_url: String,
     pub migrations_url: Option<String>,
     pub worker_url: Option<String>,
+    pub embeddings_api_key: Option<String>,
 }
 
 /// The recorded key file for an instance, when present. An environment
@@ -290,6 +291,8 @@ impl Config {
             module_migrations_url: Option<String>,
             #[serde(default)]
             module_worker_url: Option<String>,
+            #[serde(default)]
+            module_embeddings_key: Option<String>,
         }
         let raw = private_read(&self.credentials)?;
         let plain = if is_bundle(&raw) {
@@ -323,6 +326,7 @@ impl Config {
             producer_url: parsed.app_url,
             migrations_url: parsed.module_migrations_url,
             worker_url: parsed.module_worker_url,
+            embeddings_api_key: parsed.module_embeddings_key,
         })
     }
 

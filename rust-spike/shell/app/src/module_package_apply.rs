@@ -25,6 +25,7 @@ pub fn apply(instance: &Path, access: &AccessContext, input: Input) -> Result<()
     let url = module_admin::elevated_url(instance).map_err(anyhow::Error::msg)?;
     let mut child = Command::new(std::env::current_exe()?)
         .arg("apply-module-package")
+        .arg("--instance")
         .arg(instance)
         .arg(access.actor_user_id().to_string())
         .env(module_install::INSTALL_URL_VARIABLE, url)
@@ -48,9 +49,14 @@ pub fn apply(instance: &Path, access: &AccessContext, input: Input) -> Result<()
 }
 /// Internal installer entry: keeps the elevated login in one short-lived process.
 pub fn run(args: Vec<String>) -> Result<()> {
-    ensure!(args.len() == 2, "Missing instance or session actor");
-    let instance = std::path::PathBuf::from(&args[0]);
-    let actor = args[1].parse()?;
+    // Both spawn forms are accepted: --instance DIR ACTOR, or DIR ACTOR.
+    let (instance_arg, actor_arg) = match args.as_slice() {
+        [flag, dir, actor] if flag == "--instance" => (dir, actor),
+        [dir, actor] => (dir, actor),
+        _ => anyhow::bail!("Missing instance or session actor"),
+    };
+    let instance = std::path::PathBuf::from(instance_arg);
+    let actor = actor_arg.parse()?;
     let access = AccessContext::new(actor, "package-activation");
     let mut payload = Vec::new();
     std::io::stdin()
