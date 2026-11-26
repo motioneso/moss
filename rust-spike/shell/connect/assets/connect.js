@@ -234,7 +234,9 @@ const screens = {
       el(
         "div",
         { class: "connect-actions" },
-        button(s.local ? "Start it" : "Try again", "primary", () => post({ do: "retry" })),
+        button(s.local ? "Start" : "Try again", "primary", () =>
+          post({ do: s.local && s.code === "app_server_service_failed" ? "start" : "retry" })
+        ),
         button("Switch server", "secondary", () => post({ do: "servers" }))
       )
     );
@@ -306,4 +308,5 @@ window.moss = {
   }
 };
 
-post({ do: "start" });
+// Opening the app reconnects; only the owner pressing Start clears an explicit Stop.
+post({ do: "retry" });
