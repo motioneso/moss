@@ -1,0 +1,59 @@
+name: Rust phase7 Windows login probe
+on:
+  pull_request:
+    paths: [".github/workflows/rust-phase7-windows-login-probe.yml"]
+permissions:
+  contents: read
+jobs:
+  login_probe:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Compare startup processing as a standard user
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $work = Join-Path $env:RUNNER_TEMP 'login-probe'
+          New-Item -ItemType Directory $work | Out-Null
+          $script = Join-Path $work 'probe.py'
+          @'
+          import os, pathlib, subprocess, sys, time, winreg
+          root = pathlib.Path(__file__).parent
+          if len(sys.argv) > 1:
+              (root / sys.argv[1]).write_text('started')
+              raise SystemExit(0)
+          key = r'Software\Microsoft\Windows\CurrentVersion\Run'
+          for variant in ('ordinary', 'canonical'):
+              exe = sys.executable
+              if variant == 'canonical':
+                  exe = '\\\\?\\' + exe
+              args = [exe, str(pathlib.Path(__file__)), variant]
+              entry = subprocess.list2cmdline(args)
+              with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as registry:
+                  winreg.SetValueEx(registry, 'MossLoginProbe', 0, winreg.REG_SZ, entry)
+              result = subprocess.run(['runonce.exe', '/AlternateShellStartup'])
+              time.sleep(15)
+              print('PROBE:', variant, 'runonce exit', result.returncode, 'started', (root / variant).exists(), flush=True)
+              # Compare the exact registry command with direct CreateProcess execution.
+              if not (root / variant).exists():
+                  result = subprocess.run(entry)
+                  print('PROBE:', variant, 'direct exit', result.returncode, 'started', (root / variant).exists(), flush=True)
+              with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as registry:
+                  winreg.DeleteValue(registry, 'MossLoginProbe')
+          '@ | Set-Content $script
+          $account = 'moss-login-probe'
+          $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
+          $user = New-LocalUser -Name $account -Password $password -AccountNeverExpires
+          try {
+              Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
+              & icacls $work /grant ('*' + $user.SID.Value + ':(OI)(CI)M') /Q
+              if ($LASTEXITCODE -ne 0) { throw 'Could not grant probe access' }
+              $credential = [pscredential]::new("$env:COMPUTERNAME\$account", $password)
+              $process = Start-Process (Get-Command python.exe).Source -Credential $credential -LoadUserProfile -WorkingDirectory $work -ArgumentList $script -RedirectStandardOutput "$work/out.txt" -RedirectStandardError "$work/err.txt" -PassThru
+              if (-not $process.WaitForExit(120000)) { $process.Kill($true); throw 'Probe timeout' }
+              Get-Content "$work/out.txt" -Tail 30
+              Get-Content "$work/err.txt" -Tail 30
+              if ($process.ExitCode -ne 0) { throw 'Probe failed' }
+          } finally {
+              Remove-LocalUser -Name $account
+          }
