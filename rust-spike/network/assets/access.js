@@ -109,7 +109,9 @@ if (sharing) {
       ? "Paused"
       : result.firewall === "allowed"
         ? "Allowed"
-        : "Not asked yet";
+        : result.firewall === "disabled"
+          ? "Off"
+          : "Not asked yet";
     document.getElementById("address").textContent = result.origins[0] || "No network found.";
     document.getElementById("address-state").textContent = paused
       ? "Paused"

@@ -507,6 +507,13 @@ fn apply_with(os: Os, linux: Linux, action: Action, rule: &Rule) -> Result<bool,
         // Without a manager an add cannot be verified and a remove cannot be confirmed.
         return Err(NO_MANAGER);
     }
+    if os == Os::Mac && action == Action::Add {
+        match mac_enabled() {
+            Some(false) => return Ok(true), // Record that nothing was added.
+            Some(true) => {}
+            None => return Err("The firewall could not be read"),
+        }
+    }
     let queryable = present_query(os, linux, rule).is_some();
     if action == Action::Remove && !owned(os, linux, rule)? {
         // Not Moss's rule, or already gone. Nothing is deleted.
@@ -680,6 +687,22 @@ fn mac_marker(text: &str, rule: &Rule) -> bool {
     rule.entry_added == Some(true) && mac_path_present(text, &rule.program)
 }
 
+fn mac_enabled_answer(code: i32, text: &str) -> Option<bool> {
+    if code != 0 {
+        return None;
+    }
+    match text.trim() {
+        "Firewall is disabled. (State = 0)" => Some(false),
+        "Firewall is enabled. (State = 1)" => Some(true),
+        _ => None,
+    }
+}
+
+fn mac_enabled() -> Option<bool> {
+    let (code, text) = run_code(&cmd(&[SOCKET_FILTER, "--getglobalstate"]))?;
+    mac_enabled_answer(code, &text)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ServiceMark {
     Ours,
@@ -788,6 +811,7 @@ pub enum State {
     NotAsked,
     Allowed,
     Paused,
+    Disabled,
 }
 
 impl State {
@@ -796,6 +820,7 @@ impl State {
             State::NotAsked => "not_asked",
             State::Allowed => "allowed",
             State::Paused => "paused",
+            State::Disabled => "disabled",
         }
     }
 }
@@ -843,6 +868,9 @@ struct Record {
     /// The rule was open before Moss added it, so removal leaves it alone.
     #[serde(default)]
     preexisting: bool,
+    /// macOS only: the authorized helper found the application firewall disabled and added nothing.
+    #[serde(default)]
+    mac_disabled: bool,
     /// The add ran and may have left a rule, so removal is allowed even when unconfirmed.
     #[serde(default)]
     added: bool,
@@ -913,11 +941,16 @@ impl Firewall {
         };
         let rule = &record.rule;
         if !record.confirmed
-            || record.preexisting
             || rule.token.is_none()
             || rule.port != port
             || rule.program != self.program
         {
+            return false;
+        }
+        if record.mac_disabled {
+            return this_os() == Os::Mac && mac_enabled() == Some(false);
+        }
+        if record.preexisting {
             return false;
         }
         let (os, linux) = match this_os() {
@@ -963,7 +996,7 @@ impl Firewall {
         }
         if !record.paused
             || !record.confirmed
-            || record.preexisting
+            || (record.preexisting && !record.mac_disabled)
             || record.rule.port != port
             || record.rule.program != self.program
         {
@@ -978,6 +1011,7 @@ impl Firewall {
     pub fn state(&self) -> State {
         match self.recorded() {
             Ok(Some(record)) if record.paused => State::Paused,
+            Ok(Some(record)) if record.confirmed && record.mac_disabled => State::Disabled,
             Ok(Some(record)) if record.confirmed && record.rule.token.is_some() => State::Allowed,
             _ => State::NotAsked,
         }
@@ -1060,6 +1094,7 @@ impl Firewall {
             paused: false,
             confirmed: false,
             preexisting: false,
+            mac_disabled: false,
             added,
         })?;
         match self.run(Action::Add, rule.clone()).await {
@@ -1070,11 +1105,17 @@ impl Firewall {
                 if this_os() == Os::Mac {
                     stored.entry_added = Some(!preexisting);
                 }
+                let mac_disabled = if this_os() == Os::Mac && preexisting {
+                    mac_enabled().ok_or(Refusal::Failed)? == false
+                } else {
+                    false
+                };
                 self.write_record(&Record {
                     rule: stored,
                     paused: false,
                     confirmed: true,
                     preexisting,
+                    mac_disabled,
                     added: !preexisting,
                 })
             }
@@ -1085,6 +1126,7 @@ impl Firewall {
                     paused: false,
                     confirmed: false,
                     preexisting: false,
+                    mac_disabled: false,
                     added: true,
                 });
                 Err(Refusal::Stuck)
@@ -1343,6 +1385,23 @@ mod tests {
     }
 
     #[test]
+    fn mac_global_state_requires_a_clear_successful_answer() {
+        assert_eq!(
+            mac_enabled_answer(0, "Firewall is disabled. (State = 0)\n"),
+            Some(false)
+        );
+        assert_eq!(
+            mac_enabled_answer(0, "Firewall is enabled. (State = 1)\n"),
+            Some(true)
+        );
+        assert_eq!(
+            mac_enabled_answer(1, "Firewall is disabled. (State = 0)"),
+            None
+        );
+        assert_eq!(mac_enabled_answer(0, "unreadable"), None);
+    }
+
+    #[test]
     fn each_os_removes_what_it_adds() {
         for (os, linux) in [
             (Os::Windows, Linux::Nothing),
@@ -1412,6 +1471,7 @@ mod tests {
             paused: false,
             confirmed: false,
             preexisting: false,
+            mac_disabled: false,
             added: false,
         };
         firewall.write_record(&record).unwrap();
@@ -1428,6 +1488,7 @@ mod tests {
                 paused: false,
                 confirmed: false,
                 preexisting: false,
+                mac_disabled: false,
                 added: false,
             })
             .unwrap();
@@ -1685,6 +1746,7 @@ mod tests {
                 paused: false,
                 confirmed: true,
                 preexisting: false,
+                mac_disabled: false,
                 added: true,
             })
             .unwrap();
@@ -1706,6 +1768,7 @@ mod tests {
                 paused: false,
                 confirmed: true,
                 preexisting: false,
+                mac_disabled: false,
                 added: true,
             })
             .unwrap();
@@ -1774,6 +1837,7 @@ mod tests {
                 paused: false,
                 confirmed: true,
                 preexisting: false,
+                mac_disabled: false,
                 added: true,
             })
             .unwrap();
@@ -1895,6 +1959,12 @@ pub fn command(args: &[String]) -> i32 {
     };
     let result = if action == Action::Check {
         rule.check().and_then(|_| {
+            if this_os() == Os::Mac
+                && rule.entry_added == Some(false)
+                && mac_enabled() == Some(false)
+            {
+                return Ok(false);
+            }
             let linux = match rule.manager.as_deref() {
                 Some("ufw") => Linux::Ufw,
                 Some("firewalld") => Linux::Firewalld,

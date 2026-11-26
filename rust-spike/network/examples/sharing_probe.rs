@@ -33,7 +33,21 @@ fn stand_in(args: &[String]) -> i32 {
         command = Command::new(&args[0]);
         command.args(&args[1..]);
     }
-    command.status().ok().and_then(|s| s.code()).unwrap_or(1)
+    let Ok(output) = command.output() else {
+        return 1;
+    };
+    if let Some(path) = std::env::var_os("PROBE_DIAGNOSTICS") {
+        let _ = std::fs::write(
+            path,
+            format!(
+                "exit {:?}: {}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        );
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
+    output.status.code().unwrap_or(1)
 }
 
 fn is_root() -> bool {

@@ -161,6 +161,8 @@ def mac_apps():
 class Probe:
     def __init__(self, binary, folder, cert, key, port, mode):
         env = dict(os.environ, MOSS_FIREWALL_STAND_IN=str(binary), PROBE_STAND_IN=mode)
+        self.diagnostic = folder / 'helper-diagnostic.txt'
+        env['PROBE_DIAGNOSTICS'] = str(self.diagnostic)
         self.process = subprocess.Popen(
             [str(binary), '--folder', str(folder), '--listen', f'0.0.0.0:{port}',
              '--cert', str(cert), '--key', str(key)],
@@ -185,6 +187,8 @@ class Probe:
         self.process.stdin.flush()
         line = self.lines.get(timeout=seconds)
         say('PROBE ->', line)
+        if line.startswith('Err(') and self.diagnostic.exists():
+            say('HELPER:', self.diagnostic.read_text()[-2000:])
         return line
 
     def stop(self):
@@ -317,7 +321,9 @@ class World:
             sudo(['ufw', 'allow', 'in', 'proto', 'tcp', 'to', 'any', 'port', str(self.port + 1),
                   'comment', self.plant_marker + '-other'])
         else:
-            shutil.copy2(self.binary, self.other_program)
+            # ALF recognizes code identity too. A copy of the probe has the same identity
+            # and can alias its entry; plant a different executable at our unique path.
+            shutil.copy2('/usr/bin/true', self.other_program)
             sudo([SOCKET_FILTER, '--add', str(self.other_program)])
         self.planted_other = True
 
@@ -369,6 +375,32 @@ def make_certificate(folder):
     return cert, key
 
 
+def mac_disabled(binary, scratch, port):
+    folder = scratch / 'instance-mac-disabled'
+    folder.mkdir(parents=True)
+    cert, key = make_certificate(folder)
+    before = mac_apps()
+    expect(str(binary) not in before, 'disabled-firewall probe path is unused')
+    probe = None
+    try:
+        sudo([SOCKET_FILTER, '--setglobalstate', 'off'])
+        probe = Probe(binary, folder, cert, key, port, 'approve')
+        expect(probe.send('on') == 'Ok(())', 'sharing can turn on with the macOS firewall disabled')
+        record = json.loads((folder / 'firewall.json').read_text())
+        expect(record['mac_disabled'] and not record['added'], 'the record says the firewall was off and no entry was added')
+        expect(mac_apps() == before, 'disabled firewall adds no application entry')
+        expect(probe.send('restart-check') == 'true', 'restart confirms that the macOS firewall is still disabled')
+        sudo([SOCKET_FILTER, '--setglobalstate', 'on'])
+        expect(probe.send('restart') == 'paused', 'enabling the firewall pauses a restart with no verified rule')
+        probe.send('answer decline')
+        expect('Declined' in probe.send('on'), 'declined Resume stays paused')
+        expect(probe.send('off') == 'Ok(())', 'off clears a record that added no application entry')
+        expect(mac_apps() == before, 'off preserves every preexisting macOS entry')
+    finally:
+        if probe: probe.stop()
+        sudo([SOCKET_FILTER, '--setglobalstate', 'on'])
+
+
 def firewalld_services(binary, scratch, port, negative):
     """Installer file exists, but runtime catalog lacks it: runtime must never reload."""
     folder = scratch / ('instance-fwd-' + uuid.uuid4().hex[:8])
@@ -417,6 +449,7 @@ def firewalld_services(binary, scratch, port, negative):
         say('FIREWALLD UNLOADED SERVICE: PASS')
         # This is the installer's one-time provisioning step, never an application command.
         sudo(['firewall-cmd', '--reload'])
+        sudo(['firewall-cmd', f'--info-service={service}', '--verbose'])
         expect(probe.send('off') == 'Ok(())', 'confirmed absent assignments clear the failed intent')
         probe.send('answer decline')
         expect('Declined' in probe.send('on'), 'firewalld prompt refused keeps sharing off')
@@ -474,11 +507,16 @@ def main():
     parser.add_argument('--port', type=int, default=5198)
     parser.add_argument('--negative-swallow-remove', action='store_true')
     parser.add_argument('--firewalld-services', action='store_true')
+    parser.add_argument('--mac-firewall-disabled', action='store_true')
     args = parser.parse_args()
     suffix = '.exe' if SYSTEM == 'Windows' else ''
     binary = (Path(args.bin) / 'examples' / f'sharing_probe{suffix}').resolve()
     scratch = Path(args.scratch)
     shutil.rmtree(scratch, ignore_errors=True)
+    if args.mac_firewall_disabled:
+        expect(SYSTEM == 'Darwin', 'the disabled application-firewall proof runs on macOS')
+        mac_disabled(binary, scratch, args.port)
+        return
     if args.firewalld_services:
         expect(SYSTEM == 'Linux', 'firewalld proof runs on Linux')
         scratch.mkdir(parents=True)

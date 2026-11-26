@@ -46,6 +46,8 @@ jobs:
           set +e
           /usr/libexec/ApplicationFirewall/socketfilterfw --listapps
           sudo /usr/libexec/ApplicationFirewall/socketfilterfw --listapps
+          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
+          /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
       - name: Firewall rule and listener unit tests
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml --lib firewall -- --test-threads=1
       - name: Runner cleanup ownership tests
@@ -88,6 +90,10 @@ jobs:
           sudo apt-get install -y firewalld
           sudo ufw disable
           sudo systemctl start firewalld
+      - name: macOS disabled firewall adds no application entry
+        if: runner.os == 'macOS'
+        shell: bash
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-mac-disabled" --port 5198 --mac-firewall-disabled
       - name: Installer-loaded firewalld service and missing-service refusal
         if: runner.os == 'Linux'
         run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/firewalld-unloaded" --port 5198 --firewalld-services
