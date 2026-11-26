@@ -55,7 +55,9 @@ jobs:
         shell: bash
         run: |
           dbus-run-session -- bash -e -c '
-            eval "$(printf %s "" | gnome-keyring-daemon --unlock --components=secrets)"
+            mkdir -p "$HOME/.local/share/keyrings"
+            printf login > "$HOME/.local/share/keyrings/default"
+            printf "testpw\n" | gnome-keyring-daemon --unlock --components=secrets
             python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-proof"
           '
       - name: phase7_key_custody
@@ -68,7 +70,9 @@ jobs:
         run: |
           set +e
           dbus-run-session -- bash -e -c '
-            eval "$(printf %s "" | gnome-keyring-daemon --unlock --components=secrets)"
+            mkdir -p "$HOME/.local/share/keyrings"
+            printf login > "$HOME/.local/share/keyrings/default"
+            printf "testpw\n" | gnome-keyring-daemon --unlock --components=secrets
             python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-negative" --negative-plaintext
           ' > "$RUNNER_TEMP/key-custody-negative.log" 2>&1
           code=$?
