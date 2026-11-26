@@ -84,6 +84,8 @@ mod custody_tests {
     fn migrated_supervisor_reads_wrapped_role_credentials_without_recreating_files() {
         let scratch = tempfile::tempdir().unwrap();
         let instance = scratch.path().join("instance");
+        // Windows pins existing ancestors rather than manufacturing them.
+        std::fs::create_dir(&instance).unwrap();
         let layout = Layout::create(&instance.join("database")).unwrap();
         let secret = password(&layout, crate::SUPERUSER).unwrap();
         std::fs::write(instance.join("credentials.json"), b"{}").unwrap();

@@ -682,7 +682,7 @@ impl App {
             .unwrap_or_default()
         {
             "retry" => match self.current.clone().or_else(|| self.servers.last.clone()) {
-                Some(id) => self.connect(id),
+                Some(id) => self.choose(id),
                 None => self.show(json!({"screen":"first-run"})),
             },
             "start" => {
