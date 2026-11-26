@@ -153,3 +153,94 @@ fn cli_persists_serial_and_refuses_without_changing_state() {
         "corrupt state must not reset serial"
     );
 }
+
+#[test]
+fn release_output_verifies_and_contains_only_public_material() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let payload = root.join("artifact");
+    fs::write(&payload, b"artifact").unwrap();
+    let inputs = serde_json::json!([{
+        "os":std::env::consts::OS,"arch":std::env::consts::ARCH,"version":"1.0.0",
+        "url":"https://github.com/motioneso/moss/releases/download/test/app",
+        "file":payload,"schemaMin":40,"schemaMax":43
+    }]);
+    let input = root.join("input.json");
+    fs::write(&input, inputs.to_string()).unwrap();
+    let output = root.join("feed");
+    // Garbage configured credentials cannot affect the default throwaway path.
+    let result = Command::new(env!("CARGO_BIN_EXE_moss-app-update"))
+        .args(["release"])
+        .arg(&input)
+        .arg(&output)
+        .arg("20")
+        .env(
+            "MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY",
+            "unused-invalid-test-key",
+        )
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let mut files: Vec<_> = fs::read_dir(&output)
+        .unwrap()
+        .map(|f| f.unwrap().file_name())
+        .collect();
+    files.sort();
+    assert_eq!(files, ["index.json", "index.json.sig", "public-key.txt"]);
+    let check = Command::new(env!("CARGO_BIN_EXE_moss-app-update"))
+        .arg("check")
+        .arg(&output)
+        .arg("generated-ci")
+        .arg(output.join("public-key.txt"))
+        .arg(root.join("seen.json"))
+        .arg("42")
+        .arg(&payload)
+        .output()
+        .unwrap();
+    assert!(
+        check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+    // Explicit configuration must refuse absent keys rather than silently changing trust.
+    let missing = Command::new(env!("CARGO_BIN_EXE_moss-app-update"))
+        .arg("release")
+        .arg(&input)
+        .arg(root.join("missing"))
+        .args(["21", "--configured-key"])
+        .env_remove("MOSS_APP_UPDATE_SIGNING_KEY_ID")
+        .env_remove("MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY")
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(!root.join("missing").exists());
+    // Signing with a provided throwaway PKCS#8 uses exactly the same path as CI secrets.
+    let pkcs8 = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap();
+    let configured_key = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
+    let configured = root.join("configured");
+    let result = Command::new(env!("CARGO_BIN_EXE_moss-app-update"))
+        .arg("release")
+        .arg(&input)
+        .arg(&configured)
+        .args(["22", "--configured-key"])
+        .env("MOSS_APP_UPDATE_SIGNING_KEY_ID", "configured-test")
+        .env(
+            "MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY",
+            STANDARD.encode(pkcs8.as_ref()),
+        )
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    assert_eq!(
+        fs::read_to_string(configured.join("public-key.txt")).unwrap(),
+        STANDARD.encode(configured_key.public_key().as_ref())
+    );
+    assert!(!result
+        .stdout
+        .windows(pkcs8.as_ref().len())
+        .any(|w| w == pkcs8.as_ref()));
+}

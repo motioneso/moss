@@ -148,5 +148,12 @@ pub fn save_seen(path: &Path, seen: &Seen) -> Result<()> {
     file.write_all(&serde_json::to_vec(seen)?)?;
     file.sync_all()?;
     fs::rename(&next, path)?;
+    #[cfg(unix)]
+    fs::File::open(
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new(".")),
+    )?
+    .sync_all()?;
     Ok(())
 }
