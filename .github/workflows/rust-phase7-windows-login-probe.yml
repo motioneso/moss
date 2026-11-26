@@ -40,6 +40,24 @@ jobs:
                   print('PROBE:', variant, 'direct exit', result.returncode, 'started', (root / variant).exists(), flush=True)
               with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as registry:
                   winreg.DeleteValue(registry, 'MossLoginProbe')
+          entry = subprocess.list2cmdline([sys.executable, str(pathlib.Path(__file__)), 'shell'])
+          with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as registry:
+              winreg.SetValueEx(registry, 'MossLoginProbe', 0, winreg.REG_SZ, entry)
+          subprocess.Popen(['userinit.exe'])
+          time.sleep(20)
+          print('PROBE: native userinit shell started', (root / 'shell').exists(), flush=True)
+          with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as registry:
+              winreg.DeleteValue(registry, 'MossLoginProbe')
+          for mode in ('/it', '/np'):
+              marker = mode[1:]
+              entry = subprocess.list2cmdline([sys.executable, str(pathlib.Path(__file__)), marker])
+              result = subprocess.run(['schtasks.exe', '/Create', '/TN', 'MossLoginProbe', '/SC', 'ONLOGON', '/TR', entry, mode, '/F'], stdin=subprocess.DEVNULL, capture_output=True, text=True)
+              print('PROBE: scheduler', mode, 'create exit', result.returncode, result.stdout.strip(), result.stderr.strip(), flush=True)
+              if result.returncode == 0:
+                  result = subprocess.run(['schtasks.exe', '/Run', '/TN', 'MossLoginProbe'])
+                  time.sleep(15)
+                  print('PROBE: scheduler', mode, 'run exit', result.returncode, 'started', (root / marker).exists(), flush=True)
+                  subprocess.run(['schtasks.exe', '/Delete', '/TN', 'MossLoginProbe', '/F'], check=True)
           '@ | Set-Content $script
           $account = 'moss-login-probe'
           $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
