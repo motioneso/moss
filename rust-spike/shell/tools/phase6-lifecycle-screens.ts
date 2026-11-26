@@ -199,6 +199,9 @@ try {
     await page.screenshot({ path: join(out, `${width}-update-review.png`) });
     await dialog.getByRole("button", { name: "Skip", exact: true }).click();
     await expect(page).toHaveURL(`${origin}/settings/modules`);
+    // URL commitment precedes the new document's WASM startup. Reloading here
+    // can abort compilation and report a pageerror from the discarded document.
+    await expect(page.getByRole("heading", { name: "Modules", exact: true })).toBeVisible();
     await page.reload();
     const skipped = await (await admin.request.get(`${origin}/api/modules/catalog`)).json();
     assert.equal(
