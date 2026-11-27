@@ -335,28 +335,6 @@ mod windows {
         pub dir: PathBuf,
     }
 
-    fn create_store_folder(dir: &Path) -> Result<(), CustodyError> {
-        // std::fs::create_dir_all tries mkdir on existing ancestors too. A
-        // supervisor pins LOCALAPPDATA without write sharing, so mkdir there
-        // can return a sharing violation rather than AlreadyExists. Start at
-        // the first existing folder and create only the missing children.
-        let missing: Vec<_> = dir
-            .ancestors()
-            .take_while(|path| !path.as_os_str().is_empty() && !path.is_dir())
-            .collect();
-        for path in missing.into_iter().rev() {
-            match std::fs::create_dir(path) {
-                Ok(()) => {}
-                Err(error)
-                    if error.kind() == std::io::ErrorKind::AlreadyExists && path.is_dir() => {}
-                Err(error) => {
-                    return Err(CustodyError::Io(format!("create DPAPI folder: {error}")))
-                }
-            }
-        }
-        Ok(())
-    }
-
     fn blob_path(dir: &Path, service: &str) -> PathBuf {
         let safe: String = service
             .chars()
@@ -431,14 +409,15 @@ mod windows {
         }
         fn store_master(&mut self, service: &str, master: &MasterKey) -> Result<(), CustodyError> {
             let protected = protect(master.bytes())?;
-            create_store_folder(&self.dir)?;
+            std::fs::create_dir_all(&self.dir)
+                .map_err(|e| CustodyError::Io(format!("create DPAPI folder: {e}")))?;
             // Stage beside the blob, then rename over it, so a crash mid-write
             // leaves the old protected blob whole.
             let target = blob_path(&self.dir, service);
             let staging = target.with_extension("staging");
             std::fs::write(&staging, STANDARD.encode(protected))
                 .map_err(|e| CustodyError::Io(format!("write DPAPI staging file: {e}")))?;
-            let renamed = std::fs::rename(&staging, &target);
+            let renamed = crate::windows_replace::rename_sibling(&staging, &target);
             if renamed.is_err() {
                 let _ = std::fs::remove_file(&staging);
             }

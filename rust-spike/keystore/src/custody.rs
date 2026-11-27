@@ -205,13 +205,8 @@ fn unseal(key: &[u8; 32], aad: &[u8], sealed: &Value) -> Option<Vec<u8>> {
 
 pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyError> {
     if let Some(parent) = path.parent() {
-        // CreateDirectory on an existing Windows directory can request write
-        // access denied by the supervisor's ancestor pins. An existing parent
-        // needs no creation; keep those pins and write only its child file.
-        if !parent.is_dir() {
-            fs::create_dir_all(parent)
-                .map_err(|e| CustodyError::Io(format!("create private-file parent: {e}")))?;
-        }
+        fs::create_dir_all(parent)
+            .map_err(|e| CustodyError::Io(format!("create private-file parent: {e}")))?;
     }
     if fs::symlink_metadata(path)
         .map(|m| m.file_type().is_symlink())
@@ -240,8 +235,11 @@ pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyErro
         file.sync_all()
             .map_err(|e| CustodyError::Io(format!("sync bundle staging file: {e}")))?;
         drop(file);
-        fs::rename(&staging, path)
-            .map_err(|e| CustodyError::Io(format!("replace private file: {e}")))
+        #[cfg(windows)]
+        let replaced = crate::windows_replace::rename_sibling(&staging, path);
+        #[cfg(not(windows))]
+        let replaced = fs::rename(&staging, path);
+        replaced.map_err(|e| CustodyError::Io(format!("replace private file: {e}")))
     })();
     if written.is_err() {
         let _ = fs::remove_file(&staging);

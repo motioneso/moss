@@ -8,3 +8,5 @@ pub mod platform;
 pub mod probe;
 pub mod recovery;
 pub mod store;
+#[cfg(windows)]
+mod windows_replace;
