@@ -99,7 +99,7 @@ try {
   assert.equal(session.status, 200, "restored server accepts the real sign-in");
   assert.equal(session.session.user.email, config.email, "the restored account signs in");
   console.log("ok: the restored server authenticated the original account");
-  await page.getByRole("heading", { name: "Today", exact: true }).waitFor();
+  await page.getByRole("navigation", { name: "Sections", exact: true }).waitFor();
   await page.getByText(config.name, { exact: true }).waitFor();
   await shot("signed-in");
   const source = await context.request.get(`${config.sourceOrigin}/sign-in`);
