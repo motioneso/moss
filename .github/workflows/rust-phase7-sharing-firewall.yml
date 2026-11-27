@@ -73,6 +73,10 @@ jobs:
           code=$?
           echo "phase7_sharing_firewall exit: $code (expected 0)"
           exit $code
+      - name: Current version removes its own old-version firewall rule
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-versioned" --port 5198 --versioned-cleanup
       - name: Negative control, off that leaves the rule behind, must fail
         shell: bash
         run: |

@@ -408,6 +408,48 @@ def mac_disabled(binary, scratch, port):
         sudo([SOCKET_FILTER, '--setglobalstate', 'on'])
 
 
+def versioned_cleanup(binary, scratch, port):
+    """Remove a real old-version rule with the current version's helper."""
+    scratch.mkdir(parents=True)
+    scratch = scratch.resolve()
+    programs = []
+    for version in ['7.0.0', '7.1.0']:
+        program = scratch / 'versions' / version / ('moss-server' + binary.suffix)
+        program.parent.mkdir(parents=True)
+        shutil.copyfile(binary, program)
+        program.chmod(0o755)
+        programs.append(program)
+    old, current = programs
+    folder = scratch / 'instance-versioned-proof'
+    folder.mkdir()
+    if SYSTEM != 'Windows':
+        folder.chmod(0o700)
+    cert, key = make_certificate(folder)
+    world = World(folder, old, port)
+    probe = None
+    try:
+        world.set_up_client()
+        probe = Probe(old, folder, cert, key, port, 'approve')
+        expect(probe.send('on') == 'Ok(())', 'old version creates its marked rule')
+        expect(world.rule_present(), 'old version rule is live')
+        before = world.moss_record()
+        world.cleanup_record = before
+        probe.stop()
+        probe = Probe(current, folder, cert, key, port, 'approve')
+        expect(probe.send('restart') == 'paused', 'a changed executable path pauses startup')
+        expect(world.moss_record()['rule'] == before['rule'], 'startup preserves old version ownership')
+        expect(probe.send('off') == 'Ok(())', 'current helper removes its own old version rule')
+        expect(not world.rule_present() and not world.record_present(), 'old version rule and record are gone')
+        expect(world.second_client() != 'ANSWERED', 'old version cleanup keeps loopback only')
+        world.cleanup_record = None
+        say('VERSIONED RULE CLEANUP: PASS')
+    finally:
+        if probe:
+            probe.stop()
+        world.cleanup_moss_rule()
+        world.tear_down_client()
+
+
 def windows_native(binary, scratch, port):
     """An admin CI runner exercises the actual RunAs launcher without a prompt stand-in."""
     folder = scratch / ('instance-native-' + uuid.uuid4().hex[:8])
@@ -554,11 +596,15 @@ def main():
     parser.add_argument('--firewalld-services', action='store_true')
     parser.add_argument('--mac-firewall-disabled', action='store_true')
     parser.add_argument('--windows-native', action='store_true')
+    parser.add_argument('--versioned-cleanup', action='store_true')
     args = parser.parse_args()
     suffix = '.exe' if SYSTEM == 'Windows' else ''
     binary = (Path(args.bin) / 'examples' / f'sharing_probe{suffix}').resolve()
     scratch = Path(args.scratch)
     shutil.rmtree(scratch, ignore_errors=True)
+    if args.versioned_cleanup:
+        versioned_cleanup(binary, scratch, args.port)
+        return
     if args.windows_native:
         expect(SYSTEM == 'Windows', 'the real RunAs proof runs on Windows')
         windows_native(binary, scratch, args.port)
@@ -597,6 +643,16 @@ def main():
         expect(world.second_client() != 'ANSWERED', 'prompt refused: the second client is refused')
         expect(not world.rule_present() and not world.record_present(), 'prompt refused: no rule and no record')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'prompt refused: this computer still reaches the server')
+
+        probe.send('answer unknown')
+        unknown = probe.send('on')
+        expect(world.record_present(), 'unknown helper exit keeps intent')
+        expect('Unknown' in unknown, 'unknown helper exit is never reported as declined')
+        expect(not world.moss_record()['confirmed'], 'unknown helper exit never confirms sharing')
+        expect(world.second_client() != 'ANSWERED', 'unknown helper exit keeps loopback only')
+        probe.send('answer approve')
+        expect(probe.send('off') == 'Ok(())', 'known absent marker clears unknown intent safely')
+
         expect(probe.send('restart-check') == 'false', 'prompt refused: a restart would not listen beyond loopback')
 
         if SYSTEM == 'Linux':

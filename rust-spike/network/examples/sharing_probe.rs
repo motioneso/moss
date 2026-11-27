@@ -18,6 +18,9 @@ use std::{io::BufRead, path::PathBuf, process::Command};
 
 fn stand_in(args: &[String]) -> i32 {
     let mode = std::env::var("PROBE_STAND_IN").unwrap_or_default();
+    if mode == "unknown" {
+        return 42;
+    }
     // `approve-add-only` says yes to a removal and does not run it, as a broken helper would.
     if mode == "approve-add-only" && args.iter().any(|a| a == "remove") {
         return 0;
