@@ -46,7 +46,11 @@ pub(crate) fn rename_sibling(source: &Path, target: &Path) -> io::Result<()> {
         (*info).Anonymous.ReplaceIfExists = true;
         (*info).RootDirectory = std::ptr::null_mut();
         (*info).FileNameLength = (name.len() * 2) as u32;
-        std::ptr::copy_nonoverlapping(name.as_ptr(), (*info).FileName.as_mut_ptr(), name.len());
+        std::ptr::copy_nonoverlapping(
+            name.as_ptr(),
+            std::ptr::addr_of_mut!((*info).FileName).cast::<u16>(),
+            name.len(),
+        );
         // A bare leaf with NULL RootDirectory renames within the source's
         // directory. Unlike MoveFileExW's full destination path, it does not
         // reopen the parent for add-file access that conflicts with its pin.
