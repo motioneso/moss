@@ -1,3 +1,4 @@
+import { DOCKER_EXPORT_ERRORS, DOCKER_EXPORT_REMEDIATIONS } from "./app-map-docker.js";
 import * as RustModules from "./app-map-rust-modules.js";
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
 import { RUST_CHAT_REMEDIATIONS } from "./app-map-rust-chat.js";
@@ -599,14 +600,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 ];
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
-  {
-    code: "docker_export_refused",
-    runtime: "rust",
-    class: "prerequisite",
-    remediationRef: "rust-docker-export-source",
-    description:
-      "The Linux Docker-host move exporter refused the source identity, mount inventory, durable stop fence or archive capture. A failed capture leaves the source stopped where fencing already succeeded."
-  },
+  ...DOCKER_EXPORT_ERRORS,
   ...RustModules.RUST_MODULE_ERRORS,
   {
     code: "sign_in_body_timeout",
@@ -832,13 +826,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
-  {
-    id: "rust-docker-export-source",
-    runtime: "rust",
-    scope: "system",
-    description:
-      "On the Docker host, check the exporter reason, disable external restart services and file writers, identify every app and worker container, classify every persistent mount, and retry with a new archive path. Keep the source stopped until the later import reconciles the move; retain its fence receipt and recovery words."
-  },
+  ...DOCKER_EXPORT_REMEDIATIONS,
   {
     id: "rust-sign-in-retry",
     runtime: "rust",
