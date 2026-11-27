@@ -142,8 +142,6 @@ class RestoreRunner(Runner):
             headers={"content-type": "application/json", "origin": origin})
         with urllib.request.urlopen(signup, context=ssl._create_unverified_context(), timeout=60) as response:
             expect(response.status == 200, "source owner is created through the real authenticated setup route")
-        source.terminate()
-        source.wait(timeout=60)
         marker = "restore-item-" + secrets.token_hex(16)
         planted = self.json("backup-fixture", "plant", "--instance", self.instance, "--canary", "http://127.0.0.1:1/never", "--marker", marker)
         # Force multiple authenticated chunks and place the damaged byte at the end.
@@ -168,7 +166,8 @@ class RestoreRunner(Runner):
                           self.target_env, self.scratch / "restore-dev.log")
         wait_http(f"http://127.0.0.1:{app_port}", app)
         print(f"real Restore dev instance: http://127.0.0.1:{app_port}", flush=True)
-        config = {"origin": f"http://127.0.0.1:{app_port}", "data": str(self.data), "trace": str(trace),
+        config = {"origin": f"http://127.0.0.1:{app_port}", "sourceOrigin": origin,
+                  "data": str(self.data), "trace": str(trace),
                   "archive": str(archive), "damaged": str(damaged), "partial": str(partial_archive),
                   "words": self.words, "name": name, "email": email, "password": password, "proof": str(Path(self.args.proof).resolve())}
         # Generated fixture words travel on stdin, never command arguments or logged files.

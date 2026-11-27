@@ -28,6 +28,8 @@ try {
       [],
       "failed restore removes its partial staging root"
     );
+    const source = await context.request.get(`${config.sourceOrigin}/sign-in`);
+    assert.equal(source.status(), 200, "the original app still serves after a failed restore");
   };
   await page.goto(config.origin);
   await page.getByRole("heading", { name: "Restore a backup", exact: true }).waitFor();
@@ -97,6 +99,8 @@ try {
   await page.getByRole("heading", { name: "Today", exact: true }).waitFor();
   await page.getByText(config.name, { exact: true }).waitFor();
   await shot("signed-in");
+  const source = await context.request.get(`${config.sourceOrigin}/sign-in`);
+  assert.equal(source.status(), 200, "the original app still serves after successful restore");
   console.log(
     "ok: selected file, source facts, wrong words, damaged archive, staging cleanup, restore and real sign-in"
   );
