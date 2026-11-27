@@ -74,7 +74,7 @@ rust-spike/module-publisher/Cargo.toml`. Its artifact gate is `pnpm test:rust-ph
   not the LAN or tailnet interface. Owner setup stays on localhost.
 - A new CI workflow needs the exact concurrency group that `tests/unit/ci-phase-deadlines.test.ts`
   checks: `${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{
-  github.event_name == 'pull_request' && 'pr' || github.run_id }}`.
+github.event_name == 'pull_request' && 'pr' || github.run_id }}`.
 - Module server CI jobs run on PRs only when their paths change. A change to shared server
   behaviour must make those jobs run on its own PR.
 - Tests that need LAN sharing turn it on through the authenticated settings route. Writing
