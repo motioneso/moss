@@ -972,7 +972,7 @@ impl App {
             self.runtime.spawn_blocking(move || {
                 let service = pending.service.clone();
                 let event = match pending.prepared.commit_with(pending.store.as_mut(), &service) {
-                    Ok(()) => UserEvent::CustodyReady(id),
+                    Ok(_) => UserEvent::CustodyReady(id),
                     Err(error) => {
                         let network_file = folder.join(moss_network::instance::NETWORK_FILE);
                         if let Ok(mut config) = moss_network::config::Config::read(&network_file) {

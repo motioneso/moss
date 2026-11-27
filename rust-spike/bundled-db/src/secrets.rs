@@ -164,9 +164,12 @@ mod custody_tests {
         let mut store = keystore::platform::platform_store();
         let service = keystore::platform::service_name("instance");
         let result = (|| {
-            let prepared = prepare_instance(&instance, store.as_mut(), &service)?;
-            prepared.commit_with(store.as_mut(), &service)?;
-            Ok::<(), keystore::custody::CustodyError>(())
+            let prepared = prepare_instance(&instance, store.as_mut(), &service)
+                .map_err(|error| format!("prepare: {error}"))?;
+            prepared
+                .commit_with(store.as_mut(), &service)
+                .map_err(|error| format!("commit: {error}"))?;
+            Ok::<(), String>(())
         })();
         if result.is_ok() {
             let layout = Layout::open(&instance.join("database")).unwrap();

@@ -205,7 +205,13 @@ fn unseal(key: &[u8; 32], aad: &[u8], sealed: &Value) -> Option<Vec<u8>> {
 
 pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| CustodyError::Io(e.to_string()))?;
+        // CreateDirectory on an existing Windows directory can request write
+        // access denied by the supervisor's ancestor pins. An existing parent
+        // needs no creation; keep those pins and write only its child file.
+        if !parent.is_dir() {
+            fs::create_dir_all(parent)
+                .map_err(|e| CustodyError::Io(format!("create private-file parent: {e}")))?;
+        }
     }
     if fs::symlink_metadata(path)
         .map(|m| m.file_type().is_symlink())
