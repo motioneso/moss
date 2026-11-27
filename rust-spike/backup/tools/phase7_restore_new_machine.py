@@ -172,8 +172,7 @@ class RestoreRunner(Runner):
                   "words": self.words, "name": name, "email": email, "password": password, "proof": str(Path(self.args.proof).resolve())}
         # Generated fixture words travel on stdin, never command arguments or logged files.
         result = subprocess.run(["node", str(REPO / "rust-spike/backup/tools/restore-browser.mjs")],
-                                input=json.dumps(config), text=True, capture_output=True, timeout=1800)
-        print(result.stdout, end="", flush=True)
+                                input=json.dumps(config), text=True, stderr=subprocess.PIPE, timeout=1800)
         if result.returncode:
             # Browser exceptions contain selectors and assertions, never typed values.
             print(result.stderr[-5000:], file=sys.stderr)

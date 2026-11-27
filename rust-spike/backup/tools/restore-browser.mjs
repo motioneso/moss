@@ -78,11 +78,13 @@ try {
   await empty("failed preparation");
   await restore(config.archive, config.words);
   await page.getByRole("heading", { name: "Your Moss is ready", exact: true }).waitFor();
+  console.log("ok: completed Restore through the real desktop flow");
   await shot("done");
   const roots = (await listing()).filter((name) => name.startsWith("restored-"));
   assert.equal(roots.length, 1, "only one complete instance was published");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByLabel("Email", { exact: true }).fill(config.email);
+  console.log("ok: opened the restored server's real sign-in page");
   try {
     await page.getByLabel("Password", { exact: true }).fill(config.password);
   } catch {
@@ -96,6 +98,7 @@ try {
   });
   assert.equal(session.status, 200, "restored server accepts the real sign-in");
   assert.equal(session.session.user.email, config.email, "the restored account signs in");
+  console.log("ok: the restored server authenticated the original account");
   await page.getByRole("heading", { name: "Today", exact: true }).waitFor();
   await page.getByText(config.name, { exact: true }).waitFor();
   await shot("signed-in");
