@@ -51,6 +51,9 @@ $account = 'moss-app-proof'
 $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
 $user = New-LocalUser -Name $account -Password $password -AccountNeverExpires
 $process = $null
+$networkFolder = Join-Path $work 'data-lan\servers\default'
+$networkRecord = Join-Path $networkFolder 'firewall.json'
+$server = (Get-Item (Join-Path $install 'moss-server.exe')).FullName
 try {
     Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
     $temp = Join-Path $work 'temp'; New-Item -ItemType Directory -Path $temp -Force | Out-Null
@@ -88,7 +91,35 @@ try {
     Run-Proof 'windows_proof::windows_app_provisions_starts_stops_and_restarts_the_whole_server' 'WINDOWS APP LIFECYCLE PROOF' 'lifecycle'
     Write-Host '== firewall profiles on this runner'
     Get-NetFirewallProfile | Select-Object Name, Enabled | Format-Table | Out-String | Write-Host
+    $environment['MOSS_PROOF_NETWORK_PHASE'] = 'off'
     Run-Proof 'windows_proof::windows_server_answers_on_the_network_address_only_when_sharing_is_on' 'WINDOWS NETWORK ADDRESS PROOF' 'lan'
+    # The app remains a standard-user process. This disposable runner's elevated parent
+    # supplies the approved OS action using the exact production helper and a real rule.
+    # Save intent before add, then confirm the live token/program/port before enabling sharing.
+    $token = [guid]::NewGuid().ToString('N')
+    $rule = @{ name = "moss-default-$token"; port = $Port + 1; program = $server; token = $token }
+    $record = @{ rule = $rule; paused = $false; confirmed = $false; preexisting = $false; mac_disabled = $false; added = $true }
+    $record | ConvertTo-Json -Depth 4 | Set-Content $networkRecord -Encoding utf8
+    $ruleArgs = @('--name', $rule.name, '--port', "$($rule.port)", '--program', $server, '--token', $token)
+    & $server firewall-rule add @ruleArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Production firewall helper did not add the owned rule' }
+    & $server firewall-rule check @ruleArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Production firewall helper did not confirm the live marker' }
+    $record.confirmed = $true
+    $record | ConvertTo-Json -Depth 4 | Set-Content $networkRecord -Encoding utf8
+    $networkConfig = Join-Path $networkFolder 'network.json'
+    $config = Get-Content $networkConfig -Raw | ConvertFrom-Json
+    $config.sharing = $true
+    $config | ConvertTo-Json -Depth 20 | Set-Content $networkConfig -Encoding utf8
+    $environment['MOSS_PROOF_NETWORK_PHASE'] = 'on'
+    Run-Proof 'windows_proof::windows_server_answers_on_the_network_address_only_when_sharing_is_on' 'WINDOWS NETWORK ADDRESS PROOF: on passed' 'lan'
+    & $server firewall-close --instance $networkFolder
+    if ($LASTEXITCODE -ne 0 -or (Test-Path $networkRecord)) { throw 'Owned rule cleanup must succeed before the final off proof' }
+    $config.sharing = $false
+    $config | ConvertTo-Json -Depth 20 | Set-Content $networkConfig -Encoding utf8
+    $environment['MOSS_PROOF_NETWORK_PHASE'] = 'after-off'
+    Run-Proof 'windows_proof::windows_server_answers_on_the_network_address_only_when_sharing_is_on' 'WINDOWS NETWORK ADDRESS PROOF: after-off passed' 'lan'
+    Remove-Item (Join-Path $work 'data-lan') -Recurse
     if ($AppExe) {
         # Buttons proof: the real app window, driven as the same standard user.
         $buttonsData = Join-Path $work 'data-buttons'
@@ -111,7 +142,14 @@ try {
 } finally {
     if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
     Get-Process postgres, moss-server, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
+    $firewallCleanupFailed = $false
+    if (Test-Path $networkRecord) {
+        # Even failed adds and failed tests clean up only through the live ownership check.
+        & $server firewall-close --instance $networkFolder
+        $firewallCleanupFailed = $LASTEXITCODE -ne 0
+    }
     $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
     if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }
     Remove-LocalUser -Name $account
+    if ($firewallCleanupFailed) { throw 'Could not confirm ownership-checked firewall cleanup' }
 }

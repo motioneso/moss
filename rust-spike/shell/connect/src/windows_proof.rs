@@ -134,70 +134,91 @@ async fn windows_server_answers_on_the_network_address_only_when_sharing_is_on()
         }
     }
     let _cleanup = Cleanup(&install, &store);
-    provision::create_instance(&store, &install, "default").expect("app sets up a server");
+    // The elevated CI parent adds/removes the real marked rule between standard-user runs.
+    // Editing sharing=true alone must never bypass the startup ownership check.
+    let phase = std::env::var("MOSS_PROOF_NETWORK_PHASE").unwrap_or_else(|_| "off".into());
+    assert!(matches!(phase.as_str(), "off" | "on" | "after-off"));
+    if phase == "off" {
+        provision::create_instance(&store, &install, "default").expect("app sets up a server");
+    }
     let folder = store.instance_folder("default");
     let config_path = folder.join("network.json");
     let mut config = Config::read(&config_path).unwrap();
     let lan = lan_address();
     let lan_origin = format!("https://{lan}:{port}");
-    config.listen = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    config.origins = vec![
-        format!("https://localhost:{port}"),
-        format!("https://127.0.0.1:{port}"),
-        lan_origin.clone(),
-    ];
-    // A certificate that names the network address, made with the install's own OpenSSL.
-    let tls = folder.join("tls-lan");
-    moss_network::tls::local_certificate_with_command(
-        &tls,
-        &config.origins,
-        crate::launch::command(&install, "openssl"),
-    )
-    .expect("certificate for the network address");
-    config.certificate = tls.join("certificate.pem");
-    config.private_key = tls.join("key.pem");
-    config.sharing = false;
-    config.write(&config_path).unwrap();
-    println!("network address {lan_origin}");
-
-    let (running, _) = reach::local_or_start(&install, &folder)
+    if phase == "off" {
+        config.listen = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+        config.origins = vec![
+            format!("https://localhost:{port}"),
+            format!("https://127.0.0.1:{port}"),
+            lan_origin.clone(),
+        ];
+        // A certificate that names the network address, made with the install's own OpenSSL.
+        let tls = folder.join("tls-lan");
+        moss_network::tls::local_certificate_with_command(
+            &tls,
+            &config.origins,
+            crate::launch::command(&install, "openssl"),
+        )
+        .expect("certificate for the network address");
+        config.certificate = tls.join("certificate.pem");
+        config.private_key = tls.join("key.pem");
+        config.sharing = false;
+        config.write(&config_path).unwrap();
+    }
+    assert_eq!(config.sharing, phase == "on");
+    let firewall = moss_network::firewall::Firewall::new(&folder, install.join("moss-server.exe"));
+    if phase == "on" {
+        assert!(
+            firewall.rule_intact(port),
+            "sharing on has a live owned marker"
+        );
+    } else {
+        assert!(
+            !folder.join(moss_network::firewall::RECORD_FILE).exists(),
+            "sharing off has no firewall record"
+        );
+    }
+    println!("network address {lan_origin}, phase {phase}");
+    let (running, certificate) = reach::local_or_start(&install, &folder)
         .await
-        .expect("server starts");
-    let fingerprint = reach::peek_certificate(&lan_origin)
-        .await
-        .expect("certificate is readable over the network address");
-    println!("sharing off: certificate readable over {lan_origin}, code {fingerprint}");
-    let refused = reach::hello(&lan_origin, &fingerprint).await;
+        .expect("server starts and answers on loopback");
+    let fingerprint = moss_network::instance::fingerprint(&certificate);
+    if phase == "on" {
+        assert_eq!(
+            reach::peek_certificate(&lan_origin)
+                .await
+                .expect("shared certificate is reachable"),
+            fingerprint
+        );
+        let (hello, _) = reach::hello(&lan_origin, &fingerprint)
+            .await
+            .unwrap_or_else(|e| {
+                panic!("sharing on must accept the network address: {}", e.reason())
+            });
+        assert_eq!(hello.product, "moss");
+        println!("sharing on: {lan_origin} answered the app's own connect check as a Moss server");
+    } else {
+        assert!(
+            matches!(
+                reach::peek_certificate(&lan_origin).await,
+                Err(reach::Problem::Unreachable)
+            ),
+            "sharing off must not expose even a TLS certificate on the network address"
+        );
+        println!("{phase}: loopback answers, network address is unreachable");
+    }
+    reach::stop_local(&install, &folder).await.expect("stop");
+    for _ in 0..40 {
+        if !reach::alive(running.pid) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
     assert!(
-        matches!(refused, Err(reach::Problem::SharingOff)),
-        "sharing off must refuse the network address"
+        !reach::alive(running.pid),
+        "server stopped before the next firewall phase"
     );
-    println!("sharing off: the network address is refused with the sharing-off answer");
-    reach::stop_local(&install, &folder).await.expect("stop");
-    for _ in 0..40 {
-        if !reach::alive(running.pid) {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
-
-    config.sharing = true;
-    config.write(&config_path).unwrap();
-    let (running, _) = reach::local_or_start(&install, &folder)
-        .await
-        .expect("server restarts");
-    let (hello, _) = reach::hello(&lan_origin, &fingerprint)
-        .await
-        .unwrap_or_else(|e| panic!("sharing on must accept the network address: {}", e.reason()));
-    assert_eq!(hello.product, "moss");
-    println!("sharing on: {lan_origin} answered the app's own connect check as a Moss server");
-    reach::stop_local(&install, &folder).await.expect("stop");
-    for _ in 0..40 {
-        if !reach::alive(running.pid) {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
-    println!("WINDOWS NETWORK ADDRESS PROOF: refused with sharing off, answered with sharing on");
-    std::fs::remove_dir_all(data).unwrap();
+    println!("WINDOWS NETWORK ADDRESS PROOF: {phase} passed");
+    // The parent retains the record until its ownership-checked removal has succeeded.
 }
