@@ -196,6 +196,9 @@ async fn running_file_is_trusted_only_when_current_and_private() {
     assert_eq!(instance::fingerprint(&der), pin);
 
     let cases = [
+        // PID liveness is implemented on Linux and Windows; other platforms
+        // currently validate the running file through the TLS hello instead.
+        #[cfg(any(target_os = "linux", windows))]
         Running {
             pid: 4_000_000_000,
             ..good.clone()
