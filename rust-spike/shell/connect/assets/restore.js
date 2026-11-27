@@ -4,7 +4,7 @@
 // Approved M5 New computer panel. Selection belongs to the shell, never a backups list.
 function restoreScreen(s) {
   const words = el("textarea", {
-    class: "jds-input",
+    class: "jds-textarea",
     id: "restore-words",
     "aria-label": "Recovery key words",
     rows: "4",
