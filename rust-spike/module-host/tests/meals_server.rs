@@ -483,7 +483,7 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     let (_, again) = tool("meals.kitchen.get", json!({}), true);
     assert!(again.contains(MARK), "the other person removed nothing");
     let (_, removed) = tool("meals.household.remove", json!({"memberId":member_id}), true);
-    assert_eq!(json_of(&removed)["data"], json!({"removed":true}));
+    assert_eq!(json_of(&removed)["data"]["removed"], json!(true));
     // Lists and pantry through the same route. The second person sees and changes none of it.
     let (status, text) = tool("meals.list.edit", json!({"action":"add","name":MARK,"quantity":2,"unit":"kg"}), true);
     assert_eq!(status, 200, "{text}\n{}", log());

@@ -480,7 +480,10 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         Some(&cookie),
         None,
     );
-    assert_eq!(json_of(&route_goal), tool_goal);
+    // The tool reply also carries its change summary. The route returns the goal alone.
+    let mut expected_goal = tool_goal.clone();
+    expected_goal.as_object_mut().unwrap().remove("changed");
+    assert_eq!(json_of(&route_goal), expected_goal);
     let (_, list) = tool("goals.list", json!({}), false);
     assert_eq!(json_of(&list)["data"]["items"].as_array().unwrap().len(), 1);
     let evidence = json!({"goalId":tool_id,"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":MARK});
