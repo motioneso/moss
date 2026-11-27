@@ -436,7 +436,7 @@ def versioned_cleanup(binary, scratch, port):
         world.cleanup_record = before
         probe.stop()
         probe = Probe(current, folder, cert, key, port, 'approve')
-        expect(probe.send('restart') == 'paused', 'a changed executable path pauses startup')
+        expect(probe.send('restart') == 'paused_blocked', 'a changed executable path pauses startup as blocked, because Resume cannot check another version')
         expect(world.moss_record()['rule'] == before['rule'], 'startup preserves old version ownership')
         expect(probe.send('off') == 'Ok(())', 'current helper removes its own old version rule')
         expect(not world.rule_present() and not world.record_present(), 'old version rule and record are gone')
