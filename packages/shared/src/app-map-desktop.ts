@@ -14,7 +14,7 @@ export const DESKTOP_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     description:
       "Desktop first-run restore entry point, awaiting the first-run chooser in phase 7 part 10. Choose a backup file, inspect its source computer, date, Moss version and accounts, see the new destination, enter the recovery words and Restore. Every archive chunk is checked before staging is created. The database, files and credentials are checked in staging before a new instance is published. Existing instances are retained. Restored master keys use this computer's OS key store. Sign in with the restored account afterwards. This entry point has no backups list and does not provide the Settings Backups restore dialog.",
     path: "moss-app://localhost/index.html",
-    scope: "system"
+    scope: "user"
   },
   {
     id: "rust-desktop-connect",
