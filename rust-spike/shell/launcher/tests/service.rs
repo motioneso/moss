@@ -171,3 +171,20 @@ fn explicit_start_resets_the_budget_after_clean_and_failed_starts() {
         "first install has no unit to reset"
     );
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn explicit_start_tolerates_an_inactive_unit_unloaded_before_reset() {
+    let _guard = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let f = Fixture::new();
+    std::fs::write(f.root.join("bin/systemctl"), "#!/bin/sh\ncase \"$*\" in\n *reset-failed*) exit 1;;\n *show*) cat \"$MOSS_TEST_ROOT/state\";;\nesac\n").unwrap();
+    for active in ["inactive", "failed", "active"] {
+        std::fs::write(
+            f.root.join("state"),
+            format!("LoadState=loaded\nActiveState={active}\n"),
+        )
+        .unwrap();
+        let result = service::reset_failure(&f.folder());
+        assert_eq!(result.is_ok(), active == "inactive", "{active}: {result:?}");
+    }
+}

@@ -265,11 +265,17 @@ fn remove_registration(path: &Path) -> Result<(), String> {
 pub fn reset_failure(folder: &Path) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     if state(folder)? != State::Unregistered {
-        checked(Command::new("systemctl").args([
+        let reset = checked(Command::new("systemctl").args([
             "--user",
             "reset-failed",
             &format!("{}.service", name(&canonical(folder)?)),
-        ]))?;
+        ]));
+        // systemd can unload an inactive unit between show and reset-failed. Such
+        // a unit has no retained retry counter; failed or running units still
+        // require a successful reset before an explicit Start may proceed.
+        if reset.is_err() && !matches!(state(folder)?, State::Unregistered | State::Inactive) {
+            return reset;
+        }
     }
     let _ = folder;
     Ok(())
