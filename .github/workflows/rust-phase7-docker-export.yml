@@ -28,7 +28,6 @@ jobs:
       CARGO_INCREMENTAL: "0"
       PYTHONDONTWRITEBYTECODE: "1"
       PHASE7_DOCKER_RESTART_DAEMON: "1"
-      PHASE7_DOCKER_RUNNER: ${{ runner.environment }}
     steps:
       - uses: actions/checkout@v5
       - name: Select task-owned paths and CI port leases
@@ -39,6 +38,7 @@ jobs:
           echo "CARGO_TARGET_DIR=$RUNNER_TEMP/js440-target" >> "$GITHUB_ENV"
           echo "PHASE7_DOCKER_SCRATCH=$RUNNER_TEMP/js440-scratch" >> "$GITHUB_ENV"
           echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+          echo "PHASE7_DOCKER_RUNNER=${{ runner.environment }}" >> "$GITHUB_ENV"
       - name: Use declared Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: Archive and receipt tests
