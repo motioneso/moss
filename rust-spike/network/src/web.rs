@@ -90,6 +90,7 @@ pub fn router(network: Arc<Network>, private: Router, web: PathBuf) -> Router {
         .route("/api/hello", get(|| async { Json(crate::instance::hello()) }))
         .route("/settings/sharing", get(|| async { Html(include_str!("../assets/sharing.html")) }))
         .route("/api/network", get(network_status).put(set_sharing))
+        .route("/api/network/legacy", axum::routing::delete(clear_legacy))
         .route("/api/network/certificate", get(public_certificate))
         .with_state(network.clone());
     // Static theme assets are public. The middleware's closed allowlist decides which ones.
@@ -441,11 +442,21 @@ async fn network_status(
     let leaf = crate::instance::leaf_der(&bytes)
         .map_err(|_| ApiError::http(500, "Invalid public certificate"))?;
     let fingerprint = crate::instance::fingerprint(&leaf);
+    // The address that opens this computer's own firewall settings, where the computer
+    // has one. Linux has no single address for it, so the page explains instead.
+    let firewall_settings = if cfg!(windows) {
+        Some("ms-settings:windowsdefender")
+    } else if cfg!(target_os = "macos") {
+        Some("x-apple.systempreferences:com.apple.preference.security?Firewall")
+    } else {
+        None
+    };
     Ok(Json(json!({
         "sharing":n.policy.sharing(),
         "origins":config.origins,
         "fingerprint":fingerprint,
-        "firewall":n.control.as_ref().map(|c| c.firewall.state().word()),
+        "firewall":n.control.as_ref().map(|c| c.firewall.state(c.port).word()),
+        "firewall_settings":firewall_settings,
     })))
 }
 
@@ -491,12 +502,32 @@ fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
         Refusal::NoManager => "Moss could not find a firewall manager it can use.",
         Refusal::Legacy => "An old Moss firewall rule is still there. Remove it by hand.",
         Refusal::ServiceUnavailable => "Reinstall Moss or restart the firewall.",
+        Refusal::CleanedUp => "The old firewall rule was cleaned up. Try again to turn sharing on.",
     };
     (
         StatusCode::CONFLICT,
         Json(json!({"code":"app_firewall_refused", "reason":refusal.word(), "error":message, "sharing":sharing})),
     )
         .into_response()
+}
+
+/// Forgets a record from before ownership tokens, after the owner removed the old rule by
+/// hand. This deletes no firewall rule.
+async fn clear_legacy(
+    State(n): State<Arc<Network>>,
+    Extension(access): Extension<AccessContext>,
+) -> Result<Response, ApiError> {
+    require_admin(&n, &access).await?;
+    let Some(control) = &n.control else {
+        return Err(ApiError::http(500, "Sharing could not change. Try again."));
+    };
+    match control.firewall.clear_legacy() {
+        Ok(()) => Ok(Json(
+            json!({"sharing":false, "firewall":control.firewall.state(control.port).word()}),
+        )
+        .into_response()),
+        Err(refusal) => Ok(firewall_refused(refusal, false)),
+    }
 }
 
 async fn set_sharing(
@@ -524,7 +555,8 @@ async fn set_sharing(
     };
     let result = control.apply(body.sharing, previous, &n.policy, save).await;
     let reply = |on: bool| {
-        Json(json!({"sharing":on, "firewall":control.firewall.state().word()})).into_response()
+        Json(json!({"sharing":on, "firewall":control.firewall.state(control.port).word()}))
+            .into_response()
     };
     match result {
         Ok(()) => {

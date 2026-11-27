@@ -4,6 +4,9 @@ on:
     paths:
       - "rust-spike/network/**"
       - "rust-spike/shell/app/**"
+      - "rust-spike/shell/launcher/**"
+      - "rust-spike/shell/connect/src/windows_proof.rs"
+      - "rust-spike/shell/tools/windows-lifecycle.ps1"
       - "rust-spike/shell/tools/phase7_sharing_firewall.py"
       - "rust-spike/shell/tools/test_phase7_sharing_firewall.py"
       - "rust-spike/shell/tools/phase7_sharing_marker_controls.py"

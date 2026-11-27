@@ -144,7 +144,7 @@ async fn serve(args: Vec<String>) {
                 sharing = control.firewall.startup(true, control.port).unwrap();
                 control.switch.set(sharing).await.unwrap();
                 policy.set_sharing(sharing);
-                control.firewall.state().word().to_owned()
+                control.firewall.state(control.port).word().to_owned()
             }
             "listener-on" => format!("{:?}", control.switch.set(true).await),
             "listener-off" => format!("{:?}", control.switch.set(false).await),

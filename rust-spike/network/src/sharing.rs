@@ -35,7 +35,7 @@ impl Control {
         save: impl Fn(bool) -> Result<(), ()>,
     ) -> Result<(), Failure> {
         if on {
-            if self.firewall.state() == State::Paused {
+            if self.firewall.state(self.port) == State::Paused {
                 self.firewall
                     .resume(self.port)
                     .await
@@ -52,11 +52,8 @@ impl Control {
                 policy.set_sharing(true);
                 return Ok(());
             }
-            if !previous {
-                // A record left by a removal that was refused is cleared first, so a rule that
-                // replaced Moss's is met by the add's own ownership check.
-                self.firewall.close().await.map_err(Failure::Firewall)?;
-            }
+            // A stale record is cleaned up inside `open` on its own, so one turn-on
+            // never asks the owner to authorize both a cleanup and an add.
             self.firewall
                 .open(self.port)
                 .await

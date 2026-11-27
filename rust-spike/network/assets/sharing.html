@@ -39,6 +39,15 @@
               Resume
             </button>
           </div>
+          <div id="blocked-sharing" hidden>
+            <p>Turn sharing off, then on again to fix the firewall rule.</p>
+          </div>
+          <div id="legacy-sharing" hidden>
+            <p>Remove the old Moss rule in your firewall settings, then clear it here.</p>
+            <button class="jds-btn jds-btn--primary" id="clear-legacy" type="button">
+              I removed the old rule
+            </button>
+          </div>
           <div class="sharing-row">
             <strong>Firewall</strong>
             <p id="firewall">Not asked yet</p>
@@ -65,7 +74,10 @@
         </dialog>
         <p id="status" role="status" aria-live="polite">Loading sharing settings…</p>
         <div id="retry" hidden>
-          <button class="jds-btn jds-btn--primary" id="try-again" type="button">Try again</button>
+          <button class="jds-btn jds-btn--primary" id="try-again" type="button">Try again</button
+          ><button class="jds-btn jds-btn--quiet" id="open-firewall-settings" type="button">
+            Open firewall settings
+          </button>
         </div>
         <a href="/today">Back to Today</a
         ><button class="jds-btn" id="sign-out" type="button">Sign out</button>

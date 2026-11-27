@@ -283,8 +283,10 @@ approval in this plan before parts 6, 10, 11 and 16c start.
   uninstall leaves no rule), the Windows prompt and the macOS native administrator dialog (approve and decline), and a real second machine on the
   network reaching Moss only while sharing is on. A rule names the program path, so a version
   update that moves the program needs the rule added again. CI also proves a rule Moss did not
-  create is never changed or deleted, and a Windows rule that already holds Moss's name makes
-  turning on refuse. Not run in CI, so also on the part 18 checklist: the launcher's instance
+  create is never changed or deleted, and a Windows rule that already holds Moss's exact
+  marker name (moss-<instance>-<token>) makes turning on refuse. A rule that holds only the
+  bare moss- prefix, or the same port under another name, is foreign and stays untouched
+  while Moss turns on and off with its own marker. Not run in CI, so also on the part 18 checklist: the launcher's instance
   removal running the rule cleanup, the settings rollback when saving fails after the rule
   opened, and the Linux no-firewall-manager refusal on a machine with neither ufw nor firewalld.
 

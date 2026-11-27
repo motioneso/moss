@@ -135,7 +135,9 @@ async fn windows_server_answers_on_the_network_address_only_when_sharing_is_on()
     }
     let _cleanup = Cleanup(&install, &store);
     // The elevated CI parent adds/removes the real marked rule between standard-user runs.
-    // Editing sharing=true alone must never bypass the startup ownership check.
+    // This proof writes the raw config on purpose in its off and after-off phases. It never
+    // claims that writing the config turns sharing on. The on phase below only passes when
+    // the live owned marker check passes, which is the startup ownership check itself.
     let phase = std::env::var("MOSS_PROOF_NETWORK_PHASE").unwrap_or_else(|_| "off".into());
     assert!(matches!(phase.as_str(), "off" | "on" | "after-off"));
     if phase == "off" {
@@ -217,6 +219,13 @@ async fn windows_server_answers_on_the_network_address_only_when_sharing_is_on()
             firewall.rule_intact(port),
             "sharing on has a live owned marker"
         );
+        // Read the record back after the live check and confirm it still names the
+        // same rule as confirmed, as the round-nine follow-up asked.
+        let record: serde_json::Value =
+            serde_json::from_slice(&moss_network::config::private_read(&record_path).unwrap())
+                .unwrap();
+        assert_eq!(record["rule"], rule);
+        assert_eq!(record["confirmed"], true);
         config.sharing = true;
         config.write(&config_path).unwrap();
     } else {
