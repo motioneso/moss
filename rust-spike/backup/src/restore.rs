@@ -187,6 +187,7 @@ pub fn restore(
         event("data-checked");
         rebind_database(&stage, destination, &mut credentials).map_err(|_| Failure::Restore)?;
         prepare(&stage, &mut credentials).map_err(|_| Failure::Restore)?;
+        event("machine-prepared");
         // Neither local runtime state nor a headless key-file choice may arrive from another machine.
         for file in [
             "running.json",
@@ -216,9 +217,11 @@ pub fn restore(
             .map_err(|_| Failure::Restore)?;
         fs::remove_dir_all(stage.join("database/secrets")).map_err(|_| Failure::Restore)?;
         crate::create_private_dir(&stage.join("database/secrets")).map_err(|_| Failure::Restore)?;
+        event("key-saving");
         os_store
             .store_master(&service, &master)
             .map_err(Failure::KeyStore)?;
+        event("key-loading");
         let loaded = os_store.load_master(&service).map_err(Failure::KeyStore)?;
         if custody::unwrap_with_master(&wrapped, &loaded).map_err(Failure::KeyStore)?
             != serde_json::to_vec(&credentials).map_err(|_| Failure::Restore)?

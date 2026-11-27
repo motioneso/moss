@@ -174,6 +174,13 @@ class RestoreRunner(Runner):
         result = subprocess.run(["node", str(REPO / "rust-spike/backup/tools/restore-browser.mjs")],
                                 input=json.dumps(config), text=True, stderr=subprocess.PIPE, timeout=1800)
         if result.returncode:
+            # Only fixed engine milestones; never credentials or database/server log bytes.
+            milestones = {"archive-checked", "staging-created", "data-checked", "machine-prepared",
+                          "key-saving", "key-loading", "key-saved", "activated"}
+            if trace.exists():
+                print("restore milestones: " + json.dumps([line for line in trace.read_text().splitlines()
+                                                          if line in milestones]), flush=True)
+            print("failed target listing: " + json.dumps(sorted(p.name for p in (self.data / "servers").iterdir())), flush=True)
             # Browser exceptions contain selectors and assertions, never typed values.
             print(result.stderr[-5000:], file=sys.stderr)
             fail("real first-run Restore browser journey")
@@ -199,7 +206,11 @@ class RestoreRunner(Runner):
         for child in reversed(self.target_processes):
             if child.poll() is None:
                 child.terminate()
-                child.wait(timeout=60)
+                try:
+                    child.wait(timeout=60)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=60)
         for root in self.data.glob("servers/restored-*"):
             subprocess.run([self.tool("moss-server"), "stop", "--instance", str(root)], env=self.target_env, capture_output=True, timeout=60)
             subprocess.run([self.tool("moss-db"), "stop", "--root", str(root / "database")], env=self.target_env, capture_output=True, timeout=60)
