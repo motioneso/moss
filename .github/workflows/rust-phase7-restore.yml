@@ -111,6 +111,7 @@ jobs:
         shell: bash
         run: |
           dbus-run-session -- bash -e -c '
+            export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
             export HOME="$RUNNER_TEMP/restore-keyring-home"
             mkdir -p "$HOME/.local/share/keyrings"
             printf login > "$HOME/.local/share/keyrings/default"
