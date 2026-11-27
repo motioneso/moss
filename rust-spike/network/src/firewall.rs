@@ -1382,7 +1382,9 @@ fn wait(mut command: Command, expected: Option<String>) -> Result<bool, Refusal>
         Some(EXIT_NO_MANAGER) => Err(Refusal::NoManager),
         Some(EXIT_SERVICE_UNAVAILABLE) => Err(Refusal::ServiceUnavailable),
         // The macOS prompt reports a cancelled dialog as error -128.
-        Some(1) if note.contains("-128") => Err(Refusal::Declined),
+        Some(1) if cfg!(target_os = "macos") && note.trim_end().ends_with("(-128)") => {
+            Err(Refusal::Declined)
+        }
         // `do shell script` ends its error text with the helper's own exit code.
         Some(1) if cfg!(target_os = "macos") => match note.trim_end().rsplit_once('(') {
             Some((_, tail)) if tail.starts_with("5)") => Ok(true),

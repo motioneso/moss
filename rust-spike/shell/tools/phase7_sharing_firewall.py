@@ -644,14 +644,15 @@ def main():
         expect(not world.rule_present() and not world.record_present(), 'prompt refused: no rule and no record')
         expect(world.reach('127.0.0.1') == 'ANSWERED', 'prompt refused: this computer still reaches the server')
 
-        probe.send('answer unknown')
-        unknown = probe.send('on')
-        expect(world.record_present(), 'unknown helper exit keeps intent')
-        expect('Unknown' in unknown, 'unknown helper exit is never reported as declined')
-        expect(not world.moss_record()['confirmed'], 'unknown helper exit never confirms sharing')
-        expect(world.second_client() != 'ANSWERED', 'unknown helper exit keeps loopback only')
-        probe.send('answer approve')
-        expect(probe.send('off') == 'Ok(())', 'known absent marker clears unknown intent safely')
+        for unknown_mode in ['unknown', 'unknown-note']:
+            probe.send('answer ' + unknown_mode)
+            unknown = probe.send('on')
+            expect(world.record_present(), 'unknown helper exit keeps intent')
+            expect('Unknown' in unknown, 'unknown helper exit is never reported as declined')
+            expect(not world.moss_record()['confirmed'], 'unknown helper exit never confirms sharing')
+            expect(world.second_client() != 'ANSWERED', 'unknown helper exit keeps loopback only')
+            probe.send('answer approve')
+            expect(probe.send('off') == 'Ok(())', 'known absent marker clears unknown intent safely')
 
         expect(probe.send('restart-check') == 'false', 'prompt refused: a restart would not listen beyond loopback')
 

@@ -21,6 +21,10 @@ fn stand_in(args: &[String]) -> i32 {
     if mode == "unknown" {
         return 42;
     }
+    if mode == "unknown-note" {
+        eprintln!("Unrecognized helper failure -128");
+        return 1;
+    }
     // `approve-add-only` says yes to a removal and does not run it, as a broken helper would.
     if mode == "approve-add-only" && args.iter().any(|a| a == "remove") {
         return 0;
