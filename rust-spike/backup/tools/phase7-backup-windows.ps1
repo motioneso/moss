@@ -17,9 +17,12 @@ try {
     Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
 
     # The controls rebuild patched binaries, so the account needs the toolchain and target too.
+    # The workflow sets RUSTUP_HOME from bash, so rustup reports the native path.
 
-    $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE '.cargo' }
-    foreach ($path in @($work, $Repo, $Postgres, $env:CARGO_TARGET_DIR, $env:RUSTUP_HOME, $cargoHome)) {
+    $rustupHome = (& rustup show home).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rustupHome)) { throw 'Could not resolve the rustup home' }
+    $cargoHome = Join-Path $env:USERPROFILE '.cargo'
+    foreach ($path in @($work, $Repo, $Postgres, $env:CARGO_TARGET_DIR, $rustupHome, $cargoHome)) {
         & icacls $path /grant ('*' + $user.SID.Value + ':(OI)(CI)M') /Q
         if ($LASTEXITCODE -ne 0) { throw "Could not grant fixture access to $path" }
     }
@@ -37,7 +40,7 @@ try {
         $err = Join-Path $work "$($step.name).err"
         Write-Host "COMMAND: python $($step.args)"
         $process = Start-Process $python -Credential $credential -LoadUserProfile -WorkingDirectory $Repo -ArgumentList $step.args `
-            -Environment @{ RUSTUP_HOME = $env:RUSTUP_HOME; CARGO_HOME = $cargoHome; TEMP = $temp; TMP = $temp } `
+            -Environment @{ RUSTUP_HOME = $rustupHome; CARGO_HOME = $cargoHome; TEMP = $temp; TMP = $temp } `
             -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
         if (-not $process.WaitForExit(5400000)) { $process.Kill($true); throw "Backup $($step.name) exceeded its deadline" }
         Get-Content $out -Tail 80
