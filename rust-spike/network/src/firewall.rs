@@ -1439,6 +1439,13 @@ mod tests {
         std::fs::create_dir_all(foreign.parent().unwrap()).unwrap();
         std::fs::write(&foreign, b"foreign").unwrap();
         assert!(!program_for_action(Action::Remove, &foreign, &current));
+        let other_program = old.with_file_name(format!("other{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&other_program, b"not Moss").unwrap();
+        assert!(!program_for_action(
+            Action::Remove,
+            &other_program,
+            &current
+        ));
         #[cfg(unix)]
         {
             let link = root.join("versions/7.2.0").join(&name);
