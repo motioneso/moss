@@ -33,7 +33,7 @@ def build():
     cargo = ["cargo", "+1.95.0", "build", "--locked"]
     command([*cargo, "--manifest-path", REPO / "rust-spike/Cargo.toml", "-p", "moss-backup", "-p", "bundled-db", "-p", "keystore", "--bins"])
     command([*cargo, "--manifest-path", REPO / "rust-spike/network/Cargo.toml", "--bin", "moss-network"])
-    command([*cargo, "--manifest-path", REPO / "rust-spike/shell/Cargo.toml", "-p", "moss-app", "--bin", "moss-app", "--example", "restore-dev", "-p", "moss-server"])
+    command([*cargo, "--manifest-path", REPO / "rust-spike/shell/Cargo.toml", "-p", "moss-app", "--bins", "--example", "restore-dev", "-p", "moss-server"])
     command([*cargo, "--manifest-path", REPO / "rust-spike/shell/Cargo.toml", "-p", "moss-shell-ui", "--target", "wasm32-unknown-unknown"])
     command([*cargo, "--manifest-path", REPO / "rust-spike/ui/bindgen/Cargo.toml"])
     target = Path(os.environ["CARGO_TARGET_DIR"])
@@ -145,7 +145,7 @@ class RestoreRunner(Runner):
         source.terminate()
         source.wait(timeout=60)
         marker = "restore-item-" + secrets.token_hex(16)
-        self.json("backup-fixture", "plant", "--instance", self.instance, "--canary", "http://127.0.0.1:1/never", "--marker", marker)
+        planted = self.json("backup-fixture", "plant", "--instance", self.instance, "--canary", "http://127.0.0.1:1/never", "--marker", marker)
         # Force multiple authenticated chunks and place the damaged byte at the end.
         (self.instance / "vault/late-chunk.bin").write_bytes(secrets.token_bytes(2 * 1024 * 1024))
         good = self.backup()
@@ -167,6 +167,7 @@ class RestoreRunner(Runner):
         app = self.server([self.bin / f"examples/restore-dev{EXE}", self.data, self.install, app_port, trace],
                           self.target_env, self.scratch / "restore-dev.log")
         wait_http(f"http://127.0.0.1:{app_port}", app)
+        print(f"real Restore dev instance: http://127.0.0.1:{app_port}", flush=True)
         config = {"origin": f"http://127.0.0.1:{app_port}", "data": str(self.data), "trace": str(trace),
                   "archive": str(archive), "damaged": str(damaged), "partial": str(partial_archive),
                   "words": self.words, "name": name, "email": email, "password": password, "proof": str(Path(self.args.proof).resolve())}
@@ -181,12 +182,14 @@ class RestoreRunner(Runner):
         roots = [p for p in (self.data / "servers").iterdir() if p.name.startswith("restored-")]
         expect(len(roots) == 1, "target publishes exactly one completed root")
         # Read through the actual restored running database, using the target OS key store.
-        result = subprocess.run([self.tool("backup-fixture"), "restored", "--instance", str(roots[0])],
+        result = subprocess.run([self.tool("backup-fixture"), "restored", "--instance", str(roots[0]),
+                                 "--marker", marker, "--sha256", planted["sha256"]],
                                 env=self.target_env, text=True, capture_output=True, timeout=60)
         expect(result.returncode == 0, "signed-in restored instance contains the planted item and attachment with the original bytes")
         scan = self.json("backup-fixture", "scan", "--instance", self.instance, "--root", roots[0])
         expect(not scan["hits"], "restored root contains no plaintext master or restored credential value")
-        self.json("backup-fixture", "restored", "--instance", self.instance)
+        self.json("backup-fixture", "restored", "--instance", self.instance,
+                  "--marker", marker, "--sha256", planted["sha256"])
         expect(True, "the original instance still runs with its original item and attachment")
         listing = sorted(p.name for p in roots[0].iterdir())
         expect(not any((roots[0] / name).exists() for name in ("credentials.json", "key-file-choice.json")),

@@ -301,6 +301,13 @@ fn restored(args: &[String]) -> Result<Value, String> {
     if count != 1 {
         return Err("the planted item did not restore".into());
     }
+    let marker: String = client
+        .query_one("SELECT value FROM backup_proof.markers", &[])
+        .map_err(db)?
+        .get(0);
+    if flag(args, "--marker").is_some_and(|expected| marker != expected) {
+        return Err("the restored item differs from the source item".into());
+    }
     let row = client
         .query_one("SELECT path, sha256 FROM backup_proof.attachments", &[])
         .map_err(db)?;
@@ -308,7 +315,7 @@ fn restored(args: &[String]) -> Result<Value, String> {
     let expected: String = row.get(1);
     let bytes =
         std::fs::read(moss_backup::safe_join(&instance, &path)?).map_err(|e| e.to_string())?;
-    if sha(&bytes) != expected {
+    if sha(&bytes) != expected || flag(args, "--sha256").is_some_and(|source| expected != source) {
         return Err("the attachment did not restore".into());
     }
     Ok(json!({"item": true, "attachment": true}))
