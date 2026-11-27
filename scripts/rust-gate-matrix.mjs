@@ -54,8 +54,21 @@ export function rustGateEntries(modules, event = "pull_request") {
           entry("package", "test:rust-calendar"),
           entry("server", "test:rust-calendar-server")
         ];
+      case "commitments":
+        return [entry("full"), entry("server", "test:rust-commitments-live")];
+      case "meals":
+        return [entry("full"), entry("server", "test:rust-meals-live")];
+      case "goals":
+        return [entry("full"), entry("server", "test:rust-goals-live")];
+      case "wellness":
+        return [entry("full"), entry("server", "test:rust-wellness-live")];
+      case "web-research":
+        return [entry("full"), entry("server", "test:rust-web-research-live")];
       case "finance":
-        return [entry("full", "test:rust-finance test:rust-finance-ui-unit")];
+        return [
+          entry("full", "test:rust-finance test:rust-finance-ui-unit"),
+          entry("server", "test:rust-finance-live")
+        ];
       case "meetings":
         return [
           entry("full", "test:rust-meetings test:rust-meetings-oracle test:rust-recording-oracle")

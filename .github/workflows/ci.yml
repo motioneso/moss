@@ -138,7 +138,21 @@ jobs:
               touched="$touched $m"
             fi
           done
-          rust_modules=$(printf '%s\n' $touched | jq -R . | jq -sc 'map(select(length>0))')
+          # Module server tests live under rust-spike/module-host/tests, and the
+          # shared server code in rust-spike/network, rust-spike/shell/app and
+          # rust-spike/module-host/src serves all of them. Map those paths to the
+          # modules whose server jobs prove them, so a shared server change
+          # cannot skip every server job on a pull request again.
+          if grep -qE '^(rust-spike/network/|rust-spike/shell/app/|rust-spike/module-host/src/)' files.txt; then
+            touched="$touched calendar commitments finance goals meals notes web-research wellness"
+          fi
+          for pair in calendar_server:calendar commitments_server:commitments finance_server:finance goals_server:goals meals_server:meals web_research_server:web-research wellness_server:wellness; do
+            file=${pair%%:*}; server_module=${pair##*:}
+            if grep -q "^rust-spike/module-host/tests/$file\.rs$" files.txt; then
+              touched="$touched $server_module"
+            fi
+          done
+          rust_modules=$(printf '%s\n' $touched | sort -u | jq -R . | jq -sc 'map(select(length>0))')
           if [ "$RUST_TIER" = "push" ]; then rust_modules="$ALL_MODULES"; fi
           echo "host_changed=$host_changed" >> "$GITHUB_OUTPUT"
           emit_modules "$rust_modules"
