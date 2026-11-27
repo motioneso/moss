@@ -21,6 +21,14 @@ from bundle_libraries import MACHO
 
 HERE = Path(__file__).resolve().parent
 SOURCES = json.loads((HERE / "sources.json").read_text())
+
+# Same bytes from a second host, tried only when the pinned URL fails. The pinned hash still
+# decides. Kept out of sources.json so the bundle manifest does not change.
+
+MIRRORS = {
+    "zlib_windows": ["https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz"],
+}
+
 TOOLS = ("postgres", "initdb", "pg_ctl", "psql", "pg_dump", "pg_restore", "pg_config")
 
 
@@ -42,10 +50,18 @@ def source(name, cache, build):
     if not archive.exists():
         temporary = archive.with_suffix(".partial")
         try:
-            urllib.request.urlretrieve(pin["url"], temporary)
-            if digest(temporary) != pin["sha256"]:
+            for url in [pin["url"], *MIRRORS.get(name, [])]:
+                try:
+                    urllib.request.urlretrieve(url, temporary)
+                except OSError as error:
+                    print(f"{name}: {url} failed: {error}", flush=True)
+                    continue
+                if digest(temporary) == pin["sha256"]:
+                    temporary.replace(archive)
+                    break
+                print(f"{name}: {url} did not match the pinned hash", flush=True)
+            else:
                 raise ValueError(f"Source hash mismatch: {name}")
-            temporary.replace(archive)
         finally:
             temporary.unlink(missing_ok=True)
     if digest(archive) != pin["sha256"]:

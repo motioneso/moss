@@ -1,0 +1,103 @@
+name: Rust phase7_backup_engine
+on:
+  pull_request:
+    paths:
+      - "rust-spike/backup/**"
+      - "rust-spike/bundled-db/**"
+      - "rust-spike/keystore/**"
+      - "rust-spike/portability/**"
+      - "rust-spike/Cargo.toml"
+      - "rust-spike/Cargo.lock"
+      - ".github/workflows/rust-phase7-backup-engine.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_backup_engine:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Keep pinned migration and backfill bytes exact
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/phase7-pg/downloads
+          key: phase7-pg-sources-${{ runner.os }}-${{ hashFiles('rust-spike/bundled-db/tools/sources.json') }}
+      - name: Linux build dependencies already declared by the database proof
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bison flex libicu-dev zlib1g-dev libzstd-dev
+      - name: macOS build dependencies already declared by the database proof
+        if: runner.os == 'macOS'
+        run: |
+          brew list bison flex icu4c zstd >/dev/null || brew install bison flex icu4c zstd
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: Windows source build dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r rust-spike/bundled-db/tools/requirements-ci.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Hash-locked tool install failed' }
+          & C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed bison flex
+          if ($LASTEXITCODE -ne 0) { throw 'Declared parser build dependencies unavailable' }
+      - name: Build pinned sources on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 rust-spike/bundled-db/tools/build-pg-bundle.py --scratch "$RUNNER_TEMP/phase7-pg" --out "$RUNNER_TEMP/pg-built"
+      - name: Build pinned sources on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $env:PATH += ';C:\msys64\usr\bin'
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" && python rust-spike/bundled-db/tools/build-pg-bundle.py --scratch `"$env:RUNNER_TEMP\phase7-pg`" --out `"$env:RUNNER_TEMP\pg-built`""
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned database build failed' }
+      - name: Relocate bundle and remove source build trees
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          shutil.move(root / 'pg-built', root / 'postgres relocated')
+          shutil.rmtree(root / 'phase7-pg/build')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"PHASE7_BACKUP_POSTGRES={root / 'postgres relocated'}\n")
+      - name: Select task-owned Rust paths
+        shell: bash
+        run: |
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-backup/target" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+      - name: Provision declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Archive, ledger and retention unit tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p moss-backup --lib -- --test-threads=1
+      - name: phase7_backup_engine
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python rust-spike/backup/tools/phase7_backup_engine.py --scratch "$RUNNER_TEMP/backup-proof"
+      - name: Negative controls must each fail their own assertion
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python rust-spike/backup/tools/backup_negative_controls.py -- --scratch "$RUNNER_TEMP/backup-negative"
+      - name: phase7_backup_engine and negative controls as a standard Windows user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/backup/tools/phase7-backup-windows.ps1 -Repo (Get-Location).Path -Postgres $env:PHASE7_BACKUP_POSTGRES

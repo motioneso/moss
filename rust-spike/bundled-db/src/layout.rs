@@ -378,6 +378,36 @@ impl Layout {
         }
     }
 
+    /// Writes a one-line libpq password file for `role` in the private secrets folder. The
+    /// database tools read it through `PGPASSFILE`, so the password is never in an argument or
+    /// in the environment. The file is removed when the returned guard drops.
+    pub fn pass_file(
+        &self,
+        role: &str,
+        password: &crate::secrets::Secret,
+    ) -> std::io::Result<PassFile> {
+        use std::io::Write;
+        let escape = |text: &str| text.replace('\\', "\\\\").replace(':', "\\:");
+        let mut nonce = [0u8; 8];
+        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut nonce);
+        let name = format!("pgpass-{}-{}", std::process::id(), hex::encode(nonce));
+        #[cfg(unix)]
+        let mut file = private_file(&self.secrets.join(&name))?;
+        #[cfg(windows)]
+        let mut file = self
+            .windows
+            .secrets
+            .create_file(std::ffi::OsStr::new(&name))?;
+        let guard = PassFile {
+            path: self.secrets.join(&name),
+        };
+        file.write_all(
+            format!("*:*:*:{}:{}\n", escape(role), escape(password.expose())).as_bytes(),
+        )?;
+        file.sync_all()?;
+        Ok(guard)
+    }
+
     #[cfg(unix)]
     pub fn write_state(&self, bytes: &[u8]) -> std::io::Result<()> {
         self.check_run()?;
@@ -388,6 +418,23 @@ impl Layout {
     pub fn read_state(&self) -> std::io::Result<String> {
         self.check_run()?;
         read_bounded(std::fs::File::open(self.state_file())?, 65536)
+    }
+}
+
+/// A password file that exists only while this guard lives.
+pub struct PassFile {
+    path: PathBuf,
+}
+
+impl PassFile {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for PassFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
     }
 }
 
