@@ -29,7 +29,10 @@ fn run() -> Result<(), String> {
         return Err("Unexpected service arguments".into());
     }
     match action.to_str() {
-        Some("service-start") => moss_launcher::service::start(&install, &folder),
+        Some("service-start") => {
+            moss_launcher::service::reset_failure(&folder)?;
+            moss_launcher::service::start(&install, &folder)
+        }
         Some("service-stop") => moss_launcher::service::stop(&install, &folder),
         Some("service-run") => moss_launcher::service::run(&install, &folder),
         Some("service-remove") => moss_launcher::service::remove(&install, &folder),

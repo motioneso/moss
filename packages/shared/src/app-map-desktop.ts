@@ -12,7 +12,7 @@ export const DESKTOP_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Rust Moss desktop app - choose and connect to a server",
     description:
-      "The Moss desktop app opens the server it used last. On first run it asks This computer or Another computer. This computer sets up its first local server on the spot (a short Setting up screen while the private database and secure address are made) and starts it in the background if it is not running; the server keeps running after the window closes. Another computer takes an HTTPS address from that computer's Sharing screen. Public-authority certificates accepted by the operating system connect without a certificate comparison or pin; each connection checks OS trust. Self-signed certificates show a code and are saved only after It matches is pressed. Existing pins stay pinned: a saved pinned server whose certificate later changes shows the new code to compare again. Each saved server has its own sign-in. The Servers list (also at moss-app://servers) shows each server as Running, Stopped, Reachable or Can't reach, with Open, Start for a stopped local server, Stop (asks for confirmation before disconnecting people and stopping a local server and its database), Remove (other computers) and New server here, which asks for a name and makes another local server. Inside any server, the account menu at the bottom of the side bar has Switch server, which returns to this list. When a server cannot be reached the app names the reason and tries again with growing waits. The app reaches other computers only when their sharing is on. Each local server has its own sign-in service, independent of the app login entry: a systemd user unit on Linux, LaunchAgent on macOS or separate per-instance login item on Windows. Stop disables that service and keeps it down across app restarts and sign-ins until Start. Program versions live side by side apart from data; the launcher selects the current version.",
+      "The Moss desktop app opens the server it used last. On first run it asks This computer or Another computer. This computer sets up its first local server on the spot (a short Setting up screen while the private database and secure address are made) and starts it in the background if it is not running; the server keeps running after the window closes. Another computer takes an HTTPS address from that computer's Sharing screen. Public-authority certificates accepted by the operating system connect without a certificate comparison or pin; each connection checks OS trust. Self-signed certificates show a code and are saved only after It matches is pressed. Existing pins stay pinned: a saved pinned server whose certificate later changes shows the new code to compare again. Each saved server has its own sign-in. The Servers list (also at moss-app://servers) shows each server as Running, Stopped, Reachable or Can't reach, with Open, Start for a stopped local server, Stop (asks for confirmation before disconnecting people and stopping a local server and its database), Remove (other computers) and New server here, which asks for a name and makes another local server. Inside any server, the account menu at the bottom of the side bar has Switch server, which returns to this list. When a server cannot be reached the app names the reason and tries again with growing waits. The app reaches other computers only when their sharing is on. Each local server has its own sign-in service, independent of the app login entry: a systemd user unit on Linux, LaunchAgent on macOS or separate per-instance login item on Windows. Stop disables that service and keeps it down across app restarts and sign-ins until Start. On macOS Stop also removes its login file and is safe to repeat. On Linux a server gets at most three starts before automatic restarts are blocked; reconnecting does not clear that limit. After fixing the reported problem, Start clears the failure so it can try again. A cold start keeps waiting beyond twenty seconds while the service is still starting, with a five-minute readiness ceiling for a hung startup. Each explicit Start refreshes the restart budget. Program versions live side by side apart from data; the launcher selects the current version.",
     path: "moss-app://localhost/index.html",
     scope: "user"
   }
@@ -45,7 +45,7 @@ export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "transient",
     remediationRef: "rust-app-switch-server",
     description:
-      "Stop could not finish stopping a local server or its database. Open Servers to check its state and retry."
+      "Stop names the failed step and gives a matching remedy: restore a missing server folder, check folder read/write permissions or file locking, check or disable the sign-in service or Windows task, sign back in if the macOS login session is unavailable, or wait and inspect the server and database logs if shutdown is still busy. The macOS login-file cleanup asks for LaunchAgents write permission. Retry Stop after the named remedy."
   },
   {
     code: "app_desktop_integration_failed",
@@ -68,7 +68,7 @@ export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "transient",
     remediationRef: "rust-app-switch-server",
     description:
-      "The desktop app started the local Moss server but it did not answer within twenty seconds."
+      "The local Moss process exited before becoming reachable, or no starting process was found after twenty seconds. A live starting process or active background service keeps the app waiting beyond that initial window, up to a five-minute readiness ceiling."
   },
   {
     code: "app_server_service_failed",
@@ -76,7 +76,7 @@ export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "transient",
     remediationRef: "rust-app-server-service",
     description:
-      "Moss could not register, start or stop this instance's background sign-in service."
+      "Moss could not register or start this instance's background sign-in service, read its state, or it reached Linux's restart limit or the five-minute readiness ceiling. Check server.log and database.log in the server folder and fix the startup problem, then press Start. Stop failures preserve the failed step and remedy under app_server_stop_failed."
   },
   {
     code: "app_server_unreachable",
@@ -121,7 +121,7 @@ export const DESKTOP_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
     id: "rust-app-server-service",
     runtime: "rust",
     description:
-      "Check your sign-in services, then press Start on Servers. A stopped server stays stopped until Start.",
+      "Check your sign-in services and the server.log and database.log files in this server's folder, fix the startup problem, then press Start on Servers. Linux stops retrying after three starts until Start clears the failure; reconnecting keeps it failed. Stop shows a specific remedy for the failed shutdown step. A stopped server stays stopped until Start.",
     path: "moss-app://servers",
     scope: "user"
   },

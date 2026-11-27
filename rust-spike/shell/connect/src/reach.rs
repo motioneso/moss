@@ -29,6 +29,7 @@ pub enum Problem {
     DidNotStart,
     ServiceFailed,
     ServiceStopped,
+    StopFailed(String),
     Unreachable,
     HostRefused,
     SharingOff,
@@ -42,6 +43,7 @@ impl Problem {
     /// The error code the app map declares for this problem.
     pub fn code(&self) -> &'static str {
         match self {
+            Problem::StopFailed(_) => "app_server_stop_failed",
             Problem::NotSetUp => "app_server_not_set_up",
             Problem::DidNotStart => "app_server_did_not_start",
             Problem::ServiceFailed | Problem::ServiceStopped => "app_server_service_failed",
@@ -55,11 +57,12 @@ impl Problem {
         }
     }
 
-    pub fn reason(&self) -> &'static str {
+    pub fn reason(&self) -> &str {
         match self {
+            Problem::StopFailed(reason) => reason,
             Problem::NotSetUp => "Moss isn't set up on this computer yet.",
             Problem::DidNotStart => "Moss didn't start on this computer.",
-            Problem::ServiceFailed => "Check your sign-in services, then press Start.",
+            Problem::ServiceFailed => "Check your sign-in services and server.log and database.log in this server's folder. Fix the startup problem, then press Start.",
             Problem::ServiceStopped => "Moss is stopped. Press Start.",
             Problem::Unreachable => "Moss isn't answering at this address.",
             Problem::HostRefused => {
@@ -537,6 +540,9 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
                     if folder.join(moss_launcher::service::STOPPED).exists() {
                         return Err(Problem::ServiceStopped);
                     }
+                    if service_state(folder).await? == moss_launcher::service::State::Failed {
+                        return Err(Problem::ServiceFailed);
+                    }
                     let (i, f) = (install.to_owned(), folder.to_owned());
                     tokio::task::spawn_blocking(move || moss_launcher::service::start(&i, &f))
                         .await
@@ -556,23 +562,67 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
             other => return other,
         }
     }
-    for _ in 0..80 {
+    wait_for_local(install, folder, lock, Duration::from_secs(300)).await
+}
+
+async fn wait_for_local(
+    install: &Path,
+    folder: &Path,
+    lock: Option<std::fs::File>,
+    ceiling: Duration,
+) -> Result<(Running, Vec<u8>), Problem> {
+    let deadline = tokio::time::Instant::now() + ceiling;
+    let mut polls = 0;
+    loop {
         tokio::time::sleep(Duration::from_millis(250)).await;
         if let Ok(found) = local(folder).await {
             return Ok(found);
         }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(if managed(install) {
+                Problem::ServiceFailed
+            } else {
+                Problem::DidNotStart
+            });
+        }
+        polls += 1;
+        let starting = if managed(install) {
+            match service_state(folder).await? {
+                moss_launcher::service::State::Failed => return Err(Problem::ServiceFailed),
+                moss_launcher::service::State::Starting => true,
+                moss_launcher::service::State::Inactive
+                | moss_launcher::service::State::Unregistered => false,
+            }
+        } else {
+            still_running(folder)
+        };
+        if starting {
+            continue;
+        }
+        if managed(install) {
+            // Allow the native login action time to acquire its ownership lock on macOS
+            // and Windows. Once it owns the lock, database startup may take much longer.
+            if polls < 80 {
+                continue;
+            }
+            return Err(Problem::ServiceFailed);
+        }
         let gave_up = match &lock {
-            // The server this app started has stopped, so waiting longer cannot help.
-            Some(_) => !managed(install) && !still_running(folder),
-            // The app that was starting it has let go of the lock.
+            Some(_) => true,
             None => start_lock(folder)?.is_some(),
         };
-        if gave_up {
-            // The other app may have let go just after its server came up.
+        if gave_up || polls >= 80 {
             return local(folder).await.map_err(|_| Problem::DidNotStart);
         }
     }
-    Err(Problem::DidNotStart)
+}
+
+async fn service_state(folder: &Path) -> Result<moss_launcher::service::State, Problem> {
+    let folder = folder.to_owned();
+    tokio::task::spawn_blocking(move || moss_launcher::service::state(&folder))
+        .await
+        .map_err(|_| Problem::ServiceFailed)?
+        .map_err(|_| Problem::ServiceFailed)
 }
 
 /// Stops the running local server for an instance, then its database. Asks the server to finish
@@ -583,27 +633,32 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
     // Dropping a UI result cannot cancel spawn_blocking database startup; this lock can.
     let _lock = timeout(Duration::from_secs(200), async {
         loop {
-            if let Some(lock) = start_lock(folder)? {
+            if let Some(lock) = start_lock(folder).map_err(|_| Problem::StopFailed("Moss cannot open its start lock. Check write permission for this server's folder, then press Stop again.".into()))? {
                 return Ok::<_, Problem>(lock);
             }
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
     })
     .await
-    .map_err(|_| Problem::Unreachable)??;
+    .map_err(|_| Problem::StopFailed("Moss is still starting. Wait a moment, then press Stop again.".into()))??;
     if managed(install) {
         let (i, f) = (install.to_owned(), folder.to_owned());
         return tokio::task::spawn_blocking(move || moss_launcher::service::stop(&i, &f))
             .await
-            .map_err(|_| Problem::ServiceFailed)?
-            .map_err(|_| Problem::ServiceFailed);
+            .map_err(|_| {
+                Problem::StopFailed(
+                    "Moss could not finish its stop task. Open Servers and press Stop again."
+                        .into(),
+                )
+            })?
+            .map_err(Problem::StopFailed);
     }
     // Unreachable is not proof of death: leave the database alone if hello cannot answer.
-    let (running, _) = local(folder).await?;
+    let (running, _) = local(folder).await.map_err(|_| Problem::StopFailed("Moss cannot confirm which server is running. Check this server's address and folder permissions, then press Stop again.".into()))?;
     if running.pid == 0 || running.pid > i32::MAX as u32 {
-        return Err(Problem::Unreachable);
+        return Err(Problem::StopFailed("Moss cannot identify the running server. Check its running record in the server folder, then press Stop again.".into()));
     }
-    request_stop(folder, running.pid)?;
+    request_stop(folder, running.pid).map_err(|_| Problem::StopFailed("Moss could not send the stop request. Check this server's process and folder permissions, then press Stop again.".into()))?;
     for _ in 0..120 {
         still_running(folder);
         if !folder.join(RUNNING_FILE).exists() {
@@ -611,12 +666,12 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
             // Where there is no database program yet (Windows) this finds nothing to stop.
             return tokio::task::spawn_blocking(move || crate::provision::stop_database(&i, &f))
                 .await
-                .map_err(|_| Problem::Unreachable)?
-                .map_err(|_| Problem::Unreachable);
+                .map_err(|_| Problem::StopFailed("Moss could not finish stopping its database. Check database.log in this server's folder, then press Stop again.".into()))?
+                .map_err(|_| Problem::StopFailed("Moss could not stop its database. Check database.log in this server's folder, then press Stop again.".into()));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
-    Err(Problem::Unreachable)
+    Err(Problem::StopFailed("Moss is still finishing work. Wait a moment, then press Stop again; check server.log if it keeps waiting.".into()))
 }
 
 /// Asks the server whose certificate just answered for this folder to shut down.

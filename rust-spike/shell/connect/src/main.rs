@@ -525,6 +525,15 @@ impl App {
                     text("id")
                 };
                 if let Some(Target::Local { folder, .. }) = self.store.find(&self.servers, &id) {
+                    if reach::managed(&self.install)
+                        && moss_launcher::service::reset_failure(&folder).is_err()
+                    {
+                        self.show(problem_screen(
+                            &self.store.find(&self.servers, &id).unwrap(),
+                            &Problem::ServiceFailed,
+                        ));
+                        return;
+                    }
                     // Clear only the owner's explicit Stop marker. local_or_start serializes
                     // registration and launch using the instance start lock.
                     if std::fs::remove_file(folder.join(moss_launcher::service::STOPPED))
@@ -1078,7 +1087,7 @@ fn problem_screen(target: &Target, problem: &Problem) -> Value {
             "screen":"version", "title": problem.reason().trim_end_matches('.'),
             "detail": format!("{name} needs a newer app."),
         }),
-        Problem::ServiceStopped => {
+        Problem::ServiceStopped | Problem::ServiceFailed => {
             json!({"screen":"problem", "name": name, "reason": problem.reason(), "retry": false, "local": true})
         }
         Problem::NotSetUp => {
