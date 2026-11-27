@@ -260,11 +260,11 @@ fn remove_registration(path: &Path) -> Result<(), String> {
     }
 }
 
-/// A failed Linux unit stays failed until the owner explicitly asks to start again.
+/// Each explicit Start gets a fresh Linux crash budget, even after a clean stop.
 /// Reconnects must not reset the crash budget and create another endless restart loop.
 pub fn reset_failure(folder: &Path) -> Result<(), String> {
     #[cfg(target_os = "linux")]
-    if state(folder)? == State::Failed {
+    if state(folder)? != State::Unregistered {
         checked(Command::new("systemctl").args([
             "--user",
             "reset-failed",
@@ -276,6 +276,7 @@ pub fn reset_failure(folder: &Path) -> Result<(), String> {
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum State {
+    Unregistered,
     Starting,
     Inactive,
     Failed,
@@ -296,7 +297,7 @@ pub fn state(folder: &Path) -> Result<State, String> {
             .map_err(|_| REMEDY)?;
         let text = String::from_utf8_lossy(&output.stdout);
         if text.lines().any(|line| line == "LoadState=not-found") {
-            return Ok(State::Inactive);
+            return Ok(State::Unregistered);
         }
         if !output.status.success() {
             return Err(REMEDY.into());

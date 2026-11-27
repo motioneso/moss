@@ -28,7 +28,7 @@ impl Fixture {
         std::env::set_var("MOSS_TEST_ROOT", &root);
         for manager in ["systemctl", "launchctl"] {
             let path = root.join("bin").join(manager);
-            std::fs::write(&path, "#!/bin/sh\ncase \"$*\" in\n *show*) cat \"$MOSS_TEST_ROOT/state\" 2>/dev/null || echo LoadState=not-found; exit 0;;\n *disable*) [ ! -f \"$MOSS_TEST_ROOT/refuse\" ]; exit $?;;\n print*) [ -f \"$MOSS_TEST_ROOT/loaded\" ] && exit 0; exit 3;;\n bootstrap*) touch \"$MOSS_TEST_ROOT/loaded\";;\n bootout*) [ -f \"$MOSS_TEST_ROOT/loaded\" ] || exit 3; rm \"$MOSS_TEST_ROOT/loaded\";;\nesac\n").unwrap();
+            std::fs::write(&path, "#!/bin/sh\ncase \"$*\" in\n *reset-failed*) touch \"$MOSS_TEST_ROOT/reset\";;\n *show*) cat \"$MOSS_TEST_ROOT/state\" 2>/dev/null || echo LoadState=not-found; exit 0;;\n *disable*) [ ! -f \"$MOSS_TEST_ROOT/refuse\" ]; exit $?;;\n print*) [ -f \"$MOSS_TEST_ROOT/loaded\" ] && exit 0; exit 3;;\n bootstrap*) touch \"$MOSS_TEST_ROOT/loaded\";;\n bootout*) [ -f \"$MOSS_TEST_ROOT/loaded\" ] || exit 3; rm \"$MOSS_TEST_ROOT/loaded\";;\nesac\n").unwrap();
             std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
         Self { root, old }
@@ -122,7 +122,7 @@ fn linux_native_state_reports_starting_and_terminal_failure() {
     for (native, expected) in [
         (
             "LoadState=not-found\nActiveState=inactive",
-            service::State::Inactive,
+            service::State::Unregistered,
         ),
         (
             "LoadState=loaded\nActiveState=activating",
@@ -140,4 +140,34 @@ fn linux_native_state_reports_starting_and_terminal_failure() {
         std::fs::write(f.root.join("state"), native).unwrap();
         assert_eq!(service::state(&f.folder()).unwrap(), expected);
     }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn explicit_start_resets_the_budget_after_clean_and_failed_starts() {
+    let _guard = ENV.lock().unwrap_or_else(|e| e.into_inner());
+    let f = Fixture::new();
+    for active in ["inactive", "active", "failed"] {
+        std::fs::write(
+            f.root.join("state"),
+            format!("LoadState=loaded\nActiveState={active}\n"),
+        )
+        .unwrap();
+        service::reset_failure(&f.folder()).unwrap();
+        assert!(
+            f.root.join("reset").is_file(),
+            "explicit Start did not reset {active}"
+        );
+        std::fs::remove_file(f.root.join("reset")).unwrap();
+    }
+    std::fs::write(
+        f.root.join("state"),
+        "LoadState=not-found\nActiveState=inactive\n",
+    )
+    .unwrap();
+    service::reset_failure(&f.folder()).unwrap();
+    assert!(
+        !f.root.join("reset").exists(),
+        "first install has no unit to reset"
+    );
 }

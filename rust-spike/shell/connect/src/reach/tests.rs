@@ -445,6 +445,39 @@ async fn a_failed_service_shows_its_code_without_restarting_on_reconnect() {
             !dir.join("restarted").exists(),
             "reconnect reset the restart limit"
         );
+        std::fs::write(dir.join("state"), "LoadState=loaded\nActiveState=active\n").unwrap();
+        let lock = start_lock(&folder).unwrap();
+        let timed_out = tokio::time::timeout(
+            Duration::from_secs(2),
+            wait_for_local(&install, &folder, lock, Duration::from_millis(500)),
+        )
+        .await;
+        assert_eq!(timed_out.unwrap().unwrap_err(), Problem::ServiceFailed);
+        assert!(
+            start_lock(&folder).unwrap().is_some(),
+            "hung-start ceiling kept Stop locked out"
+        );
+
+        // A real TLS hello appearing after the old twenty-second cutoff still connects.
+        let (origin, fingerprint, certs) = server(moss()).await;
+        let running = Running {
+            instance: "default".into(),
+            origin,
+            fingerprint,
+            pid: std::process::id(),
+            version: instance::VERSION.into(),
+            api: instance::API,
+        };
+        let expected = running.clone();
+        let late_folder = folder.clone();
+        let publish = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(22)).await;
+            running.write(&late_folder).unwrap();
+        });
+        let (found, _) = local_or_start(&install, &folder).await.unwrap();
+        assert_eq!(found, expected);
+        publish.await.unwrap();
+        std::fs::remove_dir_all(certs).unwrap();
         return;
     }
     use std::os::unix::fs::PermissionsExt;
@@ -453,8 +486,9 @@ async fn a_failed_service_shows_its_code_without_restarting_on_reconnect() {
     crate::store::private_dir(&dir.join("default")).unwrap();
     std::fs::write(dir.join("install/moss-launcher"), "fixture").unwrap();
     std::fs::write(dir.join("default/network.json"), "{}").unwrap();
+    std::fs::write(dir.join("state"), "LoadState=loaded\nActiveState=failed\n").unwrap();
     let manager = dir.join("install/systemctl");
-    std::fs::write(&manager, "#!/bin/sh\ncase \"$*\" in\n *show*) printf 'LoadState=loaded\\nActiveState=failed\\n';;\n *) touch \"$MOSS_TEST_FAILED_SERVICE/restarted\";;\nesac\n").unwrap();
+    std::fs::write(&manager, "#!/bin/sh\ncase \"$*\" in\n *show*) cat \"$MOSS_TEST_FAILED_SERVICE/state\";;\n *) touch \"$MOSS_TEST_FAILED_SERVICE/restarted\";;\nesac\n").unwrap();
     std::fs::set_permissions(manager, std::fs::Permissions::from_mode(0o700)).unwrap();
     let result = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
@@ -463,6 +497,7 @@ async fn a_failed_service_shows_its_code_without_restarting_on_reconnect() {
             "--test-threads=1",
         ])
         .env(FIXTURE, &dir)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
         .env(
             "PATH",
             format!("{}:/usr/bin:/bin", dir.join("install").display()),

@@ -562,18 +562,36 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
             other => return other,
         }
     }
+    wait_for_local(install, folder, lock, Duration::from_secs(300)).await
+}
+
+async fn wait_for_local(
+    install: &Path,
+    folder: &Path,
+    lock: Option<std::fs::File>,
+    ceiling: Duration,
+) -> Result<(Running, Vec<u8>), Problem> {
+    let deadline = tokio::time::Instant::now() + ceiling;
     let mut polls = 0;
     loop {
         tokio::time::sleep(Duration::from_millis(250)).await;
         if let Ok(found) = local(folder).await {
             return Ok(found);
         }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(if managed(install) {
+                Problem::ServiceFailed
+            } else {
+                Problem::DidNotStart
+            });
+        }
         polls += 1;
         let starting = if managed(install) {
             match service_state(folder).await? {
                 moss_launcher::service::State::Failed => return Err(Problem::ServiceFailed),
                 moss_launcher::service::State::Starting => true,
-                moss_launcher::service::State::Inactive => false,
+                moss_launcher::service::State::Inactive
+                | moss_launcher::service::State::Unregistered => false,
             }
         } else {
             still_running(folder)

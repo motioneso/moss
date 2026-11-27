@@ -59,7 +59,7 @@ def assert_linux_restart_limit(launcher, scratch):
         return dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
     try:
         command([broken_launcher, 'service-start', folder])
-        wait_for(lambda: state().get('Result') == 'start-limit-hit',
+        wait_for(lambda: state().get('ActiveState') == 'failed' and int(state().get('NRestarts', '0')) >= 3,
                  'broken database reaches the native restart limit', seconds=30)
         before = state()
         assert before['ActiveState'] == 'failed', before
@@ -218,6 +218,7 @@ def main():
             if (folder / 'service-stopped').exists():
                 assert process.wait(timeout=20) == 0, 'queued task did not respect Stop'
             print('PASS: replayed exact Task Scheduler action; real Windows logon deferred to part 18', flush=True)
+    saved_login = args.scratch / 'queued-login.plist'
     app_login = None
     def independent_login_registration():
         return registration.read_back(name, launcher, folder)
@@ -249,6 +250,8 @@ def main():
             print('NEGATIVE CONTROL: desktop app autostart registered; no server service', flush=True)
             assert independent_login_registration(), 'server login registration exists independently of app autostart'
             raise AssertionError('Negative control unexpectedly passed')
+        if platform.system() == 'Darwin':
+            shutil.copy2(Path.home() / 'Library/LaunchAgents' / (name + '.plist'), saved_login)
         command([launcher, 'service-stop', folder])
         wait_for(lambda: stopped() and database_down(), 'Stop shuts down server and private database')
         assert (folder / 'service-stopped').exists()
@@ -260,7 +263,12 @@ def main():
         # A queued login action cannot undo an explicit Stop, even if invoked directly.
         if args.local_lifecycle_only:
             command([launcher, 'service-run', folder])
-        elif platform.system() != 'Darwin':
+        elif platform.system() == 'Darwin':
+            command(['launchctl', 'bootstrap', f'gui/{os.getuid()}', saved_login])
+            time.sleep(1)
+            command(['launchctl', 'bootout', f'gui/{os.getuid()}/{name}'])
+            print('PASS: replayed saved macOS login action still respects Stop', flush=True)
+        else:
             restart_registration()
         time.sleep(3)
         assert stopped() and database_down(), 'login action undid Stop'
