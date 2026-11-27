@@ -52,6 +52,7 @@ class Runner:
         self.instance = self.scratch / "instance"
         self.instance.mkdir()
         self.database = None
+        self.children = []
         self.hits = 0
 
     def tool(self, name):
@@ -77,8 +78,18 @@ class Runner:
         return json.loads(lines[-1])
 
     def spawn(self, name, *args):
-        return subprocess.Popen([self.tool(name), *map(str, args)], text=True,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        child = subprocess.Popen([self.tool(name), *map(str, args)], text=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.children.append(child)
+        return child
+
+    # A failed check can leave a child paused or waiting. Windows cannot rebuild a running binary.
+
+    def stop_children(self):
+        for child in self.children:
+            if child is not self.database and child.poll() is None:
+                child.kill()
+                child.wait(timeout=60)
 
     # -- setup ---------------------------------------------------------------------------------
 
@@ -333,6 +344,7 @@ def main():
     try:
         runner.main()
     finally:
+        runner.stop_children()
         runner.stop_database()
     shutil.rmtree(runner.scratch, ignore_errors=True)
 
