@@ -32,6 +32,14 @@ export const DESKTOP_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 
 export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
   {
+    code: "app_firewall_refused",
+    runtime: "rust",
+    class: "prerequisite",
+    remediationRef: "rust-network-sharing",
+    description:
+      "The firewall did not allow Moss, so sharing stays off or paused. An unknown firewall helper outcome keeps its cleanup record and asks the owner to retry. If Sharing says Paused, press Resume and allow the live firewall check. A refused or failed check preserves the paused state and rule record. Otherwise turn sharing on again and choose Allow, or add Moss in the computer's firewall settings. If a firewall rule with Moss's name was made by someone else, Moss leaves it alone and refuses: rename or remove that rule, then try again. An old Moss rule from before ownership markers is never removed by Moss: remove it by hand, then try again. On Linux, Moss needs ufw or firewalld installed and turned on. If firewalld has not loaded the installer-owned service, sharing stays off: reinstall Moss or restart the firewall. Moss never reloads firewalld at runtime."
+  },
+  {
     code: "app_server_stop_failed",
     runtime: "rust",
     class: "transient",

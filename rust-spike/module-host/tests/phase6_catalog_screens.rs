@@ -23,6 +23,25 @@ impl Drop for Server {
         let _ = self.0.wait();
     }
 }
+// Even a panicking browser fixture removes only its own token-marked rule, through
+// the same cleanup command as instance uninstall. The temp directory outlives this guard.
+struct SharingCleanup<'a>(&'a Path);
+impl Drop for SharingCleanup<'_> {
+    fn drop(&mut self) {
+        let result = Command::new(std::env::var("JS170_SERVER").unwrap())
+            .args(["firewall-close", "--instance"])
+            .arg(self.0)
+            .status();
+        let removed = result.is_ok_and(|status| status.success());
+        if std::thread::panicking() {
+            if !removed {
+                eprintln!("sharing fixture firewall cleanup failed");
+            }
+        } else {
+            assert!(removed, "sharing fixture firewall cleanup");
+        }
+    }
+}
 struct Port(String);
 impl Drop for Port {
     fn drop(&mut self) {
@@ -106,7 +125,7 @@ pub fn serve_catalog() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("{listen_host}:{}",port.0),"origins":origins,"sharing":host != "localhost","certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{listen_host}:{}",port.0),"origins":origins,"sharing":false,"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     // What the app writes at setup. There is no owner account and there are no module tables yet.
     private(
@@ -159,6 +178,7 @@ pub fn serve_catalog() {
             .env("XDG_CONFIG_HOME", root.join("key-config"))
             .env("XDG_DATA_HOME", root.join("key-data"));
     }
+    let _sharing_cleanup = (host != "localhost").then(|| SharingCleanup(root));
     let mut server = Server(
         command
             .stdin(Stdio::null())
@@ -169,7 +189,7 @@ pub fn serve_catalog() {
     );
     let deadline = Instant::now() + Duration::from_secs(30);
     while !client
-        .get(format!("{origin}/api/hello"))
+        .get(format!("{local_origin}/api/hello"))
         .send()
         .is_ok_and(|r| r.status().is_success())
     {
@@ -190,6 +210,31 @@ pub fn serve_catalog() {
         .next()
         .unwrap()
         .to_owned();
+    if host != "localhost" {
+        // Raw sharing=true no longer authorizes LAN startup. Turn it on as the owner,
+        // through the real listener/firewall control, after loopback-only setup.
+        assert!(client.get(format!("{origin}/api/hello")).send().is_err());
+        let response = client
+            .put(format!("{local_origin}/api/network"))
+            .header("origin", &local_origin)
+            .header("cookie", &cookie)
+            .json(&json!({"sharing":true}))
+            .send()
+            .unwrap();
+        assert_eq!(response.status(), 200, "owner authorizes sharing");
+        let state: Value = response.json().unwrap();
+        assert_eq!(state["sharing"], true, "sharing is really on: {state}");
+        assert_eq!(
+            state["firewall"], "allowed",
+            "live firewall marker: {state}"
+        );
+        assert!(client
+            .get(format!("{origin}/api/hello"))
+            .send()
+            .unwrap()
+            .status()
+            .is_success());
+    }
     use reqwest::Method;
     let api = |method: reqwest::Method, path: &str, body: Option<Value>, cookie: Option<&str>| {
         let mut request = client

@@ -13,4 +13,17 @@ python3 rust-spike/module-ui/build-assets.py "$CARGO_TARGET_DIR/web/module-share
 cp rust-spike/shell/assets/index.html "$CARGO_TARGET_DIR/web/index.html"
 cargo +1.95.0 build --offline --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-server
 cargo +1.95.0 build --offline --locked --manifest-path rust-spike/network/Cargo.toml --bin moss-network
+# Only disposable CI answers the graphical authorization with a scripted approval.
+# The production helper still adds, verifies and removes the real OS rule. Local
+# runs retain pkexec and the normal owner-initiated graphical prompt.
+if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+  command -v ufw >/dev/null
+  sudo -n ufw show added >/dev/null
+  export MOSS_FIREWALL_STAND_IN="$CARGO_TARGET_DIR/exit-firewall-approve"
+  cat > "$MOSS_FIREWALL_STAND_IN" <<'APPROVE'
+#!/bin/sh
+exec sudo -n -- "$@"
+APPROVE
+  chmod 700 "$MOSS_FIREWALL_STAND_IN"
+fi
 pnpm exec tsx rust-spike/shell/tools/phase6-exit-journey.ts
