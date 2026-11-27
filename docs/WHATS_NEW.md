@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-27
+
+#### Fixed
+
+- **Sharing settings no longer dead-end on old or paused firewall rules.** The Sharing page can now clear an old firewall record after you remove the rule by hand, explains how to fix a paused state it cannot resume, and offers a button that opens your firewall settings when a change fails. [PR #4511](https://github.com/motioneso/moss/pull/4511)
+
 ### 2026-11-24
 
 #### Added
