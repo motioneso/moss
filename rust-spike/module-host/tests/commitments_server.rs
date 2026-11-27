@@ -109,7 +109,7 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("0.0.0.0:{}",port.0),"sharing":true,"origins":[origin,remote_origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"sharing":false,"origins":[origin,remote_origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -303,6 +303,22 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":ai_key}),
     );
     let _server = start(true);
+    // A saved sharing flag no longer opens the network on its own. The owner turns
+    // sharing on through the real route, which opens the firewall rule first.
+    let turned_on = client
+        .put(format!("{origin}/api/network"))
+        .header("origin", &origin)
+        .header("cookie", &cookie)
+        .json(&json!({"sharing":true}))
+        .send()
+        .unwrap();
+    let turned_on_status = turned_on.status().as_u16();
+    let turned_on_body: Value = turned_on.json().unwrap_or(Value::Null);
+    assert_eq!(
+        (turned_on_status, turned_on_body["sharing"].as_bool()),
+        (200, Some(true)),
+        "owner turns sharing on: {turned_on_body}"
+    );
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.
     let other = {

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { networkInterfaces } from "node:os";
 import { getMossDatabaseUrls } from "@moss/db";
+import { ciFirewallApproval } from "../../../rust-spike/module-host/tools/firewall-approval.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR", "JS287_GOALS_PACKAGE"]) {
@@ -60,6 +61,7 @@ cargo(
     "--nocapture"
   ],
   {
+    ...ciFirewallApproval(target),
     MOSS_MODULE_SHARED_DIR: sharedDir,
     JS290_PROOF_ADDRESS: address,
     JS43_APP_URL: urls.app,
