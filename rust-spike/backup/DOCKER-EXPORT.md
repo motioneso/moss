@@ -20,6 +20,7 @@ Supply a JSON plan with the source identities (these are placeholders):
   "database": "jarv1s",
   "writers": ["source-app-container", "source-worker-container"],
   "externalSupervisorsDisabled": true,
+  "credentialsNotCarried": [],
   "mounts": [
     {
       "container": "source-app-container",
@@ -48,6 +49,10 @@ one disposition:
 - `reconstructed`: record a `reason` without copying the mount, for example disposable sockets,
   model caches, or a second reference to an already captured volume. The operator is responsible
   for that classification; the exporter does not infer which mounts are expendable.
+
+List any credential that cannot be carried in `credentialsNotCarried`, each with `kind` and `reason`.
+Use an empty list only when the operator reports no such exceptions. Provider acceptance and
+OS-bound session portability remain unqualified even when all original bytes were captured.
 
 The database's `/var/lib/postgresql/data` mount travels as a custom dump; extra database mounts are
 refused. Independent Notes roots and secret-file mounts must appear in the plan. Links and special
@@ -90,7 +95,7 @@ without staging a plaintext copy on the host. Memory zeroization and protection 
 administrators are not claimed.
 
 The encrypted `moss-docker-move` version 1 manifest records image versions and immutable image IDs,
-core schema version, complete core/module migration ledgers, account count, tables/extensions,
+core schema version, complete core/module migration ledgers, module install states, account count, tables/extensions,
 dump/roles/file hashes and sizes, ownership intent, mount dispositions and source fence/inventory.
 It also records credential portability caveats: originals are retained, but CLI, OAuth and OS-bound
 sessions remain inactive until the importer qualifies them. Provider acceptance is not tested.

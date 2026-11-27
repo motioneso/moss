@@ -26,6 +26,9 @@ def control(original, name):
         assert modified != original and "turn off a source container restart policy" not in modified
         return modified, "reboot-condition replay leaves old app and worker stopped with persisted restart=no"
     anchor = "        show_words(&recovery)?;\n"
+    if name == "diagnostics":
+        assert original.count(anchor) == 1
+        return original.replace(anchor, '        println!("{} {}", credentials, recovery.words().join(" "));\n' + anchor), "export diagnostics contain no generated credential"
     assert original.count(anchor) == 1
     return original.replace(anchor,
                             '        out.write_all(credentials.to_string().as_bytes()).unwrap();\n'
@@ -34,13 +37,23 @@ def control(original, name):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--only", choices=["no-restart-fence", "plaintext"])
+    parser.add_argument("--only", choices=["no-restart-fence", "plaintext", "diagnostics"])
     args = parser.parse_args()
     original = SOURCE.read_text()
+    runner_original = RUNNER.read_text()
     try:
-        for name in ([args.only] if args.only else ["no-restart-fence", "plaintext"]):
+        for name in ([args.only] if args.only else ["no-restart-fence", "plaintext", "diagnostics"]):
             modified, assertion = control(original, name)
             SOURCE.write_text(modified)
+            # With the policy change removed, its deliberate command-failure probe cannot
+            # trigger. Skip that probe only in the temporary mutated runner, so the independent
+            # reboot assertion observes the missing protection instead of an earlier refusal.
+            runner = runner_original
+            if name == "no-restart-fence":
+                start = runner.index("        for operation, reason in [")
+                end = runner.index("            shim.write_text", start)
+                runner = runner[:start] + "        for operation, reason in []:\n" + runner[end:]
+            RUNNER.write_text(runner)
             build()
             result = subprocess.run([sys.executable, str(RUNNER), "--no-build"], capture_output=True, text=True)
             # Runner output includes assertion names only. Never echo raw build/application output.
@@ -48,8 +61,10 @@ def main():
                 raise AssertionError(f"{name} did not fail its intended assertion (exit {result.returncode})")
             print(f"negative control {name}: runner exit {result.returncode}; observed FAIL: {assertion}", flush=True)
             SOURCE.write_text(original)
+            RUNNER.write_text(runner_original)
     finally:
         SOURCE.write_text(original)
+        RUNNER.write_text(runner_original)
         build()
     print("Docker exporter negative controls: PASS; production protections restored", flush=True)
 

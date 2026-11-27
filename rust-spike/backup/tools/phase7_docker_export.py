@@ -59,7 +59,7 @@ class Stack:
         self.port = None
         self.images_before = set(command(["docker", "image", "ls", "-q", "--no-trunc"]).stdout.split())
         self.image_ids = set()
-        self.secrets = [secrets.token_hex(32) for _ in range(8)]
+        self.secrets = [secrets.token_hex(32) for _ in range(9)]
         self.item = "fixture-item-" + secrets.token_hex(12)
         self.attachment = os.urandom(8192)
         self.account = "14da8cd7-d1ef-4d4a-a7a0-595ace14f001"
@@ -76,6 +76,14 @@ class Stack:
     def sql(self, sql):
         return command(["docker", "exec", "-i", self.container("postgres"), "psql", "-XAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "jarv1s"], data=sql.encode()).stdout
 
+    def startup_diagnostics(self):
+        logs = self.compose("logs", "--no-color", "--tail", "35", "app", "worker", check=False)
+        report = (logs.stdout + logs.stderr).decode(errors="replace")
+        for secret in sorted(self.secrets, key=len, reverse=True):
+            report = report.replace(secret, "[redacted]")
+            report = report.replace(json.dumps(secret)[1:-1], "[redacted]")
+        print(report[-16000:], file=sys.stderr)
+
     def setup(self):
         if shutil.which("devports"):
             self.port = int(command(["devports", "claim", self.project]).stdout.decode().strip())
@@ -89,15 +97,17 @@ class Stack:
         expect(image.startswith("ghcr.io/motioneso/moss:"), "app and worker use the published Moss image")
         runtime = {"NODE_ENV": "production", "JARVIS_CONNECTOR_SECRET_KEY": self.secrets[1],
                    "JARVIS_AI_SECRET_KEY": self.secrets[2], "JARVIS_CLI_RUNNER_RPC_SECRET": self.secrets[3],
-                   "JARVIS_APP_VERSION": image.rsplit(":", 1)[1], "JARVIS_EMBED_PROVIDER": "fake",
+                   "BETTER_AUTH_SECRET": self.secrets[8],
+                   "JARVIS_AUTH_BASE_URL": f"http://127.0.0.1:{self.port}",
                    "JARVIS_MODULES_DIR": "/data/modules", "HOST": "0.0.0.0", "PORT": "3000"}
         for key, role, password in zip(["BOOTSTRAP", "MIGRATION", "APP", "AUTH", "WORKER"],
                                        ["postgres", "jarvis_migration_owner", "jarvis_app_runtime", "jarvis_auth_runtime", "jarvis_worker_runtime"],
                                        [self.secrets[0], *self.secrets[4:8]]):
             runtime[f"JARVIS_{key}_DATABASE_URL"] = f"postgres://{role}:{password}@postgres:5432/jarv1s"
         # Preserve retired key iteration order and a generated signing config in the key bundle.
-        runtime["JARVIS_AI_SECRET_KEYS"] = json.dumps({"retired-b": secrets.token_hex(32), "retired-a": secrets.token_hex(32)})
-        self.secrets.append(runtime["JARVIS_AI_SECRET_KEYS"])
+        retired = {"retired-b": secrets.token_hex(32), "retired-a": secrets.token_hex(32)}
+        runtime["JARVIS_AI_SECRET_KEYS"] = json.dumps(retired)
+        self.secrets.extend([runtime["JARVIS_AI_SECRET_KEYS"], *retired.values()])
         config = {"services": {
             "postgres": {"image": "pgvector/pgvector:pg17", "environment": {"POSTGRES_DB": "jarv1s", "POSTGRES_PASSWORD": self.secrets[0]},
                          "restart": "always", "volumes": ["database:/var/lib/postgresql/data"]},
@@ -110,9 +120,10 @@ class Stack:
                   "volumes": {"database": {}, "vault": {}}}
         self.file.write_text(json.dumps(config))
         self.file.chmod(0o600)
-        self.compose("pull", "postgres", "app", "worker")
         for name in ("pgvector/pgvector:pg17", image):
+            command(["docker", "pull", name])
             self.image_ids.add(command(["docker", "image", "inspect", "--format", "{{.Id}}", name]).stdout.strip())
+            print("ok: published fixture image is available", flush=True)
         self.compose("up", "-d", "postgres")
         for _ in range(90):
             ready = command(["docker", "exec", self.container("postgres"), "pg_isready", "-U", "postgres", "-d", "jarv1s"], check=False)
@@ -123,7 +134,8 @@ class Stack:
             raise RuntimeError("throwaway database never became ready")
         self.compose("--profile", "ops", "run", "--rm", "migrate")
         self.sql(f"INSERT INTO app.users(id,email) VALUES ('{self.account}','fixture@example.invalid'); "
-                 f"INSERT INTO app.rls_probe_items(id,owner_user_id,body) VALUES ('14da8cd7-d1ef-4d4a-a7a0-595ace14f002','{self.account}','{self.item}');")
+                 f"INSERT INTO app.rls_probe_items(id,owner_user_id,body) VALUES ('14da8cd7-d1ef-4d4a-a7a0-595ace14f002','{self.account}','{self.item}'); "
+                 "INSERT INTO app.module_installs(module_id,status,table_prefix,runtime_role,install_role) VALUES ('fixture-unavailable','failed','fixture_','fixture_runtime','fixture_install');")
         self.compose("up", "-d", "app", "worker")
         for _ in range(120):
             try:
@@ -134,6 +146,7 @@ class Stack:
                 pass
             time.sleep(1)
         else:
+            self.startup_diagnostics()
             raise RuntimeError("published app did not become ready (private logs withheld)")
         expect(self.inspect(self.container("worker"))["State"]["Running"], "published app and worker are running against their own migrated database")
         command(["docker", "exec", "-i", self.container("app"), "sh", "-c", f"mkdir -p /data/vaults/{self.account}; cat > /data/vaults/{self.account}/attachment.bin"], data=self.attachment)
@@ -146,7 +159,10 @@ class Stack:
         # Never remove an image that existed before this run or force-remove a shared image.
         for image in self.image_ids - self.images_before:
             command(["docker", "image", "rm", image.decode()], check=False)
-        shutil.rmtree(self.scratch, ignore_errors=True)
+        remaining = command(["docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=" + self.project]).stdout.strip()
+        volumes = command(["docker", "volume", "ls", "-q", "--filter", "label=com.docker.compose.project=" + self.project]).stdout.strip()
+        expect(not remaining and not volumes, "throwaway containers and volumes are gone")
+        shutil.rmtree(self.scratch)
 
     def run_export(self, plan, output, env=None):
         config = self.scratch / (output.stem + ".json")
@@ -205,7 +221,7 @@ class Stack:
         app, worker, db = (self.container(s) for s in ("app", "worker", "postgres"))
         # Refusal before side effects: missing mount disposition and a wrong project.
         plan = {"project": self.project, "database": "jarv1s", "postgres": db,
-                "writers": [app, worker], "externalSupervisorsDisabled": True,
+                "writers": [app, worker], "externalSupervisorsDisabled": True, "credentialsNotCarried": [],
                 "mounts": [{"container": app, "target": "/data/vaults", "archive": "vault", "disposition": "transferred"},
                            {"container": worker, "target": "/data/vaults", "disposition": "reconstructed", "reason": "same volume already captured from app"}]}
         for label, bad in [("mount", {**plan, "mounts": []}), ("identity", {**plan, "project": "wrong-project"})]:
@@ -239,7 +255,7 @@ class Stack:
         content = output.read_bytes()
         expect(all(secret.encode() not in content for secret in [*self.secrets, words.decode().strip()]),
                "byte search finds no plaintext credential or recovery words in the archive")
-        expect(all(secret.encode() not in result.stdout + result.stderr for secret in self.secrets),
+        expect(all(secret.encode() not in result.stdout + result.stderr for secret in [*self.secrets, words.decode().strip()]),
                "export diagnostics contain no generated credential")
         self.reboot_conditions([app, worker])
         command([TARGET / "debug/moss-docker-export", "check-fence", output.with_suffix(".fence.json")])
@@ -250,7 +266,8 @@ class Stack:
         opened = self.scratch / "opened"
         command([TARGET / "debug/docker-export-fixture", output, words_file, opened])
         manifest = json.loads((opened / "manifest.json").read_bytes())
-        expect(manifest["accountsCount"] == 1 and manifest["schemaVersion"] and manifest["catalog"]["extensions"],
+        expect(manifest["accountsCount"] == 1 and manifest["schemaVersion"] and manifest["catalog"]["extensions"]
+               and any(m["module_id"] == "fixture-unavailable" for m in manifest["modules"]),
                "part 4 reader opens account, schema, module and extension inventory")
         expect((opened / "files/vault" / self.account / "attachment.bin").read_bytes() == self.attachment,
                "part 4 reader verifies the seeded attachment bytes and every recorded file hash")
@@ -268,7 +285,7 @@ class Stack:
         expect(self.item.encode() in sql and self.account.encode() in sql,
                "container pg_restore finds the seeded item and account in the archived custom dump")
         command(["docker", "stop", db])
-        # Damage, wrong key, and changed live policy must be rejected by the real readers.
+        # Damage and changed live policy must be rejected by the real readers.
         damaged = bytearray(content)
         damaged[-20] ^= 1
         bad = self.scratch / "damaged.mossbak"

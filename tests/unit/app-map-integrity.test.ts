@@ -141,7 +141,7 @@ describe("app-map integrity and truthfulness", () => {
     ]);
     for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
       // Host-only remedies have instructions and no screen.
-      if (entry.scope === "system" && entry.path === undefined) continue;
+      if ("scope" in entry && entry.scope === "system" && entry.path === undefined) continue;
       // Catalog, install and lifecycle screens are query views of the declared shell route.
       expect(
         rustRoutes.has((entry.path ?? "").split("?")[0] ?? ""),
@@ -375,7 +375,7 @@ describe("app-map integrity and truthfulness", () => {
     const rustRemediations = CORE_APP_REMEDIATIONS.filter((entry) => entry.runtime === "rust");
     expect(rustRemediations.length).toBeGreaterThan(0);
     for (const entry of rustRemediations) {
-      if (entry.scope === "system" && entry.path === undefined) continue;
+      if ("scope" in entry && entry.scope === "system" && entry.path === undefined) continue;
       const path = entry.path ?? "";
       // A query view must name a declared screen on a real HTTP route.
       expect(

@@ -176,9 +176,13 @@ fn receipt_write(path: &Path, receipt: &Value, first: bool) -> Result<(), String
         std::fs::rename(&tmp, path).map_err(|_| "Cannot publish the source fence receipt")?;
     }
     #[cfg(unix)]
-    std::fs::File::open(path.parent().unwrap_or(Path::new(".")))
-        .and_then(|d| d.sync_all())
-        .map_err(|_| "Cannot persist the source fence directory")?;
+    std::fs::File::open(
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new(".")),
+    )
+    .and_then(|d| d.sync_all())
+    .map_err(|_| "Cannot persist the source fence directory")?;
     Ok(())
 }
 
@@ -186,7 +190,8 @@ const CATALOG: &str = "SELECT json_build_object(
  'accountsCount', (SELECT count(*) FROM app.users),
  'schemaVersion', (SELECT max(version) FROM app.schema_migrations),
  'coreLedger', (SELECT coalesce(json_agg(t ORDER BY t.version), '[]') FROM app.schema_migrations t),
- 'modules', (SELECT coalesce(json_agg(t ORDER BY t.module_id,t.version), '[]') FROM app.module_schema_migrations t),
+ 'moduleLedger', (SELECT coalesce(json_agg(t ORDER BY t.module_id,t.version), '[]') FROM app.module_schema_migrations t),
+ 'modules', (SELECT coalesce(json_agg(t ORDER BY t.module_id), '[]') FROM app.module_installs t),
  'tables', (SELECT json_agg(json_build_object('schema',n.nspname,'table',c.relname) ORDER BY n.nspname,c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind IN ('r','p') AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%'),
  'extensions', (SELECT json_agg(json_build_object('name',extname,'version',extversion) ORDER BY extname) FROM pg_extension),
  'otherClients', (SELECT count(*) FROM pg_stat_activity WHERE pid<>pg_backend_pid() AND backend_type='client backend'));
@@ -213,6 +218,10 @@ pub fn export(
         return Err("Disable external restart services and external vault writers, then confirm externalSupervisorsDisabled in the plan".into());
     }
     let mounts = list(plan, "mounts")?;
+    for credential in list(plan, "credentialsNotCarried")? {
+        text(credential, "kind")?;
+        text(credential, "reason")?;
+    }
     let mut inventory = Vec::new();
     let mut ids = BTreeSet::new();
     for name in writers.iter().chain(std::iter::once(&plan["postgres"])) {
@@ -395,8 +404,20 @@ pub fn export(
                 &mut files,
             )?;
         }
-        let versions: Vec<_> = inventory[..inventory.len()-1].iter().map(|i| json!({"id":id(i),"image":i["Config"]["Image"],"imageId":i["Image"],"version":i["Config"]["Env"].as_array().and_then(|env|env.iter().filter_map(Value::as_str).find_map(|e|e.strip_prefix("JARVIS_APP_VERSION=")))})).collect();
-        let manifest = json!({"kind":"moss-docker-move","version":1,"backupId":backup_id,"createdAt":created_at,"mossVersion":versions,"schemaVersion":catalog["schemaVersion"],"accountsCount":catalog["accountsCount"],"modules":catalog["modules"],"catalog":catalog,"database":{"name":database,"dump":dump,"roles":roles},"files":files,"mounts":mounts,"sourceFence":receipt,"credentialsNotCarried":[{"kind":"provider-acceptance","reason":"CLI, OAuth and OS-bound sessions are preserved but inactive; sign-in may be required. Provider acceptance has not been checked."}],"sourceInventory":inventory.iter().map(|i|json!({"id":id(i),"mounts":i["Mounts"]})).collect::<Vec<_>>()});
+        let versions: Vec<_> = inventory[..inventory.len() - 1]
+            .iter()
+            .map(|i| {
+                let version = i["Config"]["Env"].as_array().and_then(|env| {
+                    env.iter().filter_map(Value::as_str).find_map(|e| {
+                        e.strip_prefix("JARVIS_APP_VERSION=").filter(|v| !v.is_empty())
+                    })
+                });
+                json!({"id":id(i),"image":i["Config"]["Image"],"imageId":i["Image"],
+                    "version":version.unwrap_or(i["Config"]["Image"].as_str().unwrap_or("")),
+                    "versionSource":if version.is_some() { "app-environment" } else { "image-reference" }})
+            })
+            .collect();
+        let manifest = json!({"kind":"moss-docker-move","version":1,"backupId":backup_id,"createdAt":created_at,"mossVersion":versions,"schemaVersion":catalog["schemaVersion"],"accountsCount":catalog["accountsCount"],"modules":catalog["modules"],"catalog":catalog,"database":{"name":database,"dump":dump,"roles":roles},"files":files,"mounts":mounts,"sourceFence":receipt,"credentialsNotCarried":plan["credentialsNotCarried"],"credentialPortability":{"providerAcceptance":"not checked","osBoundSessions":"preserved but inactive; sign-in may be required"},"sourceInventory":inventory.iter().map(|i|json!({"id":id(i),"mounts":i["Mounts"]})).collect::<Vec<_>>()});
         writer
             .begin_entry(archive::ENTRY_MANIFEST, "manifest.json")
             .and_then(|_| writer.segment(manifest.to_string().as_bytes()))
