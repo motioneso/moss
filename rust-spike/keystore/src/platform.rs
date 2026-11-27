@@ -20,11 +20,7 @@ pub fn platform_store() -> Box<dyn OsKeyStore + Send> {
 
 #[cfg(target_os = "windows")]
 pub fn platform_store() -> Box<dyn OsKeyStore + Send> {
-    let dir = std::env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_default()
-        .join("Moss/keystore");
-    Box::new(windows::DpapiStore { dir })
+    Box::new(windows::DpapiStore)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
@@ -331,8 +327,43 @@ mod windows {
         CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
     };
 
-    pub struct DpapiStore {
-        pub dir: PathBuf,
+    pub struct DpapiStore;
+
+    fn store_folder() -> Result<PathBuf, CustodyError> {
+        use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+        use windows_sys::Win32::{
+            System::Com::CoTaskMemFree,
+            UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath},
+        };
+        let mut raw = std::ptr::null_mut();
+        // Resolve the actual token's profile, not an environment inherited
+        // from a different account when this process was launched.
+        // SAFETY: the API writes an allocated, NUL-terminated UTF-16 path.
+        let result = unsafe {
+            SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, std::ptr::null_mut(), &mut raw)
+        };
+        if result < 0 || raw.is_null() {
+            if !raw.is_null() {
+                // SAFETY: this pointer was allocated by SHGetKnownFolderPath.
+                unsafe { CoTaskMemFree(raw.cast()) };
+            }
+            return Err(CustodyError::Unavailable(
+                "Windows could not open your account's key store folder. Sign out and in, then try again."
+                    .into(),
+            ));
+        }
+        // SAFETY: successful SHGetKnownFolderPath returns a NUL-terminated
+        // string; copy it before freeing exactly its original allocation.
+        let path = unsafe {
+            let mut length = 0;
+            while *raw.add(length) != 0 {
+                length += 1;
+            }
+            let path = OsString::from_wide(std::slice::from_raw_parts(raw, length));
+            CoTaskMemFree(raw.cast());
+            PathBuf::from(path)
+        };
+        Ok(path.join("Moss/keystore"))
     }
 
     fn blob_path(dir: &Path, service: &str) -> PathBuf {
@@ -405,15 +436,17 @@ mod windows {
 
     impl OsKeyStore for DpapiStore {
         fn probe(&self) -> Result<(), CustodyError> {
+            store_folder()?;
             protect(b"moss-probe").map(|_| ())
         }
         fn store_master(&mut self, service: &str, master: &MasterKey) -> Result<(), CustodyError> {
             let protected = protect(master.bytes())?;
-            std::fs::create_dir_all(&self.dir)
+            let dir = store_folder()?;
+            std::fs::create_dir_all(&dir)
                 .map_err(|e| CustodyError::Io(format!("create DPAPI folder: {e}")))?;
             // Stage beside the blob, then rename over it, so a crash mid-write
             // leaves the old protected blob whole.
-            let target = blob_path(&self.dir, service);
+            let target = blob_path(&dir, service);
             let staging = target.with_extension("staging");
             std::fs::write(&staging, STANDARD.encode(protected))
                 .map_err(|e| CustodyError::Io(format!("write DPAPI staging file: {e}")))?;
@@ -424,7 +457,7 @@ mod windows {
             renamed.map_err(|e| CustodyError::Io(format!("replace DPAPI blob: {e}")))
         }
         fn load_master(&self, service: &str) -> Result<MasterKey, CustodyError> {
-            let text = std::fs::read_to_string(blob_path(&self.dir, service))
+            let text = std::fs::read_to_string(blob_path(&store_folder()?, service))
                 .map_err(|_| CustodyError::NoMaster)?;
             let protected = STANDARD
                 .decode(text.trim())
@@ -436,7 +469,7 @@ mod windows {
             Ok(MasterKey::from_bytes(bytes))
         }
         fn delete_master(&mut self, service: &str) -> Result<(), CustodyError> {
-            let _ = std::fs::remove_file(blob_path(&self.dir, service));
+            let _ = std::fs::remove_file(blob_path(&store_folder()?, service));
             Ok(())
         }
     }
