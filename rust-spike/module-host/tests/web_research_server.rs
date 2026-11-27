@@ -460,9 +460,19 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
                     .send()
                     .unwrap_or_else(|e| panic!("network address read: {e}"))
             };
-            // Sharing is off by default, so another device is refused until the administrator
-            // turns it on through the real settings route.
-            assert_eq!(send().status().as_u16(), 403, "sharing is off");
+            // Sharing is off by default and the server binds this computer only, so
+            // another device cannot open a connection until the administrator turns
+            // sharing on through the real settings route.
+            let off = remote
+                .post(format!("{origin}/api/m/web/read"))
+                .header("origin", &origin)
+                .header("cookie", &other)
+                .json(&json!({"urls": ["https://10.0.0.5/"]}))
+                .send();
+            assert!(
+                off.is_err() || off.is_ok_and(|r| r.status().as_u16() == 403),
+                "sharing is off"
+            );
             let turned_on = client
                 .put(format!("{origin}/api/network"))
                 .header("origin", &origin)

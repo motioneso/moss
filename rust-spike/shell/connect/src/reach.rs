@@ -27,6 +27,9 @@ pub const SUPPORTED: ApiRange = ApiRange {
 pub enum Problem {
     NotSetUp,
     DidNotStart,
+    ServiceFailed,
+    ServiceStopped,
+    StopFailed(String),
     Unreachable,
     HostRefused,
     SharingOff,
@@ -40,8 +43,10 @@ impl Problem {
     /// The error code the app map declares for this problem.
     pub fn code(&self) -> &'static str {
         match self {
+            Problem::StopFailed(_) => "app_server_stop_failed",
             Problem::NotSetUp => "app_server_not_set_up",
             Problem::DidNotStart => "app_server_did_not_start",
+            Problem::ServiceFailed | Problem::ServiceStopped => "app_server_service_failed",
             Problem::Unreachable => "app_server_unreachable",
             Problem::HostRefused => "host_refused",
             Problem::SharingOff => "origin_or_sharing_refused",
@@ -52,10 +57,13 @@ impl Problem {
         }
     }
 
-    pub fn reason(&self) -> &'static str {
+    pub fn reason(&self) -> &str {
         match self {
+            Problem::StopFailed(reason) => reason,
             Problem::NotSetUp => "Moss isn't set up on this computer yet.",
             Problem::DidNotStart => "Moss didn't start on this computer.",
+            Problem::ServiceFailed => "Check your sign-in services and server.log and database.log in this server's folder. Fix the startup problem, then press Start.",
+            Problem::ServiceStopped => "Moss is stopped. Press Start.",
             Problem::Unreachable => "Moss isn't answering at this address.",
             Problem::HostRefused => {
                 "That computer doesn't list this address. Use one from its Sharing screen."
@@ -109,24 +117,29 @@ pub fn is_loopback_origin(origin: &str) -> bool {
 
 /// Records the leaf certificate and, when pinned, accepts only that exact leaf. The server must
 /// still prove it holds the certificate's key through the normal handshake signature. Validity
-/// dates are ignored on purpose: a renewed certificate is a new leaf and is asked about again.
+/// dates are ignored only on the pinned path: a renewed leaf is asked about again.
+/// The platform path verifies the chain, name and validity through the OS trust policy.
 #[derive(Debug)]
 struct Pin {
     expected: Option<String>,
     seen: Arc<Mutex<Option<Vec<u8>>>>,
     provider: Arc<CryptoProvider>,
+    platform: Option<rustls_platform_verifier::Verifier>,
 }
 
 impl ServerCertVerifier for Pin {
     fn verify_server_cert(
         &self,
         end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp: &[u8],
-        _now: UnixTime,
+        intermediates: &[CertificateDer<'_>],
+        server_name: &ServerName<'_>,
+        ocsp: &[u8],
+        now: UnixTime,
     ) -> Result<ServerCertVerified, rustls::Error> {
         *self.seen.lock().expect("pin lock") = Some(end_entity.as_ref().to_vec());
+        if let Some(platform) = &self.platform {
+            return platform.verify_server_cert(end_entity, intermediates, server_name, ocsp, now);
+        }
         match &self.expected {
             Some(pin) if *pin != fingerprint(end_entity.as_ref()) => {
                 Err(rustls::Error::General("certificate pin mismatch".into()))
@@ -172,7 +185,9 @@ impl ServerCertVerifier for Pin {
 
 type Tls = tokio_rustls::client::TlsStream<TcpStream>;
 
-/// Opens TLS to an origin. `Err(Some(der))` means the certificate did not match the pin.
+/// Opens TLS to an origin. A nonempty pin keeps the existing exact-leaf trust path; an empty
+/// pin requires OS trust. `None` is certificate inspection only and must never send a request.
+/// `Err(Ok(der))` means the certificate did not match a nonempty pin.
 async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<Vec<u8>, Problem>> {
     let url = url::Url::parse(origin).map_err(|_| Err(Problem::NotMoss))?;
     let host = url
@@ -184,9 +199,17 @@ async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let seen = Arc::new(Mutex::new(None));
     let verifier = Pin {
-        expected: pin.map(str::to_owned),
+        expected: pin.filter(|p| !p.is_empty()).map(str::to_owned),
         seen: seen.clone(),
         provider: provider.clone(),
+        platform: if pin == Some("") {
+            Some(
+                rustls_platform_verifier::Verifier::new(provider.clone())
+                    .map_err(|_| Err(Problem::NotMoss))?,
+            )
+        } else {
+            None
+        },
     };
     let mut config = rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
@@ -211,13 +234,15 @@ async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<
     let leaf = seen.lock().expect("pin lock").clone();
     match (handshake, leaf) {
         (Ok(Ok(stream)), Some(der)) => Ok((stream, der)),
-        (Ok(Err(_)), Some(der)) if pin.is_some_and(|p| p != fingerprint(&der)) => Err(Ok(der)),
+        (Ok(Err(_)), Some(der)) if pin.is_some_and(|p| !p.is_empty() && p != fingerprint(&der)) => {
+            Err(Ok(der))
+        }
         (Ok(Err(_)), Some(_)) => Err(Err(Problem::NotMoss)),
         _ => Err(Err(Problem::Unreachable)),
     }
 }
 
-/// One HTTPS request over the pinned connection. Used by the notifier, which has no web view.
+/// One HTTPS request over the pinned or OS-verified connection. Used by the notifier, which has no web view.
 /// `Origin` is the server's own origin, as the server requires for writes.
 pub async fn request(
     origin: &str,
@@ -254,6 +279,12 @@ pub async fn request(
     Ok((status, body.to_vec()))
 }
 
+/// Checks OS trust before choosing the add-server flow. No API response (sharing, product or
+/// version) may turn a valid public certificate into a pin-comparison prompt.
+pub async fn has_os_trust(origin: &str) -> bool {
+    open(origin, Some("")).await.is_ok()
+}
+
 /// Reads the certificate without trusting it, so the user can compare its code. No request is
 /// sent over the connection.
 pub async fn peek_certificate(origin: &str) -> Result<String, Problem> {
@@ -264,7 +295,8 @@ pub async fn peek_certificate(origin: &str) -> Result<String, Problem> {
     }
 }
 
-/// Connects with the pin, asks for hello and checks versions. Returns the leaf certificate so
+/// Connects with the pin (or OS trust for an empty pin), asks for hello and checks versions.
+/// Returns the leaf certificate so
 /// the window's web engine can trust exactly the same one.
 pub async fn hello(origin: &str, pin: &str) -> Result<(Hello, Vec<u8>), Problem> {
     let (mut tls, der) = match open(origin, Some(pin)).await {
@@ -439,7 +471,7 @@ fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
             .open(folder.join("server.log"))
             .map_err(|_| Problem::DidNotStart)?
     };
-    let mut command = crate::launch::command(install, "moss-shell");
+    let mut command = crate::launch::command(install, "moss-server");
     command
         .arg("serve")
         .arg("--instance")
@@ -486,6 +518,11 @@ fn start_lock(folder: &Path) -> Result<Option<std::fs::File>, Problem> {
         .map_err(|_| Problem::DidNotStart)
 }
 
+/// Development fixtures without a launcher retain their direct-process lifecycle.
+pub fn managed(install: &Path) -> bool {
+    moss_launcher::launcher(install).is_file()
+}
+
 /// Finds the local server, starting it if no one else is. The lock is released on return.
 pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, Vec<u8>), Problem> {
     match local(folder).await {
@@ -499,36 +536,93 @@ pub async fn local_or_start(install: &Path, folder: &Path) -> Result<(Running, V
     if lock.is_some() {
         match local(folder).await {
             Err(Problem::Unreachable) => {
-                // An instance the app made has its own database, which must be up first.
-                let (i, f) = (install.to_owned(), folder.to_owned());
-                tokio::task::spawn_blocking(move || {
-                    crate::provision::ensure_database(&i, &f, false)
-                })
-                .await
-                .map_err(|_| Problem::DidNotStart)?
-                .map_err(|_| Problem::DidNotStart)?;
-                start_local(install, folder)?
+                if managed(install) {
+                    if folder.join(moss_launcher::service::STOPPED).exists() {
+                        return Err(Problem::ServiceStopped);
+                    }
+                    if service_state(folder).await? == moss_launcher::service::State::Failed {
+                        return Err(Problem::ServiceFailed);
+                    }
+                    let (i, f) = (install.to_owned(), folder.to_owned());
+                    tokio::task::spawn_blocking(move || moss_launcher::service::start(&i, &f))
+                        .await
+                        .map_err(|_| Problem::ServiceFailed)?
+                        .map_err(|_| Problem::ServiceFailed)?;
+                } else {
+                    let (i, f) = (install.to_owned(), folder.to_owned());
+                    tokio::task::spawn_blocking(move || {
+                        crate::provision::ensure_database(&i, &f, false)
+                    })
+                    .await
+                    .map_err(|_| Problem::DidNotStart)?
+                    .map_err(|_| Problem::DidNotStart)?;
+                    start_local(install, folder)?;
+                }
             }
             other => return other,
         }
     }
-    for _ in 0..80 {
+    wait_for_local(install, folder, lock, Duration::from_secs(300)).await
+}
+
+async fn wait_for_local(
+    install: &Path,
+    folder: &Path,
+    lock: Option<std::fs::File>,
+    ceiling: Duration,
+) -> Result<(Running, Vec<u8>), Problem> {
+    let deadline = tokio::time::Instant::now() + ceiling;
+    let mut polls = 0;
+    loop {
         tokio::time::sleep(Duration::from_millis(250)).await;
         if let Ok(found) = local(folder).await {
             return Ok(found);
         }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(if managed(install) {
+                Problem::ServiceFailed
+            } else {
+                Problem::DidNotStart
+            });
+        }
+        polls += 1;
+        let starting = if managed(install) {
+            match service_state(folder).await? {
+                moss_launcher::service::State::Failed => return Err(Problem::ServiceFailed),
+                moss_launcher::service::State::Starting => true,
+                moss_launcher::service::State::Inactive
+                | moss_launcher::service::State::Unregistered => false,
+            }
+        } else {
+            still_running(folder)
+        };
+        if starting {
+            continue;
+        }
+        if managed(install) {
+            // Allow the native login action time to acquire its ownership lock on macOS
+            // and Windows. Once it owns the lock, database startup may take much longer.
+            if polls < 80 {
+                continue;
+            }
+            return Err(Problem::ServiceFailed);
+        }
         let gave_up = match &lock {
-            // The server this app started has stopped, so waiting longer cannot help.
-            Some(_) => !still_running(folder),
-            // The app that was starting it has let go of the lock.
+            Some(_) => true,
             None => start_lock(folder)?.is_some(),
         };
-        if gave_up {
-            // The other app may have let go just after its server came up.
+        if gave_up || polls >= 80 {
             return local(folder).await.map_err(|_| Problem::DidNotStart);
         }
     }
-    Err(Problem::DidNotStart)
+}
+
+async fn service_state(folder: &Path) -> Result<moss_launcher::service::State, Problem> {
+    let folder = folder.to_owned();
+    tokio::task::spawn_blocking(move || moss_launcher::service::state(&folder))
+        .await
+        .map_err(|_| Problem::ServiceFailed)?
+        .map_err(|_| Problem::ServiceFailed)
 }
 
 /// Stops the running local server for an instance, then its database. Asks the server to finish
@@ -539,20 +633,32 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
     // Dropping a UI result cannot cancel spawn_blocking database startup; this lock can.
     let _lock = timeout(Duration::from_secs(200), async {
         loop {
-            if let Some(lock) = start_lock(folder)? {
+            if let Some(lock) = start_lock(folder).map_err(|_| Problem::StopFailed("Moss cannot open its start lock. Check write permission for this server's folder, then press Stop again.".into()))? {
                 return Ok::<_, Problem>(lock);
             }
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
     })
     .await
-    .map_err(|_| Problem::Unreachable)??;
-    // Unreachable is not proof of death: leave the database alone if hello cannot answer.
-    let (running, _) = local(folder).await?;
-    if running.pid == 0 || running.pid > i32::MAX as u32 {
-        return Err(Problem::Unreachable);
+    .map_err(|_| Problem::StopFailed("Moss is still starting. Wait a moment, then press Stop again.".into()))??;
+    if managed(install) {
+        let (i, f) = (install.to_owned(), folder.to_owned());
+        return tokio::task::spawn_blocking(move || moss_launcher::service::stop(&i, &f))
+            .await
+            .map_err(|_| {
+                Problem::StopFailed(
+                    "Moss could not finish its stop task. Open Servers and press Stop again."
+                        .into(),
+                )
+            })?
+            .map_err(Problem::StopFailed);
     }
-    request_stop(folder, running.pid)?;
+    // Unreachable is not proof of death: leave the database alone if hello cannot answer.
+    let (running, _) = local(folder).await.map_err(|_| Problem::StopFailed("Moss cannot confirm which server is running. Check this server's address and folder permissions, then press Stop again.".into()))?;
+    if running.pid == 0 || running.pid > i32::MAX as u32 {
+        return Err(Problem::StopFailed("Moss cannot identify the running server. Check its running record in the server folder, then press Stop again.".into()));
+    }
+    request_stop(folder, running.pid).map_err(|_| Problem::StopFailed("Moss could not send the stop request. Check this server's process and folder permissions, then press Stop again.".into()))?;
     for _ in 0..120 {
         still_running(folder);
         if !folder.join(RUNNING_FILE).exists() {
@@ -560,12 +666,12 @@ pub async fn stop_local(install: &Path, folder: &Path) -> Result<(), Problem> {
             // Where there is no database program yet (Windows) this finds nothing to stop.
             return tokio::task::spawn_blocking(move || crate::provision::stop_database(&i, &f))
                 .await
-                .map_err(|_| Problem::Unreachable)?
-                .map_err(|_| Problem::Unreachable);
+                .map_err(|_| Problem::StopFailed("Moss could not finish stopping its database. Check database.log in this server's folder, then press Stop again.".into()))?
+                .map_err(|_| Problem::StopFailed("Moss could not stop its database. Check database.log in this server's folder, then press Stop again.".into()));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
-    Err(Problem::Unreachable)
+    Err(Problem::StopFailed("Moss is still finishing work. Wait a moment, then press Stop again; check server.log if it keeps waiting.".into()))
 }
 
 /// Asks the server whose certificate just answered for this folder to shut down.
@@ -597,3 +703,6 @@ pub(crate) fn request_stop_by_file(folder: &Path, pid: u32) -> Result<(), Proble
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod phase7_os_trust;

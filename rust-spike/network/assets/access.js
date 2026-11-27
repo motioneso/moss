@@ -2,10 +2,26 @@
 "use strict";
 const status = document.getElementById("status");
 const say = (message) => {
+  status.setAttribute("role", "status");
   status.textContent = message;
 };
-const explanation = (code) =>
-  ({
+const sayAlert = (message) => {
+  status.setAttribute("role", "alert");
+  status.textContent = message;
+};
+const firewallReasons = {
+  unknown: "Could not confirm the firewall change. Try again.",
+  firewall_service_unavailable: "Reinstall Moss or restart the firewall.",
+  foreign_rule: "Rename or remove the other rule in your firewall settings, then try again.",
+  no_firewall_manager: "Install and turn on ufw or firewalld, then try again.",
+  stuck:
+    "The firewall rule may still be open. Try again, or remove Moss's rule in your firewall settings.",
+  legacy_rule: "Remove the old Moss rule in your firewall settings, then try again.",
+  cleaned_up: "The old firewall rule was cleaned up. Try again to turn sharing on."
+};
+const explanation = (code, reason) =>
+  firewallReasons[reason] ||
+  {
     sign_in_body_timeout: "That connection was too slow. Try signing in again.",
     sign_in_body_too_large: "This sign-in request is too large. Reload the page and try again.",
     sign_in_rate_limited: "Too many tries. Wait a minute, then try again.",
@@ -13,8 +29,9 @@ const explanation = (code) =>
     setup_is_complete: "Moss already has an owner. Go back and sign in.",
     setup_is_local_only: "Create the owner account on the computer running Moss.",
     origin_or_sharing_refused: "This address is not allowed. Open Moss at a trusted address.",
+    app_firewall_refused: "The firewall did not allow Moss. Try again.",
     host_refused: "This address is not trusted. Open Moss at its configured address."
-  })[code];
+  }[code];
 async function call(path, method = "GET", body) {
   const response = await fetch(path, {
     method,
@@ -23,10 +40,16 @@ async function call(path, method = "GET", body) {
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   const result = await response.json();
-  if (!response.ok)
-    throw new Error(
-      explanation(result.code) || result.message || result.error || "That did not work. Try again."
+  if (!response.ok) {
+    const failure = new Error(
+      explanation(result.code, result.reason) ||
+        result.message ||
+        result.error ||
+        "That did not work. Try again."
     );
+    failure.sharing = result.sharing;
+    throw failure;
+  }
   return result;
 }
 for (const id of ["sign-in", "setup"]) {
@@ -77,39 +100,117 @@ if (document.getElementById("setup") || document.getElementById("setup-link")) {
 }
 const sharing = document.getElementById("sharing");
 if (sharing) {
-  call("/api/network")
-    .then((result) => {
-      const checkbox = document.getElementById("sharing-enabled");
-      document.getElementById("fingerprint").textContent = result.fingerprint;
-      checkbox.checked = result.sharing;
-      checkbox.disabled = false;
-      sharing.querySelector("button").disabled = false;
-      for (const origin of result.origins) {
+  const box = document.getElementById("sharing-enabled");
+  const confirmBox = document.getElementById("confirm");
+  const retry = document.getElementById("retry");
+  const pausedPanel = document.getElementById("paused-sharing");
+  const blockedPanel = document.getElementById("blocked-sharing");
+  const legacyPanel = document.getElementById("legacy-sharing");
+  const resume = document.getElementById("resume-sharing");
+  let paused = false;
+  let blocked = false;
+  let legacy = false;
+  let firewallSettings = null;
+  const paint = (result) => {
+    paused = result.firewall === "paused";
+    blocked = result.firewall === "paused_blocked";
+    legacy = result.firewall === "legacy";
+    if (result.firewall_settings !== undefined) firewallSettings = result.firewall_settings;
+    pausedPanel.hidden = !paused;
+    blockedPanel.hidden = !blocked;
+    legacyPanel.hidden = !legacy;
+    resume.disabled = false;
+    box.checked = result.sharing || paused || blocked;
+    box.disabled = false;
+    document.getElementById("firewall").textContent =
+      paused || blocked
+        ? "Paused"
+        : legacy
+          ? "Old rule"
+          : result.firewall === "allowed"
+            ? "Allowed"
+            : result.firewall === "disabled"
+              ? "Off"
+              : "Not asked yet";
+    document.getElementById("address").textContent = result.origins[0] || "No network found.";
+    document.getElementById("address-state").textContent =
+      paused || blocked ? "Paused" : result.sharing ? "On" : "Off";
+    document.getElementById("fingerprint").textContent = result.fingerprint;
+    const list = document.getElementById("origins");
+    list.replaceChildren(
+      ...result.origins.map((origin) => {
         const li = document.createElement("li");
         li.textContent = origin;
-        document.getElementById("origins").append(li);
-      }
-      say(
-        result.sharing
-          ? "Sharing is on. Other devices must sign in."
-          : "Sharing is off. Moss is available on this computer only."
-      );
+        return li;
+      })
+    );
+  };
+  let target = true;
+  const put = async (on) => {
+    target = on;
+    box.disabled = true;
+    retry.hidden = true;
+    resume.disabled = true;
+    say(on ? "Waiting for your firewall…" : "Turning sharing off…");
+    try {
+      await call("/api/network", "PUT", { sharing: on });
+      // The change reply carries no address list, so the screen reads the full state again.
+      paint(await call("/api/network"));
+      say("");
+    } catch (error) {
+      sayAlert(error.message);
+      retry.hidden = paused || blocked || legacy;
+      // A failed read leaves the screen as it was, since it cannot say what is true now.
+      await call("/api/network")
+        .then((result) => {
+          paint(result);
+          retry.hidden = paused || blocked || legacy;
+        })
+        .catch(() => sayAlert("Moss could not read the current state. Reload this page."));
+    }
+  };
+  call("/api/network")
+    .then((result) => {
+      paint(result);
+      say("");
     })
     .catch((error) => say(error.message));
-  sharing.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const button = sharing.querySelector("button");
-    button.disabled = true;
+  resume.addEventListener("click", () => put(true));
+  document.getElementById("clear-legacy").addEventListener("click", async () => {
     try {
-      const result = await call("/api/network", "PUT", {
-        sharing: document.getElementById("sharing-enabled").checked
-      });
-      say(result.sharing ? "Saved. Other devices can now sign in." : "Saved. Sharing is off.");
+      await call("/api/network/legacy", "DELETE");
+      paint(await call("/api/network"));
+      say("The old rule record is cleared. You can turn sharing on again.");
     } catch (error) {
-      say(error.message);
-    } finally {
-      button.disabled = false;
+      sayAlert(error.message);
     }
+  });
+  document.getElementById("open-firewall-settings").addEventListener("click", () => {
+    if (firewallSettings) {
+      const link = document.createElement("a");
+      link.href = firewallSettings;
+      link.click();
+    } else {
+      say("Open your firewall settings and look for Moss in the list of allowed programs.");
+    }
+  });
+  box.addEventListener("change", () => {
+    if (box.checked) {
+      box.checked = false;
+      confirmBox.showModal();
+    } else put(false);
+  });
+  document.getElementById("cancel").addEventListener("click", () => {
+    confirmBox.close();
+  });
+  const start = () => {
+    confirmBox.close();
+    put(true);
+  };
+  document.getElementById("turn-on").addEventListener("click", start);
+  document.getElementById("try-again").addEventListener("click", () => {
+    if (target) start();
+    else put(false);
   });
 }
 document.getElementById("sign-out")?.addEventListener("click", async () => {

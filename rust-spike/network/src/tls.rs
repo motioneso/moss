@@ -5,12 +5,13 @@ use hyper_util::{
     service::TowerToHyperService,
 };
 use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     path::Path,
     process::{Command, Stdio},
     sync::Arc,
 };
 use tokio::{
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     sync::Semaphore,
     time::{timeout, Duration},
 };
@@ -72,12 +73,117 @@ async fn stop_requested(folder: Option<&Path>) {
     let path = folder.join(STOP_FILE);
     loop {
         tokio::time::sleep(Duration::from_millis(300)).await;
-        let Ok(bytes) = private_read(&path) else { continue };
+        let Ok(bytes) = private_read(&path) else {
+            continue;
+        };
         let _ = std::fs::remove_file(&path);
         let named = String::from_utf8_lossy(&bytes).trim().parse::<u32>().ok();
         if named == Some(std::process::id()) {
             return;
         }
+    }
+}
+
+/// The sockets the server accepts on. With sharing off only loopback is bound, so no other
+/// device can open a connection at all. Turning sharing on binds `shared` instead.
+pub struct Listening {
+    listeners: Vec<TcpListener>,
+    binder: Option<Binder>,
+    port: u16,
+    sharing: bool,
+    switch: tokio::sync::mpsc::Receiver<(bool, Reply)>,
+}
+
+#[derive(Clone)]
+struct Binder {
+    shared: SocketAddr,
+}
+
+impl Binder {
+    /// The addresses for one sharing state. Port 0 picks one port and reuses it.
+    async fn bind(&self, sharing: bool) -> Result<Vec<TcpListener>, String> {
+        let mut found = Vec::new();
+        let mut port = self.shared.port();
+        let mut addrs = Vec::new();
+        if sharing {
+            addrs.push(self.shared.ip());
+        }
+        // A specific shared address leaves loopback to its own socket.
+        if !sharing || !self.shared.ip().is_unspecified() {
+            addrs.push(Ipv4Addr::LOCALHOST.into());
+            addrs.push(Ipv6Addr::LOCALHOST.into());
+        }
+        // An IPv4 wildcard covers every IPv4 address, loopback included, but no IPv6
+        // address at all. Keep the local IPv6 loopback socket in that case.
+        if sharing && self.shared.ip() == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
+            addrs.push(Ipv6Addr::LOCALHOST.into());
+        }
+        addrs.dedup();
+        for ip in addrs {
+            match TcpListener::bind(SocketAddr::new(ip, port)).await {
+                Ok(l) => {
+                    if port == 0 {
+                        port = l
+                            .local_addr()
+                            .map_err(|_| "Cannot read the listening port")?
+                            .port();
+                    }
+                    found.push(l);
+                }
+                // Only the IPv6 loopback may be missing on a machine without IPv6.
+                Err(_) if ip == IpAddr::V6(Ipv6Addr::LOCALHOST) && !found.is_empty() => {}
+                Err(_) => return Err("Cannot bind the configured HTTPS listener".into()),
+            }
+        }
+        Ok(found)
+    }
+}
+
+type Reply = tokio::sync::oneshot::Sender<Result<(), String>>;
+
+/// Asks the running server to change what it binds.
+#[derive(Clone)]
+pub struct ListenSwitch {
+    tx: tokio::sync::mpsc::Sender<(bool, Reply)>,
+}
+
+impl ListenSwitch {
+    pub async fn set(&self, sharing: bool) -> Result<(), String> {
+        let (reply, answer) = tokio::sync::oneshot::channel();
+        self.tx
+            .send((sharing, reply))
+            .await
+            .map_err(|_| "The server is not accepting connections")?;
+        answer
+            .await
+            .map_err(|_| "The server is not accepting connections")?
+    }
+}
+
+impl Listening {
+    pub async fn bind(listen: SocketAddr, sharing: bool) -> Result<(Self, ListenSwitch), String> {
+        let mut binder = Binder { shared: listen };
+        let listeners = binder.bind(sharing).await?;
+        let port = listeners[0]
+            .local_addr()
+            .map_err(|_| "Cannot read the listening port")?
+            .port();
+        binder.shared.set_port(port);
+        let (tx, switch) = tokio::sync::mpsc::channel(4);
+        Ok((
+            Listening {
+                listeners,
+                binder: Some(binder),
+                port,
+                sharing,
+                switch,
+            },
+            ListenSwitch { tx },
+        ))
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 }
 
@@ -97,6 +203,46 @@ pub async fn serve_in(
     app: Router,
     folder: Option<&Path>,
 ) -> Result<(), String> {
+    let port = listener
+        .local_addr()
+        .map_err(|_| "Cannot read the listening port")?
+        .port();
+    let (_, switch) = tokio::sync::mpsc::channel(1);
+    let listening = Listening {
+        listeners: vec![listener],
+        binder: None,
+        port,
+        sharing: false,
+        switch,
+    };
+    serve_switched(listening, acceptor, app, folder).await
+}
+
+fn accept_on(
+    listener: TcpListener,
+    tx: tokio::sync::mpsc::Sender<(TcpStream, SocketAddr)>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            match listener.accept().await {
+                Ok(connection) => {
+                    if tx.send(connection).await.is_err() {
+                        return;
+                    }
+                }
+                Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+            }
+        }
+    })
+}
+
+/// Serves on `listening` and rebinds when the switch asks.
+pub async fn serve_switched(
+    listening: Listening,
+    acceptor: TlsAcceptor,
+    app: Router,
+    folder: Option<&Path>,
+) -> Result<(), String> {
     // A request left by an earlier run could name a reused process number.
     if let Some(folder) = folder {
         let _ = std::fs::remove_file(folder.join(STOP_FILE));
@@ -105,6 +251,15 @@ pub async fn serve_in(
     let local_slots = Arc::new(Semaphore::new(32));
     let remote_slots = Arc::new(Semaphore::new(224));
     let mut connections = tokio::task::JoinSet::new();
+    let (tx, mut accepted) = tokio::sync::mpsc::channel(64);
+    let binder = listening.binder.clone();
+    let mut switch = listening.switch;
+    let mut bound = Some(listening.sharing);
+    let mut sockets: Vec<_> = listening
+        .listeners
+        .into_iter()
+        .map(|l| accept_on(l, tx.clone()))
+        .collect();
     let stop = async {
         tokio::select! { _ = stop_signal() => {}, _ = stop_requested(folder) => {} }
     };
@@ -113,11 +268,37 @@ pub async fn serve_in(
         tokio::select! {
             _ = &mut stop => break,
             Some(_) = connections.join_next(), if !connections.is_empty() => {},
-            accepted = listener.accept() => {
-                let (stream, peer) = match accepted {
-                    Ok(connection) => connection,
-                    Err(_) => { tokio::time::sleep(Duration::from_millis(100)).await; continue; }
+            Some((sharing, reply)) = switch.recv() => {
+                // A request for the state already held changes nothing.
+                if Some(sharing) == bound {
+                    let _ = reply.send(Ok(()));
+                    continue;
+                }
+                // Close every socket first, so the new set can reuse the port.
+                for socket in sockets.drain(..) {
+                    socket.abort();
+                    let _ = socket.await;
+                }
+                let result = match &binder {
+                    Some(binder) => rebind(binder, sharing, &tx).await,
+                    None => Err("This server cannot change its sockets".to_owned()),
                 };
+                match result {
+                    Ok(next) => { sockets = next; bound = Some(sharing); let _ = reply.send(Ok(())); }
+                    Err(reason) => {
+                        // Return to the earlier state rather than stop accepting.
+                        if let Some(binder) = &binder {
+                            // With no sockets left, the held state is unknown and the next request rebinds.
+                            let held = bound.take();
+                            if let Some(held) = held {
+                                if let Ok(back) = rebind(binder, held, &tx).await { sockets = back; bound = Some(held); }
+                            }
+                        }
+                        let _ = reply.send(Err(reason));
+                    }
+                }
+            }
+            Some((stream, peer)) = accepted.recv() => {
                 let slots = if crate::policy::loopback(peer.ip()) { &local_slots } else { &remote_slots };
                 let Ok(permit) = slots.clone().try_acquire_owned() else { continue };
                 let acceptor = acceptor.clone();
@@ -134,8 +315,49 @@ pub async fn serve_in(
             }
         }
     }
+    for socket in sockets {
+        socket.abort();
+    }
     connections.abort_all();
     Ok(())
+}
+
+async fn rebind(
+    binder: &Binder,
+    sharing: bool,
+    tx: &tokio::sync::mpsc::Sender<(TcpStream, SocketAddr)>,
+) -> Result<Vec<tokio::task::JoinHandle<()>>, String> {
+    let listeners = binder.bind(sharing).await?;
+    Ok(listeners
+        .into_iter()
+        .map(|l| accept_on(l, tx.clone()))
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn sharing_on_an_ipv4_wildcard_keeps_the_ipv6_loopback() {
+        let binder = Binder {
+            shared: SocketAddr::from(([0, 0, 0, 0], 0)),
+        };
+        let listeners = binder.bind(true).await.unwrap();
+        let addrs: Vec<SocketAddr> = listeners.iter().map(|l| l.local_addr().unwrap()).collect();
+        assert!(
+            addrs
+                .iter()
+                .any(|a| a.ip() == IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            "{addrs:?}"
+        );
+        assert!(
+            addrs
+                .iter()
+                .any(|a| a.ip() == IpAddr::V6(Ipv6Addr::LOCALHOST)),
+            "{addrs:?}"
+        );
+    }
 }
 
 /// Uses the operator's installed OpenSSL. Does not install software or machine trust roots.

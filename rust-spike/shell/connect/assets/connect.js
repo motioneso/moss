@@ -158,25 +158,23 @@ const screens = {
 
   "confirm-stop": (s) => [
     back("Servers", { do: "servers" }),
-    heading(`Stop ${s.name}?`),
-    muted(
-      "People using this server will be disconnected. Jobs and agents will stop. You can start it again from Servers."
-    ),
+    heading("Stop Moss?"),
+    muted("Phones and other computers lose access until you start it again."),
     el(
       "div",
       { class: "connect-actions" },
       button("Cancel", "secondary", () => post({ do: "servers" })),
-      button("Stop server", "primary", () => post({ do: "confirm-stop", id: s.id }))
+      button("Stop", "primary", () => post({ do: "confirm-stop", id: s.id }))
     )
   ],
 
   "stop-failed": (s) => [
-    heading("Could not stop Moss"),
+    heading("Moss could not stop."),
     muted(s.reason),
     button("Servers", "secondary", () => post({ do: "servers" }))
   ],
 
-  stopping: (s) => [heading(s.name), muted("Stopping the server and its database…")],
+  stopping: (s) => [heading(s.name), muted("Stopping…")],
 
   desktop: (s) => [
     back("Servers", { do: "servers" }),
@@ -210,6 +208,60 @@ const screens = {
     button("Quit app", "quiet", () => post({ do: "quit" }))
   ],
 
+  "recovery-key": (s) => {
+    if (!s.words) {
+      return [
+        heading("Your recovery key"),
+        el("p", { class: "connect-error", role: "alert" }, s.reason || "No key store found."),
+        el(
+          "div",
+          { class: "connect-actions" },
+          s.code === "app_keystore_locked"
+            ? button("Unlock and retry", "primary", () => post({ do: "recovery-retry" }))
+            : button("Try again", "primary", () => post({ do: "recovery-retry" }))
+        )
+      ];
+    }
+    const inputs = (s.ask || []).map((position) => {
+      const input = el("input", {
+        class: "jds-input",
+        type: "text",
+        autocomplete: "off",
+        spellcheck: "false",
+        "data-position": String(position)
+      });
+      return el(
+        "div",
+        { class: "jds-field" },
+        el("label", { class: "jds-label" }, `Word ${position}`),
+        input
+      );
+    });
+    return [
+      heading("Your recovery key"),
+      muted("Backups open only with these words."),
+      el(
+        "ol",
+        { class: "connect-words", "aria-label": "Recovery words" },
+        ...s.words.map((word, index) => el("li", {}, `${index + 1}. ${word}`))
+      ),
+      el("h2", {}, "Check your key"),
+      el("div", { class: "connect-check" }, ...inputs),
+      s.error ? el("p", { class: "connect-error", role: "alert" }, s.error) : "",
+      el(
+        "div",
+        { class: "connect-actions" },
+        button("Continue", "primary", () => {
+          const checked = {};
+          for (const node of root.querySelectorAll("[data-position]")) {
+            checked[node.dataset.position] = node.value;
+          }
+          post({ do: "recovery-check", checked });
+        })
+      )
+    ];
+  },
+
   "setting-up": (s) => [heading(s.name), muted("Setting up. The first start can take a minute.")],
 
   connecting: (s) => [heading(s.name), muted("Connecting…")],
@@ -236,7 +288,9 @@ const screens = {
       el(
         "div",
         { class: "connect-actions" },
-        button(s.local ? "Start it" : "Try again", "primary", () => post({ do: "retry" })),
+        button(s.local ? "Start" : "Try again", "primary", () =>
+          post({ do: s.local && s.code === "app_server_service_failed" ? "start" : "retry" })
+        ),
         button("Switch server", "secondary", () => post({ do: "servers" }))
       )
     );
@@ -262,22 +316,27 @@ const screens = {
         el(
           "li",
           { class: "connect-server" },
-          el(
-            "div",
-            {},
-            el("p", {}, el("strong", {}, server.name)),
-            muted(`${server.detail} · ${server.state}`)
-          ),
+          el("div", {}, el("p", {}, el("strong", {}, server.name)), muted(server.detail)),
           el(
             "div",
             { class: "connect-actions" },
+            el(
+              "span",
+              {
+                class: `jds-indicator jds-indicator--${["Running", "Reachable"].includes(server.state) ? "ready" : "idle"}`
+              },
+              el("span", { class: "jds-indicator__dot" }),
+              el("span", {}, server.state)
+            ),
             server.removable
               ? button("Remove", "quiet", () => post({ do: "remove", id: server.id }))
               : "",
+            server.local && server.state === "Stopped"
+              ? button("Start", "secondary", () => post({ do: "start", id: server.id }))
+              : button("Open", "primary", () => post({ do: "open", id: server.id })),
             server.stoppable
-              ? button("Stop", "quiet", () => post({ do: "stop", id: server.id }))
-              : "",
-            button("Open", "secondary", () => post({ do: "open", id: server.id }))
+              ? button("Stop", "secondary", () => post({ do: "stop", id: server.id }))
+              : ""
           )
         )
       )
@@ -303,4 +362,5 @@ window.moss = {
   }
 };
 
-post({ do: "start" });
+// Opening the app reconnects; only the owner pressing Start clears an explicit Stop.
+post({ do: "retry" });

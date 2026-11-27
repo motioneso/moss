@@ -91,6 +91,20 @@ extern "system" {
     fn PostMessageW(window: Handle, message: u32, w: usize, l: isize) -> i32;
     fn PostQuitMessage(exit_code: i32);
     fn RegisterWindowMessageW(name: *const u16) -> u32;
+    fn CreatePopupMenu() -> Handle;
+    fn AppendMenuW(menu: Handle, flags: u32, id: usize, text: *const u16) -> i32;
+    fn TrackPopupMenu(
+        menu: Handle,
+        flags: u32,
+        x: i32,
+        y: i32,
+        reserved: i32,
+        window: Handle,
+        rect: *const c_void,
+    ) -> u32;
+    fn DestroyMenu(menu: Handle) -> i32;
+    fn GetCursorPos(point: *mut Point) -> i32;
+    fn SetForegroundWindow(window: Handle) -> i32;
 }
 #[link(name = "shell32")]
 extern "system" {
@@ -174,8 +188,66 @@ fn tray_icon(window: Handle) -> Icon {
     }
     // SAFETY: IDI_APPLICATION is a predefined system resource.
     item.icon = unsafe { LoadIconW(std::ptr::null_mut(), 32512usize as *const u16) };
-    fill(&mut item.tip, "Moss — right-click for Desktop settings");
+    fill(&mut item.tip, "Moss — right-click for server controls");
     item
+}
+/// Builds each popup from the latest checked server state on the tray window's thread.
+fn popup_action(window: Handle) -> Option<Action> {
+    let status = super::server_status();
+    let label = status
+        .as_ref()
+        .map(|s| s.1.as_str())
+        .unwrap_or("No local server");
+    let running = status.as_ref().is_some_and(|s| s.2);
+    // SAFETY: this thread owns the window and menu. AppendMenuW copies each UTF-16 label;
+    // TrackPopupMenu returns a command ID, and the menu is destroyed before dispatching it.
+    unsafe {
+        let menu = CreatePopupMenu();
+        if menu.is_null() {
+            return None;
+        }
+        for (id, title, enabled) in [
+            (1, "Open Moss", true),
+            (2, label, false),
+            (3, "Stop server", running),
+            (4, "Desktop settings", true),
+            (5, "Quit app", true),
+        ] {
+            if id == 3 || id == 5 {
+                AppendMenuW(menu, 0x0800, 0, std::ptr::null()); // MF_SEPARATOR
+            }
+            let flags = if enabled { 0 } else { 1 }; // MF_STRING / MF_GRAYED
+            if AppendMenuW(menu, flags, id, wide(title).as_ptr()) == 0 {
+                DestroyMenu(menu);
+                return None;
+            }
+        }
+        let mut point = Point { x: 0, y: 0 };
+        if GetCursorPos(&mut point) == 0 {
+            DestroyMenu(menu);
+            return None;
+        }
+        SetForegroundWindow(window);
+        let selected = TrackPopupMenu(
+            menu,
+            0x0100 | 0x0080 | 0x0002, // TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON
+            point.x,
+            point.y,
+            0,
+            window,
+            std::ptr::null(),
+        );
+        DestroyMenu(menu);
+        // Let the notification-area menu dismiss normally after clicking outside it.
+        PostMessageW(window, 0, 0, 0);
+        match selected {
+            1 => Some(Action::Reveal),
+            3 if running => Some(Action::Stop),
+            4 => Some(Action::Settings),
+            5 => Some(Action::Quit),
+            _ => None,
+        }
+    }
 }
 unsafe extern "system" fn procedure(window: Handle, message: u32, w: usize, l: isize) -> isize {
     // Sent messages arrive here while GetMessageW is waiting; posted messages arrive
@@ -191,7 +263,7 @@ unsafe extern "system" fn procedure(window: Handle, message: u32, w: usize, l: i
             }
             let event = match l as u32 {
                 0x0202 => Some(Action::Reveal),
-                0x0205 => Some(Action::Settings),
+                0x0205 => popup_action(window),
                 _ => None,
             };
             if let Some(event) = event {
@@ -498,7 +570,13 @@ pub fn set_login(data: &Path, install: &Path, enabled: bool) -> Result<(), Strin
         let key = Key(key);
         let name = value_name(data);
         let result = if enabled {
-            let exe = std::env::current_exe().map_err(|_| "Cannot find this app")?;
+            let stable = moss_launcher::launcher(install);
+            let versioned = stable.is_file();
+            let exe = if versioned {
+                stable
+            } else {
+                std::env::current_exe().map_err(|_| "Cannot find this app")?
+            };
             let quote = |path: &Path| -> Result<String, String> {
                 let text = path.to_str().ok_or("The install path is not valid text")?;
                 if text.contains(['"', '\r', '\n', '\0']) || text.ends_with('\\') {
@@ -506,12 +584,16 @@ pub fn set_login(data: &Path, install: &Path, enabled: bool) -> Result<(), Strin
                 }
                 Ok(format!("\"{text}\""))
             };
-            let command = wide(&format!(
-                "{} --data {} --install {}",
-                quote(&exe)?,
-                quote(data)?,
-                quote(install)?
-            ));
+            let command = wide(&if versioned {
+                format!("{} moss-app --data {}", quote(&exe)?, quote(data)?)
+            } else {
+                format!(
+                    "{} --data {} --install {}",
+                    quote(&exe)?,
+                    quote(data)?,
+                    quote(install)?
+                )
+            });
             RegSetValueExW(
                 key.0,
                 name.as_ptr(),

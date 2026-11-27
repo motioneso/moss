@@ -12,7 +12,7 @@ logs = Path(os.environ["JS370_PROOF_DIR"]) / "approval-removals"
 logs.mkdir(parents=True, exist_ok=True)
 base = ["cargo", "+1.95.0", "test", "--offline", "--locked", "--manifest-path"]
 def server(test):
-    return ["--bin", "moss-shell", test]
+    return ["--bin", "moss-server", test]
 
 controls = [
     ("approval-owner", "rust-spike/shell/app/src/chat_approvals.rs", r' && r\.actor == actor\)', ')', "rust-spike/shell/Cargo.toml", server("chat_approvals::tests::another_account_cannot_answer_an_approval_and_sees_it_as_unknown")),

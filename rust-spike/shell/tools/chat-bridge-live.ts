@@ -83,7 +83,7 @@ if (process.env.MOSS_CHAT_FINANCE_PROOF === "1") {
   ]);
   process.env.JS390_FINANCE_PACKAGE = join(target, "finance.mosspkg");
 }
-cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-shell", "--features", "live-proof"]);
+cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-server", "--features", "live-proof"]);
 cargo("rust-spike/agents/Cargo.toml", ["build", "--bins"]);
 cargo("rust-spike/network/Cargo.toml", ["build", "--bin", "moss-network"]);
 const web = join(proof, "web");
@@ -111,7 +111,7 @@ const fixture = spawn(
       JS43_WORKER_URL: urls.worker,
       JS43_BOOTSTRAP_URL: urls.bootstrap,
       JS170_AUTH_URL: urls.auth,
-      JS170_SERVER: join(target, "debug/moss-shell"),
+      JS170_SERVER: join(target, "debug/moss-server"),
       JS170_CERTIFICATE: join(target, "debug/moss-network"),
       JS286_SCRATCHPAD_PACKAGE: join(target, "scratchpad.mosspkg"),
       MOSS_SCRATCHPAD_SCREEN_WEB: web,

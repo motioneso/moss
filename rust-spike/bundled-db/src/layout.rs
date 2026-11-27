@@ -345,6 +345,20 @@ fn read_bounded(file: std::fs::File, limit: u64) -> std::io::Result<String> {
 impl Layout {
     pub(crate) fn read_secret(&self, role: &str) -> std::io::Result<String> {
         check_secret_name(role)?;
+        if let Some(instance) = self
+            .root
+            .parent()
+            .filter(|_| self.root.file_name().is_some_and(|n| n == "database"))
+        {
+            if instance.join(keystore::custody::BUNDLE_FILE).exists()
+                && !instance
+                    .join(keystore::custody::LEGACY_CREDENTIALS)
+                    .exists()
+            {
+                return keystore::database_secrets::read(instance, role)
+                    .map_err(std::io::Error::other);
+            }
+        }
         #[cfg(unix)]
         let file = std::fs::File::open(self.secrets.join(role))?;
         #[cfg(windows)]

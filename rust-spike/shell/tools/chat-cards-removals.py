@@ -37,7 +37,7 @@ for name, source, pattern, replacement, test in controls:
     changed, count = re.subn(pattern, replacement, original.decode(), flags=re.S)
     if count != 1:
         raise SystemExit(f"Expected one protection {name}; found {count}")
-    command = ["cargo", "+1.95.0", "test", "--offline", "--locked", "--manifest-path", manifest, "--bin", "moss-shell", test, "--", "--exact"]
+    command = ["cargo", "+1.95.0", "test", "--offline", "--locked", "--manifest-path", manifest, "--bin", "moss-server", test, "--", "--exact"]
     for removed in [False, True, False]:
         try:
             path.write_text(changed if removed else original.decode())

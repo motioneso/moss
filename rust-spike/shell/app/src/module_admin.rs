@@ -80,6 +80,27 @@ pub(crate) fn say(status: StatusCode, message: &str) -> Response {
     (status, Json(json!({ "error": message }))).into_response()
 }
 
+/// Only the two declared custody codes cross the child boundary. Rebuild the
+/// remedy locally rather than reflecting arbitrary child stderr into a response.
+pub(crate) fn custody_child_error(stderr: &[u8]) -> Option<keystore::custody::CustodyError> {
+    String::from_utf8_lossy(stderr).lines().find_map(|line| {
+        let line = line.strip_prefix("moss-server: ").unwrap_or(line);
+        if line.starts_with("app_keystore_locked:") {
+            Some(keystore::custody::CustodyError::Locked)
+        } else if line.starts_with("app_keystore_unavailable:") {
+            Some(keystore::custody::CustodyError::Unavailable(String::new()))
+        } else {
+            None
+        }
+    })
+}
+
+pub(crate) fn custody_response(error: &anyhow::Error) -> Option<Response> {
+    error
+        .downcast_ref::<keystore::custody::CustodyError>()
+        .map(|error| say(StatusCode::UNPROCESSABLE_ENTITY, &error.to_string()))
+}
+
 pub(crate) async fn require_admin(admin: &Admin, access: &AccessContext) -> Result<(), Response> {
     let refuse = || {
         say(
@@ -173,6 +194,11 @@ fn run(
     let output = command
         .output()
         .map_err(|_| "Cannot start the installer".to_owned())?;
+    // Real-server fixtures need full helper errors, including successful refreshes
+    // reporting individual failures. This private stderr never changes the API error.
+    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+    }
     if output.status.success() {
         return String::from_utf8(output.stdout).map_err(|_| "Unreadable installer output".into());
     }
@@ -183,10 +209,17 @@ fn run(
         .find(|l| !l.trim().is_empty() && !l.contains("postgres://"))
         .unwrap_or("The installer failed");
     Err(line
-        .trim_start_matches("moss-shell: ")
+        .trim_start_matches("moss-server: ")
         .chars()
         .take(300)
         .collect())
+}
+
+/// Opt-in private diagnostics for real-server fixtures; public errors stay generic.
+pub(crate) fn test_diagnostic(label: &str, error: impl std::fmt::Display) {
+    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+        eprintln!("{label}: {error:#}");
+    }
 }
 
 pub(crate) fn run_json(
@@ -315,5 +348,28 @@ mod tests {
         assert!(!valid_name("-x"));
         assert!(!valid_name(""));
         assert!(!valid_name("a b"));
+    }
+
+    #[tokio::test]
+    async fn custody_child_failure_reaches_the_http_response_with_its_remedy() {
+        for (code, remedy) in [
+            ("app_keystore_locked", "Unlock your key store"),
+            ("app_keystore_unavailable", "Check your key store"),
+        ] {
+            let stderr = format!("moss-server: {code}: child-only detail\n");
+            let error: anyhow::Error = custody_child_error(stderr.as_bytes()).unwrap().into();
+            let response = custody_response(&error.context("child stopped")).unwrap();
+            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            let body = axum::body::to_bytes(response.into_body(), 4096)
+                .await
+                .unwrap();
+            let body: Value = serde_json::from_slice(&body).unwrap();
+            let message = body["error"].as_str().unwrap();
+            assert!(message.contains(code));
+            assert!(message.contains(remedy));
+            assert!(!message.contains("child-only detail"));
+        }
+        assert!(custody_child_error(b"untrusted text mentioning app_keystore_locked:").is_none());
+        assert!(custody_response(&anyhow::anyhow!("unrelated failure")).is_none());
     }
 }

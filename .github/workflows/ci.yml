@@ -138,7 +138,21 @@ jobs:
               touched="$touched $m"
             fi
           done
-          rust_modules=$(printf '%s\n' $touched | jq -R . | jq -sc 'map(select(length>0))')
+          # Module server tests live under rust-spike/module-host/tests, and the
+          # shared server code in rust-spike/network, rust-spike/shell/app and
+          # rust-spike/module-host/src serves all of them. Map those paths to the
+          # modules whose server jobs prove them, so a shared server change
+          # cannot skip every server job on a pull request again.
+          if grep -qE '^(rust-spike/network/|rust-spike/shell/app/|rust-spike/module-host/src/)' files.txt; then
+            touched="$touched calendar commitments finance goals meals notes web-research wellness"
+          fi
+          for pair in calendar_server:calendar commitments_server:commitments finance_server:finance finance_plaid_live:finance goals_server:goals meals_server:meals web_research_server:web-research wellness_server:wellness; do
+            file=${pair%%:*}; server_module=${pair##*:}
+            if grep -q "^rust-spike/module-host/tests/$file\.rs$" files.txt; then
+              touched="$touched $server_module"
+            fi
+          done
+          rust_modules=$(printf '%s\n' $touched | sort -u | jq -R . | jq -sc 'map(select(length>0))')
           if [ "$RUST_TIER" = "push" ]; then rust_modules="$ALL_MODULES"; fi
           echo "host_changed=$host_changed" >> "$GITHUB_OUTPUT"
           emit_modules "$rust_modules"
@@ -371,7 +385,7 @@ jobs:
   rust-modules:
     name: Rust gate (${{ matrix.module }} / ${{ matrix.suite }})
     # Playwright currently supports Ubuntu 24.04, not the newer ubuntu-latest image.
-    runs-on: ${{ ((matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens' || matrix.suite == 'phase6-lifecycle-screens' || matrix.suite == 'phase6-trust-screens'))) && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    runs-on: ${{ ((matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens' || matrix.suite == 'phase6-lifecycle-screens' || matrix.suite == 'phase6-trust-screens' || matrix.suite == 'phase6-exit-journey'))) && 'ubuntu-24.04' || 'ubuntu-latest' }}
     timeout-minutes: ${{ needs.changes.outputs.rust_tier == 'pull_request' && 60 || 120 }}
     needs: changes
     if: needs.changes.outputs.rust_entries != '[]'
@@ -413,7 +427,7 @@ jobs:
         run: echo "$GITHUB_WORKSPACE/.github/ci-bin" >> "$GITHUB_PATH"
 
       - name: Install browser gate Chromium
-        if: (matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens' || matrix.suite == 'phase6-lifecycle-screens' || matrix.suite == 'phase6-trust-screens'))
+        if: (matrix.module == 'calendar' && matrix.suite == 'server') || (matrix.module == 'host' && (matrix.suite == 'phase6-catalog-screens' || matrix.suite == 'phase6-install-screens' || matrix.suite == 'phase6-lifecycle-screens' || matrix.suite == 'phase6-trust-screens' || matrix.suite == 'phase6-exit-journey'))
         run: |
           # Try the runner's default apt mirror first, then the standard Ubuntu archive.
           status=0
@@ -516,6 +530,14 @@ jobs:
             fi
           done
           exit $failed
+
+      - name: Phase exit desktop and phone LAN screenshots
+        if: always() && matrix.suite == 'phase6-exit-journey'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-exit-journey
+          path: /tmp/js422-evidence/journey/*.png
+          if-no-files-found: warn
 
       - name: Trust desktop and phone screenshots
         if: always() && matrix.suite == 'phase6-trust-screens'

@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][string]$Bin,        # folder holding moss-db.exe and moss-shell.exe
+    [Parameter(Mandatory)][string]$Bin,        # folder holding moss-db.exe and moss-server.exe
     [Parameter(Mandatory)][string]$Postgres,   # database bundle with the vector extension
     [Parameter(Mandatory)][string]$Repo,       # repository root
     [Parameter(Mandatory)][string]$TestExe,    # moss-app test program
@@ -15,7 +15,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') {
 $work = Join-Path $Bin 'lifecycle-proof'
 $install = Join-Path $work 'install'
 New-Item -ItemType Directory -Path $install -Force | Out-Null
-foreach ($name in 'moss-db.exe', 'moss-shell.exe') { Copy-Item (Join-Path $Bin $name) $install }
+foreach ($name in 'moss-db.exe', 'moss-server.exe') { Copy-Item (Join-Path $Bin $name) $install }
 if ($AppExe) { Copy-Item $AppExe $install }
 Copy-Item $Postgres (Join-Path $install 'postgres') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $install 'web') -Force | Out-Null
@@ -51,7 +51,13 @@ $account = 'moss-app-proof'
 $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
 $user = New-LocalUser -Name $account -Password $password -AccountNeverExpires
 $process = $null
+$ruleArgs = $null
+$server = $null
+$phaseError = $null
+$firewallCleanupFailed = $false
 try {
+    # Inside the try, so a missing server program cannot strand the temporary proof account.
+    $server = (Get-Item (Join-Path $install 'moss-server.exe')).FullName
     Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
     $temp = Join-Path $work 'temp'; New-Item -ItemType Directory -Path $temp -Force | Out-Null
     $data = Join-Path $work 'data'   # the app creates it; the test asserts it starts absent
@@ -88,7 +94,24 @@ try {
     Run-Proof 'windows_proof::windows_app_provisions_starts_stops_and_restarts_the_whole_server' 'WINDOWS APP LIFECYCLE PROOF' 'lifecycle'
     Write-Host '== firewall profiles on this runner'
     Get-NetFirewallProfile | Select-Object Name, Enabled | Format-Table | Out-String | Write-Host
+    $token = [guid]::NewGuid().ToString('N')
+    $ruleArgs = @('--name', "moss-default-$token", '--port', "$($Port + 1)", '--program', $server, '--token', $token)
+    $environment['MOSS_PROOF_NETWORK_TOKEN'] = $token
+    $environment['MOSS_PROOF_NETWORK_PHASE'] = 'off'
     Run-Proof 'windows_proof::windows_server_answers_on_the_network_address_only_when_sharing_is_on' 'WINDOWS NETWORK ADDRESS PROOF' 'lan'
+    # The standard-user proof wrote intent in its protected instance folder before
+    # returning. This elevated parent touches only the token-marked OS rule; it never
+    # reads, writes or changes the ACL of that private folder.
+    & $server firewall-rule add @ruleArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Production firewall helper did not add the owned rule' }
+    & $server firewall-rule check @ruleArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Production firewall helper did not confirm the live marker' }
+    $environment['MOSS_PROOF_NETWORK_PHASE'] = 'on'
+    Run-Proof 'windows_proof::windows_server_answers_on_the_network_address_only_when_sharing_is_on' 'WINDOWS NETWORK ADDRESS PROOF: on passed' 'lan'
+    & $server firewall-rule remove @ruleArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Owned rule removal must succeed before the final off proof' }
+    $environment['MOSS_PROOF_NETWORK_PHASE'] = 'after-off'
+    Run-Proof 'windows_proof::windows_server_answers_on_the_network_address_only_when_sharing_is_on' 'WINDOWS NETWORK ADDRESS PROOF: after-off passed' 'lan'
     if ($AppExe) {
         # Buttons proof: the real app window, driven as the same standard user.
         $buttonsData = Join-Path $work 'data-buttons'
@@ -108,10 +131,27 @@ try {
         if ($buttons.ExitCode -eq 3) { Write-Warning 'Buttons proof NOT RUN: the web engine never opened its debugging port on this runner' }
         elseif ($buttons.ExitCode -ne 0 -or -not (Select-String -Path $buttonsOut -Pattern 'WINDOWS APP BUTTONS PROOF')) { throw "Buttons proof failed ($($buttons.ExitCode))" }
     }
+} catch {
+    $phaseError = $_
 } finally {
     if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
-    Get-Process postgres, moss-shell, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
-    $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
-    if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }
-    Remove-LocalUser -Name $account
+    Get-Process postgres, moss-server, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
+    if ($ruleArgs) {
+        # Failed phases also remove only a matching live marker, with no private-file access.
+        & $server firewall-rule remove @ruleArgs
+        $firewallCleanupFailed = $LASTEXITCODE -ne 0
+    }
+    try {
+        $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
+        if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }
+        Remove-LocalUser -Name $account
+    } catch {
+        $firewallCleanupFailed = $true
+    }
 }
+# A cleanup failure never hides the phase failure that came before it. Both are reported.
+if ($phaseError -and $firewallCleanupFailed) {
+    throw "Proof phase failed: $($phaseError.Exception.Message) Cleanup also failed: could not confirm cleanup finished"
+}
+if ($firewallCleanupFailed) { throw 'Could not confirm cleanup finished' }
+if ($phaseError) { throw $phaseError }

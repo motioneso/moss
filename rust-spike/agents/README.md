@@ -30,7 +30,7 @@ The server includes the account's current tool definitions in each chat op. Turn
 account run sequentially; Claude receives MCP `notifications/tools/list_changed` while
 retaining the agent session. Codex changes take effect at a fresh conversation, as described below.
 
-For the part 2a live measurement only, build both the runner and `moss-shell` with
+For the part 2a live measurement only, build both the runner and `moss-server` with
 `--features live-proof` in debug mode. Only that opt-in build accepts
 `MOSS_CHAT_TEST_TOOLS_FILE` as the server's offered-list fixture and executes runner-local
 `proof_*` challenge tools. Default builds omit those hooks; release builds omit them even

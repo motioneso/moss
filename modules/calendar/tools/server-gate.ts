@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { getMossDatabaseUrls } from "@moss/db";
+import { ciFirewallApproval } from "../../../rust-spike/module-host/tools/firewall-approval.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR"]) {
@@ -136,7 +137,7 @@ cargo([
   "--manifest-path",
   "rust-spike/shell/Cargo.toml",
   "-p",
-  "moss-shell"
+  "moss-server"
 ]);
 cargo([
   "build",
@@ -147,6 +148,7 @@ cargo([
   "--bin",
   "moss-network"
 ]);
+const firewallApproval = ciFirewallApproval(target);
 cargo(
   [
     "test",
@@ -161,6 +163,7 @@ cargo(
     "--nocapture"
   ],
   {
+    ...firewallApproval,
     MOSS_CALENDAR_PUBLIC_HOST: address,
     MOSS_CALENDAR_SHELL_WEB: shellWeb,
     JS181_CALENDAR_PACKAGE: calendarPackage,
@@ -174,7 +177,7 @@ cargo(
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,
     JS170_AUTH_URL: urls.auth,
-    JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
+    JS170_SERVER: join(process.env.CARGO_TARGET_DIR!, "debug/moss-server"),
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
   }
 );

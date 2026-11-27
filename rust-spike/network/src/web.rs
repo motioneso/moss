@@ -1,7 +1,9 @@
 use crate::{
     config::Config,
+    firewall::Refusal,
     limit::SignInLimit,
     policy::{loopback, Policy},
+    sharing::{Control, Failure},
 };
 use axum::{
     body::{to_bytes, Body},
@@ -15,8 +17,8 @@ use axum::{
 use safety_core::{
     access::AccessContext,
     auth, companion_gate,
-    device_requests::DeviceRequests,
     db::DataContext,
+    device_requests::DeviceRequests,
     error::ApiError,
     http::{log, Platform},
 };
@@ -36,6 +38,7 @@ use tokio::{
 pub struct Network {
     pub platform: Arc<Platform>,
     pub policy: Policy,
+    control: Option<Control>,
     config: Mutex<Config>,
     config_path: PathBuf,
     setup: Mutex<()>,
@@ -44,13 +47,25 @@ pub struct Network {
 }
 
 impl Network {
+    /// Standalone module fixtures supply their own listener; the installed server uses
+    /// `with_control` to coordinate its listener and operating-system firewall.
     pub fn new(
         platform: Arc<Platform>,
         config: Config,
         path: PathBuf,
     ) -> Result<Arc<Self>, String> {
+        Self::with_control(platform, config, path, None)
+    }
+
+    pub fn with_control(
+        platform: Arc<Platform>,
+        config: Config,
+        path: PathBuf,
+        control: Option<Control>,
+    ) -> Result<Arc<Self>, String> {
         Ok(Arc::new(Self {
             policy: config.policy()?,
+            control,
             platform,
             config: Mutex::new(config),
             config_path: path,
@@ -68,12 +83,14 @@ pub fn router(network: Arc<Network>, private: Router, web: PathBuf) -> Router {
     let pages = Router::new()
         .route("/sign-in", get(|| async { Html(include_str!("../assets/sign-in.html")) }))
         .route("/setup", get(|| async { Html(include_str!("../assets/setup.html")) }))
+        .route("/sharing.css", get(|| async { ([(header::CONTENT_TYPE, "text/css")], include_str!("../assets/sharing.css")) }))
         .route("/access.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], include_str!("../assets/access.js")) }))
         .route("/moss-start.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], "const app = await import('/app.js'); await app.default({module_or_path:'/app_bg.wasm'});") }))
         .route("/api/setup/status", get(setup_status))
         .route("/api/hello", get(|| async { Json(crate::instance::hello()) }))
         .route("/settings/sharing", get(|| async { Html(include_str!("../assets/sharing.html")) }))
         .route("/api/network", get(network_status).put(set_sharing))
+        .route("/api/network/legacy", axum::routing::delete(clear_legacy))
         .route("/api/network/certificate", get(public_certificate))
         .with_state(network.clone());
     // Static theme assets are public. The middleware's closed allowlist decides which ones.
@@ -165,9 +182,10 @@ async fn boundary(State(n): State<Arc<Network>>, mut request: Request, next: Nex
     let mut response = response;
     // A checked module picture arrives with its own short private cache time; keep it.
     let kept = response.status().is_success()
-        && response.headers().get(header::CACHE_CONTROL).is_some_and(|v| {
-            v.to_str().is_ok_and(|v| v.starts_with("private, max-age="))
-        })
+        && response
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .is_some_and(|v| v.to_str().is_ok_and(|v| v.starts_with("private, max-age=")))
         && response
             .headers()
             .get(header::CONTENT_TYPE)
@@ -276,12 +294,20 @@ async fn guarded(n: &Arc<Network>, request: &mut Request, next: Next) -> Respons
             }
             Err(error) => return error.into_response(),
         }
-    } else if let (false, Some((kind, token))) =
-        (public(&path), companion_gate::companion_bearer(request.headers()))
-    {
+    } else if let (false, Some((kind, token))) = (
+        public(&path),
+        companion_gate::companion_bearer(request.headers()),
+    ) {
         // A device credential opens only its own short list of paths.
-        match companion_gate::admit(&n.platform, request.headers(), request.method(), &path, kind, &token)
-            .await
+        match companion_gate::admit(
+            &n.platform,
+            request.headers(),
+            request.method(),
+            &path,
+            kind,
+            &token,
+        )
+        .await
         {
             Ok(admitted) => {
                 scoped = Some(companion_gate::Scoped::new(
@@ -416,9 +442,22 @@ async fn network_status(
     let leaf = crate::instance::leaf_der(&bytes)
         .map_err(|_| ApiError::http(500, "Invalid public certificate"))?;
     let fingerprint = crate::instance::fingerprint(&leaf);
-    Ok(Json(
-        json!({"sharing":n.policy.sharing(), "origins":config.origins, "fingerprint":fingerprint}),
-    ))
+    // The address that opens this computer's own firewall settings, where the computer
+    // has one. Linux has no single address for it, so the page explains instead.
+    let firewall_settings = if cfg!(windows) {
+        Some("ms-settings:windowsdefender")
+    } else if cfg!(target_os = "macos") {
+        Some("x-apple.systempreferences:com.apple.preference.security?Firewall")
+    } else {
+        None
+    };
+    Ok(Json(json!({
+        "sharing":n.policy.sharing(),
+        "origins":config.origins,
+        "fingerprint":fingerprint,
+        "firewall":n.control.as_ref().map(|c| c.firewall.state(c.port).word()),
+        "firewall_settings":firewall_settings,
+    })))
 }
 
 async fn public_certificate(
@@ -452,19 +491,86 @@ struct Sharing {
     sharing: bool,
 }
 
+fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
+    let message = match refusal {
+        Refusal::Declined => "The firewall did not allow Moss.",
+        Refusal::Unknown => "Could not confirm the firewall change. Try again.",
+        Refusal::Failed | Refusal::Stuck => "The firewall did not take the change.",
+        Refusal::Foreign => {
+            "The firewall already has a rule with Moss's name that Moss did not create."
+        }
+        Refusal::NoManager => "Moss could not find a firewall manager it can use.",
+        Refusal::Legacy => "An old Moss firewall rule is still there. Remove it by hand.",
+        Refusal::ServiceUnavailable => "Reinstall Moss or restart the firewall.",
+        Refusal::CleanedUp => "The old firewall rule was cleaned up. Try again to turn sharing on.",
+    };
+    (
+        StatusCode::CONFLICT,
+        Json(json!({"code":"app_firewall_refused", "reason":refusal.word(), "error":message, "sharing":sharing})),
+    )
+        .into_response()
+}
+
+/// Forgets a record from before ownership tokens, after the owner removed the old rule by
+/// hand. This deletes no firewall rule.
+async fn clear_legacy(
+    State(n): State<Arc<Network>>,
+    Extension(access): Extension<AccessContext>,
+) -> Result<Response, ApiError> {
+    require_admin(&n, &access).await?;
+    let Some(control) = &n.control else {
+        return Err(ApiError::http(500, "Sharing could not change. Try again."));
+    };
+    match control.firewall.clear_legacy() {
+        Ok(()) => Ok(Json(
+            json!({"sharing":false, "firewall":control.firewall.state(control.port).word()}),
+        )
+        .into_response()),
+        Err(refusal) => Ok(firewall_refused(refusal, false)),
+    }
+}
+
 async fn set_sharing(
     State(n): State<Arc<Network>>,
     Extension(access): Extension<AccessContext>,
     Json(body): Json<Sharing>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Response, ApiError> {
     require_admin(&n, &access).await?;
     let mut config = n.config.lock().await;
+    let previous = config.sharing;
     let mut saved = config.clone();
     saved.sharing = body.sharing;
-    saved
-        .write(&n.config_path)
-        .map_err(|_| ApiError::http(500, "Sharing was not saved. Try again."))?;
-    n.policy.set_sharing(saved.sharing);
-    *config = saved;
-    Ok(Json(json!({"sharing":body.sharing})))
+    let Some(control) = &n.control else {
+        saved
+            .write(&n.config_path)
+            .map_err(|_| ApiError::http(500, "Sharing was not saved. Try again."))?;
+        n.policy.set_sharing(saved.sharing);
+        *config = saved;
+        return Ok(Json(json!({"sharing":body.sharing})).into_response());
+    };
+    let save = |on: bool| {
+        let mut next = config.clone();
+        next.sharing = on;
+        next.write(&n.config_path).map_err(|_| ())
+    };
+    let result = control.apply(body.sharing, previous, &n.policy, save).await;
+    let reply = |on: bool| {
+        Json(json!({"sharing":on, "firewall":control.firewall.state(control.port).word()}))
+            .into_response()
+    };
+    match result {
+        Ok(()) => {
+            *config = saved;
+            Ok(reply(body.sharing))
+        }
+        // Sharing is off either way; only the rule's removal was refused.
+        Err(Failure::Firewall(refusal)) => {
+            if !body.sharing {
+                *config = saved;
+            }
+            Ok(firewall_refused(refusal, false))
+        }
+        Err(Failure::Save) => Err(ApiError::http(500, "Sharing was not saved. Try again.")),
+        Err(Failure::Switch) => Err(ApiError::http(500, "Sharing could not change. Try again.")),
+    }
 }

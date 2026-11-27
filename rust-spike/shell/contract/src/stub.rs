@@ -187,7 +187,7 @@ impl ShellData for StubShellData {
             messages.drain(..excess);
             if !self.warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
                 eprintln!(
-                    "moss-shell: sample chat passed {STUB_HISTORY_LIMIT} messages; dropping the oldest"
+                    "moss-server: sample chat passed {STUB_HISTORY_LIMIT} messages; dropping the oldest"
                 );
             }
         }

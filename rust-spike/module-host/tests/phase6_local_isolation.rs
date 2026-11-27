@@ -302,6 +302,24 @@ fn local_declarations_cannot_escape_account_scope() {
 }
 
 #[test]
+fn snapshot_resolution_is_owner_only() {
+    let (f, host, _) = installed();
+    f.install(&host, "2.0.0");
+    let snapshot = host.snapshots(&f.owner).unwrap().pop().unwrap();
+    let resolved = host
+        .snapshot_for_restore(&f.owner, &snapshot.module, &snapshot.id)
+        .unwrap();
+    assert_eq!(resolved.id, snapshot.id);
+    for actor in [&f.other, &f.admin] {
+        assert!(
+            host.snapshot_for_restore(actor, &snapshot.module, &snapshot.id)
+                .is_err(),
+            "PRIVATE-SNAPSHOT-MARKER resolved by non-builder"
+        );
+    }
+}
+
+#[test]
 fn snapshot_listing_and_restore_are_owner_only() {
     let (f, host, _) = installed();
     f.install(&host, "2.0.0");

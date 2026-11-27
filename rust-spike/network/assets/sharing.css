@@ -1,0 +1,45 @@
+/* Layout only. Controls, type and surfaces use the shared Moss design system. */
+.sharing-page {
+  padding: var(--space-6);
+}
+.sharing-panel {
+  width: 100%;
+  display: grid;
+  gap: var(--space-5);
+}
+.sharing-settings {
+  display: grid;
+  gap: var(--space-5);
+}
+.sharing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  justify-items: start;
+  align-items: center;
+}
+.sharing-row > strong,
+.sharing-row > p {
+  grid-column: 1;
+}
+.sharing-row > .jds-switch,
+.sharing-row > .jds-badge {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.sharing-settings p,
+.sharing-settings ul {
+  margin: 0;
+}
+.sharing-settings {
+  overflow-wrap: anywhere;
+}
+dialog.jds-dialog {
+  margin: auto;
+  padding: 0;
+}
+@media (max-width: 600px) {
+  .sharing-page {
+    padding: var(--space-4);
+  }
+}

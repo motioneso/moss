@@ -65,3 +65,10 @@ rust-spike/module-publisher/Cargo.toml`. Its artifact gate is `pnpm test:rust-ph
 - The phase6-install-requests gate needs a task-owned `CARGO_HOME`, `RUSTUP_HOME` and
   `CARGO_TARGET_DIR`. Copy the registry cache into that `CARGO_HOME` for offline runs.
 - Format only the files you changed. A tree-wide format rewrites other lanes' files.
+- Browser proof of an opened module enters `iframe.module-screen`, then `iframe#frame`. The
+  outer frame is the host bridge.
+- A new Rust screen also goes in the expected Rust route list in
+  `tests/unit/app-map-integrity.test.ts` ("builds a separate Rust map"). Run that file before
+  marking ready.
+- `pnpm test:rust-phase6-exit-journey` needs `EXIT_LAN_HOST` when the first non-loopback IPv4 is
+  not the LAN or tailnet interface. Owner setup stays on localhost.

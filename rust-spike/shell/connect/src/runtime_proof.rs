@@ -45,7 +45,7 @@ async fn staged_runtime_provisions_starts_and_stops_local_server() {
         assert_eq!(running.origin, format!("https://127.0.0.1:{port}"));
         assert_eq!(
             std::fs::read_link(format!("/proc/{}/exe", running.pid)).unwrap(),
-            install.join("moss-shell")
+            install.join("moss-server")
         );
         let maps = std::fs::read_to_string(format!("/proc/{}/maps", running.pid)).unwrap();
         assert!(maps

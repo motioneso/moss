@@ -12,5 +12,7 @@ pub fn install_id(data: &std::path::Path) -> u64 {
 pub enum Action {
     Reveal,
     Settings,
+    Stop,
+    Quit,
     Unavailable,
 }

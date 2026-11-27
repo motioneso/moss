@@ -14,5 +14,5 @@ CARGO_TARGET_DIR="$memory" RUSTFLAGS='-C link-arg=--import-memory -C link-arg=--
   cargo +1.95.0 build --locked --offline --release --lib --target wasm32-unknown-unknown --manifest-path modules/memory/src/Cargo.toml
 cargo +1.95.0 test --locked --offline --manifest-path modules/meetings/host/Cargo.toml --test package
 # The reinstall proof pairs through the real shell routes over HTTPS.
-cargo +1.95.0 build --locked --offline --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
+cargo +1.95.0 build --locked --offline --manifest-path rust-spike/shell/Cargo.toml -p moss-server
 cargo +1.95.0 build --locked --offline --manifest-path rust-spike/network/Cargo.toml --bin moss-network

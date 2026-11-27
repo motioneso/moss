@@ -30,7 +30,7 @@ if (!process.env.JS416_SERVER)
     "--manifest-path",
     "rust-spike/shell/Cargo.toml",
     "-p",
-    "moss-shell"
+    "moss-server"
   ]);
 cargo([
   "build",
@@ -62,7 +62,7 @@ cargo(
     JS43_MIGRATION_URL: urls.migration,
     JS170_AUTH_URL: urls.auth,
     JS170_SERVER:
-      process.env.JS416_SERVER ?? join(process.env.CARGO_TARGET_DIR!, "debug/moss-shell"),
+      process.env.JS416_SERVER ?? join(process.env.CARGO_TARGET_DIR!, "debug/moss-server"),
     JS170_CERTIFICATE: join(process.env.CARGO_TARGET_DIR!, "debug/moss-network")
   }
 );

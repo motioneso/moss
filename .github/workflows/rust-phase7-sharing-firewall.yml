@@ -1,0 +1,122 @@
+name: Rust phase7_sharing_firewall
+on:
+  pull_request:
+    paths:
+      - "rust-spike/network/**"
+      - "rust-spike/shell/app/**"
+      - "rust-spike/shell/launcher/**"
+      - "rust-spike/shell/connect/src/windows_proof.rs"
+      - "rust-spike/shell/tools/windows-lifecycle.ps1"
+      - "rust-spike/shell/tools/phase7_sharing_firewall.py"
+      - "rust-spike/shell/tools/test_phase7_sharing_firewall.py"
+      - "rust-spike/shell/tools/phase7_sharing_marker_controls.py"
+      - ".github/workflows/rust-phase7-sharing-firewall.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_sharing_firewall:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Select task-owned Rust paths
+        shell: bash
+        run: |
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-sharing/target" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+      - name: Provision declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: macOS native firewall listing diagnostic
+        if: runner.os == 'macOS'
+        run: |
+          set +e
+          /usr/libexec/ApplicationFirewall/socketfilterfw --listapps
+          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --listapps
+          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
+          /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+      - name: Firewall rule and listener unit tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml --lib firewall -- --test-threads=1
+      - name: Runner cleanup ownership tests
+        run: python3 rust-spike/shell/tools/test_phase7_sharing_firewall.py
+      - name: Marker negative controls detect each removed protection
+        if: runner.os == 'Linux'
+        run: python3 rust-spike/shell/tools/phase7_sharing_marker_controls.py
+      - name: Build the probe server
+        id: build_probe
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/network/Cargo.toml --examples
+      - name: Turn the Linux firewall on, denying incoming connections
+        if: runner.os == 'Linux'
+        run: |
+          sudo ufw --force reset
+          sudo ufw default deny incoming
+          sudo ufw default allow outgoing
+          sudo ufw --force enable
+          sudo ufw status verbose
+      - name: phase7_sharing_firewall
+        shell: bash
+        run: |
+          set +e
+          python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-proof" --port 5198
+          code=$?
+          echo "phase7_sharing_firewall exit: $code (expected 0)"
+          exit $code
+      - name: Current version removes its own old-version firewall rule
+        if: ${{ !cancelled() && steps.build_probe.outcome == 'success' }}
+        shell: bash
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-versioned" --port 5198 --versioned-cleanup
+      - name: Negative control, off that leaves the rule behind, must fail
+        shell: bash
+        run: |
+          set +e
+          python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-negative" --port 5198 --negative-swallow-remove > "$RUNNER_TEMP/sharing-negative.log" 2>&1
+          code=$?
+          echo "Negative control exit: $code (expected 1)"
+          tail -30 "$RUNNER_TEMP/sharing-negative.log"
+          test "$code" -eq 1
+          grep -q "FAIL: the firewall rule is gone after off" "$RUNNER_TEMP/sharing-negative.log"
+      - name: Windows real RunAs launcher without a prompt stand-in
+        if: runner.os == 'Windows'
+        shell: bash
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-native-windows" --port 5198 --windows-native
+      - name: Provision the supported firewalld manager for its unloaded-service proof
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y firewalld
+          sudo ufw disable
+          sudo systemctl start firewalld
+      - name: macOS disabled firewall adds no application entry
+        if: runner.os == 'macOS'
+        shell: bash
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-mac-disabled" --port 5198 --mac-firewall-disabled
+      - name: Installer-loaded firewalld service and missing-service refusal
+        if: runner.os == 'Linux'
+        run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/firewalld-unloaded" --port 5198 --firewalld-services
+      - name: Firewalld negative control must detect a stranded assignment
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set +e
+          python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/firewalld-negative" --port 5198 --firewalld-services --negative-swallow-remove > "$RUNNER_TEMP/firewalld-negative.log" 2>&1
+          code=$?
+          echo "Firewalld negative control exit: $code (expected 1)"
+          tail -30 "$RUNNER_TEMP/firewalld-negative.log"
+          test "$code" -eq 1
+          grep -q "AssertionError: the firewall rule is gone after off" "$RUNNER_TEMP/firewalld-negative.log"

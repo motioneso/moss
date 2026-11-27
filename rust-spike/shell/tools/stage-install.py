@@ -30,10 +30,10 @@ def stage(dist: Path, postgres: Path, out: Path, server_runtime: bool = False,
     if not folders or not bootstrap:
         raise ValueError("Cannot read the database supervisor's schema layout")
     schema = re.findall(r'"([^"]+)"', folders[1]) + [bootstrap[1]]
-    for name in ("moss-app", "moss-shell", "moss-db"):
+    for name in ("moss-app", "moss-server", "moss-db", "moss-launcher"):
         if not (dist / name).is_file() or not os.access(dist / name, os.X_OK):
             raise ValueError(f"Missing executable: {name}")
-    for name in ("bin/postgres", "bin/initdb", "bin/pg_ctl", "share/postgresql/extension/vector.control", "lib/postgresql/vector.so", "lib/postgresql/moss_nodump.so"):
+    for name in ("bin/postgres", "bin/initdb", "bin/pg_ctl", "bin/pg_dump", "bin/pg_restore", "share/postgresql/extension/vector.control", "lib/postgresql/vector.so", "lib/postgresql/moss_nodump.so"):
         if not (postgres / name).is_file():
             raise ValueError(f"Incomplete Phase 1 PostgreSQL bundle: {name}")
     if not (dist / "web/index.html").is_file():
@@ -44,7 +44,7 @@ def stage(dist: Path, postgres: Path, out: Path, server_runtime: bool = False,
     out.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=".moss-stage-", dir=out.parent))
     try:
-        for name in ("moss-app", "moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-server", "moss-db", "moss-launcher"):
             shutil.copy2(dist / name, temporary / name)
         shutil.copytree(dist / "web", temporary / "web")
         shutil.copytree(postgres, temporary / "postgres", symlinks=True)

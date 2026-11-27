@@ -54,8 +54,21 @@ export function rustGateEntries(modules, event = "pull_request") {
           entry("package", "test:rust-calendar"),
           entry("server", "test:rust-calendar-server")
         ];
+      case "commitments":
+        return [entry("full"), entry("server", "test:rust-commitments-live")];
+      case "meals":
+        return [entry("full"), entry("server", "test:rust-meals-live")];
+      case "goals":
+        return [entry("full"), entry("server", "test:rust-goals-live")];
+      case "wellness":
+        return [entry("full"), entry("server", "test:rust-wellness-live")];
+      case "web-research":
+        return [entry("full"), entry("server", "test:rust-web-research-live")];
       case "finance":
-        return [entry("full", "test:rust-finance test:rust-finance-ui-unit")];
+        return [
+          entry("full", "test:rust-finance test:rust-finance-ui-unit"),
+          entry("server", "test:rust-finance-live")
+        ];
       case "meetings":
         return [
           entry("full", "test:rust-meetings test:rust-meetings-oracle test:rust-recording-oracle")
@@ -94,6 +107,7 @@ export const rustModules = [
 ];
 
 export const hostGates = [
+  "phase7-update-feed",
   "module-bootstrap",
   "phase6-lifecycle-api",
   "phase6-registry-api",
@@ -103,6 +117,7 @@ export const hostGates = [
   "phase6-install-screens",
   "phase6-lifecycle-screens",
   "phase6-trust-screens",
+  "phase6-exit-journey",
   "install-endpoints",
   "module-assembly",
   "public-web",

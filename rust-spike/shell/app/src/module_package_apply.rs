@@ -25,12 +25,13 @@ pub fn apply(instance: &Path, access: &AccessContext, input: Input) -> Result<()
     let url = module_admin::elevated_url(instance).map_err(anyhow::Error::msg)?;
     let mut child = Command::new(std::env::current_exe()?)
         .arg("apply-module-package")
+        .arg("--instance")
         .arg(instance)
         .arg(access.actor_user_id().to_string())
         .env(module_install::INSTALL_URL_VARIABLE, url)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
     let payload = serde_json::to_vec(&input)?;
     let written = child
@@ -40,17 +41,33 @@ pub fn apply(instance: &Path, access: &AccessContext, input: Input) -> Result<()
         .write_all(&payload);
     if written.is_err() {
         let _ = child.kill();
-        let _ = child.wait();
+        let output = child.wait_with_output()?;
+        if let Some(error) = module_admin::custody_child_error(&output.stderr) {
+            return Err(error.into());
+        }
         anyhow::bail!("Package transfer failed");
     }
-    ensure!(child.wait()?.success(), "Package activation failed");
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        // A key store failure in the child names itself and its remedy.
+        // Surface that line instead of the generic failure.
+        if let Some(error) = module_admin::custody_child_error(&output.stderr) {
+            return Err(error.into());
+        }
+        anyhow::bail!("Package activation failed");
+    }
     Ok(())
 }
 /// Internal installer entry: keeps the elevated login in one short-lived process.
 pub fn run(args: Vec<String>) -> Result<()> {
-    ensure!(args.len() == 2, "Missing instance or session actor");
-    let instance = std::path::PathBuf::from(&args[0]);
-    let actor = args[1].parse()?;
+    // Both spawn forms are accepted: --instance DIR ACTOR, or DIR ACTOR.
+    let (instance_arg, actor_arg) = match args.as_slice() {
+        [flag, dir, actor] if flag == "--instance" => (dir, actor),
+        [dir, actor] => (dir, actor),
+        _ => anyhow::bail!("Missing instance or session actor"),
+    };
+    let instance = std::path::PathBuf::from(instance_arg);
+    let actor = actor_arg.parse()?;
     let access = AccessContext::new(actor, "package-activation");
     let mut payload = Vec::new();
     std::io::stdin()

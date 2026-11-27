@@ -134,70 +134,156 @@ async fn windows_server_answers_on_the_network_address_only_when_sharing_is_on()
         }
     }
     let _cleanup = Cleanup(&install, &store);
-    provision::create_instance(&store, &install, "default").expect("app sets up a server");
+    // The elevated CI parent adds/removes the real marked rule between standard-user runs.
+    // This proof writes the raw config on purpose in its off and after-off phases. It never
+    // claims that writing the config turns sharing on. The on phase below only passes when
+    // the live owned marker check passes, which is the startup ownership check itself.
+    let phase = std::env::var("MOSS_PROOF_NETWORK_PHASE").unwrap_or_else(|_| "off".into());
+    assert!(matches!(phase.as_str(), "off" | "on" | "after-off"));
+    if phase == "off" {
+        provision::create_instance(&store, &install, "default").expect("app sets up a server");
+    }
     let folder = store.instance_folder("default");
     let config_path = folder.join("network.json");
     let mut config = Config::read(&config_path).unwrap();
     let lan = lan_address();
     let lan_origin = format!("https://{lan}:{port}");
-    config.listen = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    config.origins = vec![
-        format!("https://localhost:{port}"),
-        format!("https://127.0.0.1:{port}"),
-        lan_origin.clone(),
-    ];
-    // A certificate that names the network address, made with the install's own OpenSSL.
-    let tls = folder.join("tls-lan");
-    moss_network::tls::local_certificate_with_command(
-        &tls,
-        &config.origins,
-        crate::launch::command(&install, "openssl"),
-    )
-    .expect("certificate for the network address");
-    config.certificate = tls.join("certificate.pem");
-    config.private_key = tls.join("key.pem");
-    config.sharing = false;
-    config.write(&config_path).unwrap();
-    println!("network address {lan_origin}");
-
-    let (running, _) = reach::local_or_start(&install, &folder)
+    if phase == "off" {
+        config.listen = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+        config.origins = vec![
+            format!("https://localhost:{port}"),
+            format!("https://127.0.0.1:{port}"),
+            lan_origin.clone(),
+        ];
+        // A certificate that names the network address, made with the install's own OpenSSL.
+        let tls = folder.join("tls-lan");
+        moss_network::tls::local_certificate_with_command(
+            &tls,
+            &config.origins,
+            crate::launch::command(&install, "openssl"),
+        )
+        .expect("certificate for the network address");
+        config.certificate = tls.join("certificate.pem");
+        config.private_key = tls.join("key.pem");
+        config.sharing = false;
+        config.write(&config_path).unwrap();
+    }
+    let token = std::env::var("MOSS_PROOF_NETWORK_TOKEN").expect("parent's public rule token");
+    let rule = serde_json::json!({"name":format!("moss-default-{token}"), "port":port,
+        "program":install.join("moss-server.exe"), "token":token});
+    let record_path = folder.join(moss_network::firewall::RECORD_FILE);
+    if phase == "on" {
+        // Only the instance owner writes its protected files. The elevated parent has
+        // already added and checked this exact token, port and program through the helper.
+        let mut record: serde_json::Value =
+            serde_json::from_slice(&moss_network::config::private_read(&record_path).unwrap())
+                .unwrap();
+        assert_eq!(record["rule"], rule);
+        record["confirmed"] = true.into();
+        moss_network::config::private_write(&record_path, &serde_json::to_vec(&record).unwrap())
+            .unwrap();
+    } else if phase == "after-off" {
+        // Removal is privileged; checking absence is not. An error or a foreign live
+        // entry never counts as absent and never clears the owner's intent.
+        config.sharing = false;
+        config.write(&config_path).unwrap();
+        let record: serde_json::Value =
+            serde_json::from_slice(&moss_network::config::private_read(&record_path).unwrap())
+                .unwrap();
+        assert_eq!(record["rule"], rule);
+        let shown = std::process::Command::new("netsh")
+            .args([
+                "advfirewall",
+                "firewall",
+                "show",
+                "rule",
+                &format!("name=moss-default-{token}"),
+                "verbose",
+            ])
+            .output()
+            .expect("read the exact rule after removal");
+        assert_eq!(
+            shown.status.code(),
+            Some(1),
+            "rule lookup clearly reports absence"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&shown.stdout).trim(),
+            "No rules match the specified criteria."
+        );
+        std::fs::remove_file(&record_path).unwrap();
+    }
+    let firewall = moss_network::firewall::Firewall::new(&folder, install.join("moss-server.exe"));
+    if phase == "on" {
+        assert!(
+            firewall.rule_intact(port),
+            "sharing on has a live owned marker"
+        );
+        // Read the record back after the live check and confirm it still names the
+        // same rule as confirmed, as the round-nine follow-up asked.
+        let record: serde_json::Value =
+            serde_json::from_slice(&moss_network::config::private_read(&record_path).unwrap())
+                .unwrap();
+        assert_eq!(record["rule"], rule);
+        assert_eq!(record["confirmed"], true);
+        config.sharing = true;
+        config.write(&config_path).unwrap();
+    } else {
+        assert!(
+            !folder.join(moss_network::firewall::RECORD_FILE).exists(),
+            "sharing off has no firewall record"
+        );
+    }
+    assert_eq!(config.sharing, phase == "on");
+    println!("network address {lan_origin}, phase {phase}");
+    let (running, certificate) = reach::local_or_start(&install, &folder)
         .await
-        .expect("server starts");
-    let fingerprint = reach::peek_certificate(&lan_origin)
-        .await
-        .expect("certificate is readable over the network address");
-    println!("sharing off: certificate readable over {lan_origin}, code {fingerprint}");
-    let refused = reach::hello(&lan_origin, &fingerprint).await;
+        .expect("server starts and answers on loopback");
+    let fingerprint = moss_network::instance::fingerprint(&certificate);
+    if phase == "on" {
+        assert_eq!(
+            reach::peek_certificate(&lan_origin)
+                .await
+                .expect("shared certificate is reachable"),
+            fingerprint
+        );
+        let (hello, _) = reach::hello(&lan_origin, &fingerprint)
+            .await
+            .unwrap_or_else(|e| {
+                panic!("sharing on must accept the network address: {}", e.reason())
+            });
+        assert_eq!(hello.product, "moss");
+        println!("sharing on: {lan_origin} answered the app's own connect check as a Moss server");
+    } else {
+        assert!(
+            matches!(
+                reach::peek_certificate(&lan_origin).await,
+                Err(reach::Problem::Unreachable)
+            ),
+            "sharing off must not expose even a TLS certificate on the network address"
+        );
+        println!("{phase}: loopback answers, network address is unreachable");
+    }
+    reach::stop_local(&install, &folder).await.expect("stop");
+    for _ in 0..40 {
+        if !reach::alive(running.pid) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
     assert!(
-        matches!(refused, Err(reach::Problem::SharingOff)),
-        "sharing off must refuse the network address"
+        !reach::alive(running.pid),
+        "server stopped before the next firewall phase"
     );
-    println!("sharing off: the network address is refused with the sharing-off answer");
-    reach::stop_local(&install, &folder).await.expect("stop");
-    for _ in 0..40 {
-        if !reach::alive(running.pid) {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
+    if phase == "off" {
+        // Save intent before the parent performs any privileged add. This lives in the
+        // owner's protected folder, not in the elevated runner's account.
+        let record = serde_json::json!({"rule":rule, "paused":false, "confirmed":false,
+            "preexisting":false, "mac_disabled":false, "added":true});
+        moss_network::config::private_write(&record_path, &serde_json::to_vec(&record).unwrap())
+            .unwrap();
+    } else if phase == "after-off" {
+        std::fs::remove_dir_all(&data).unwrap();
     }
-
-    config.sharing = true;
-    config.write(&config_path).unwrap();
-    let (running, _) = reach::local_or_start(&install, &folder)
-        .await
-        .expect("server restarts");
-    let (hello, _) = reach::hello(&lan_origin, &fingerprint)
-        .await
-        .unwrap_or_else(|e| panic!("sharing on must accept the network address: {}", e.reason()));
-    assert_eq!(hello.product, "moss");
-    println!("sharing on: {lan_origin} answered the app's own connect check as a Moss server");
-    reach::stop_local(&install, &folder).await.expect("stop");
-    for _ in 0..40 {
-        if !reach::alive(running.pid) {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
-    println!("WINDOWS NETWORK ADDRESS PROOF: refused with sharing off, answered with sharing on");
-    std::fs::remove_dir_all(data).unwrap();
+    println!("WINDOWS NETWORK ADDRESS PROOF: {phase} passed");
 }

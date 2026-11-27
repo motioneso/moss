@@ -1,0 +1,343 @@
+# Rust phase 7: installers, signing, updates, backup and Docker import
+
+Task JS-423. Part of #4027 (board task JS-67). **Draft for coordinator review, then Ben.** This PR
+plans work and drafts screens. It changes no product code. Sizes mean complexity, not duration.
+Each numbered part is one session and one reviewable PR. No part starts from this document alone;
+the coordinator confirms each part's contracts against the previous part's evidence first.
+
+## Sources and baseline
+
+- [Port plan](../specs/2026-11-06-rust-port-plan.md): Phase 7 (lines 590-600), sections 3.8-3.10
+  (lines 344-402), forks 7.6 and 7.7 (table from line 653).
+- [Data and install rules](../specs/2026-11-06-rust-port-data-and-install-rules.md): move
+  (106-119), fresh install (136-154), keys (233-262), backup/restore/update/uninstall (263-276).
+- [Server and app split](../specs/2026-11-08-rust-server-and-app-split-design.md): sections 3.1,
+  3.3, 6.3, 9, 11 and 13.2.
+- [Phase 6 exit report](../reports/2026-11-24-rust-phase6-exit.md): GO for Phase 7 (line 100).
+- [Phase 1 report](../specs/2026-11-07-rust-phase1-report.md), slice
+  [27](../specs/2026-11-10-rust-server-app-slice27-report.md) and
+  [28](../specs/2026-11-10-rust-server-app-slice28-report.md) reports.
+- [Unbuilt TypeScript desktop plan](2026-09-05-moss-desktop-install.md): contracts only, never
+  built.
+- `.claude/skills/plan-build/SKILL.md`, `.claude/skills/design-system/SKILL.md`,
+  `docs/design-system.md`.
+- Code read at main `4ef501c2e` on 2026-11-25. Bounded source reads only. No Rust build, database
+  gate or full suite was run for this plan.
+
+## Stock-take
+
+Paths are repository-relative. A citation anchors the seam; it does not claim a fresh pass.
+
+| Area                  | What exists at `4ef501c2e`                                                                                                                                                                                                                                                                                                                                                       | Gap Phase 7 must close                                                                                                                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bundled database      | `rust-spike/bundled-db/src/main.rs:21-30` offers init, up, stop, status, credentials, check, hold and at-rest. `src/cluster.rs:198,328,541` initialise, start and stop. Linux bundle built by `proof/linux/build-pg.sh` with a pinned pgvector 0.8.7 hash. Mac proofs in `proof/mac/{build,bundle,sign,flows,app-layout}.sh`; Windows proofs in `proof/windows/*.ps1`.           | No dump or restore command; no `pg_dump` call anywhere under `rust-spike/`. `src/at_rest.rs:5` defers backup destinations. Windows CI uses the runner's Postgres (`.github/workflows/rust-windows-supervisor.yml:40`) and pgvector v0.8.0 (line 42). |
+| Install stage         | `rust-spike/shell/tools/stage-install.py:2` builds an unsigned relocatable stage; line 36 checks six Postgres files; line 50 copies the whole tree. `uninstall.py:2` removes unchanged inventoried files and keeps data. Tests in `test_install.py`.                                                                                                                             | Not a native package on any OS. `pg_dump` and `pg_restore` presence is unchecked. One version folder only, so no old program survives an update.                                                                                                     |
+| App setup and servers | `rust-spike/shell/connect/src/provision.rs:78` creates an instance; `:280` and `:443` start and stop its database. `main.rs:567,607,619` create, confirm stop and stop. `assets/connect.js` draws first run (41), Connect (96), Certificate (103), New server (156), Stop confirm (161-179), Desktop settings (183-210), Setting up (213), Can't reach (219), Servers (257-290). | First run has no Restore or Move-from-Docker choice. No recovery key screen. No backup or update screens.                                                                                                                                            |
+| Start at login        | `shell/connect/src/desktop.rs:327-362` writes an XDG autostart entry; `desktop/macos.rs:464,490` a per-folder LaunchAgent; `desktop/windows.rs:463,480` an HKCU Run key.                                                                                                                                                                                                         | All three start the app, not the server. No systemd user unit. Split design 3.3 assigns server start-at-login and Stop to Phase 7.                                                                                                                   |
+| Tray                  | `shell/connect/src/desktop/identity.rs:12` defines Reveal, Settings, Unavailable.                                                                                                                                                                                                                                                                                                | No Stop server, status or Check for updates item.                                                                                                                                                                                                    |
+| Updates               | `shell/connect/src/reach.rs:66-67` tells the user to update one side.                                                                                                                                                                                                                                                                                                            | No updater, feed, staging, switch or rollback code exists.                                                                                                                                                                                           |
+| Credentials and keys  | `provision.rs:220-222` writes `credentials.json` as an owner-only plaintext file. `rust-spike/network/README.md:36` defers keychain provisioning to the installer phase. `rust-spike/keystore/src/lib.rs:1` and `recovery.rs:1-13` hold a throwaway spike with a 24-word recovery key. `rust-spike/portability/src/lib.rs:1` mirrors the TypeScript cipher and hash rules.       | Keys are not in OS key stores. The recovery key is not wired into setup. Companion doc keys rules (233-262) unmet.                                                                                                                                   |
+| Certificates          | Pinned-certificate trust in `shell/connect/src/trust_linux.rs`, `trust_macos.rs`, `trust_windows.rs`.                                                                                                                                                                                                                                                                            | Split design 6.3 needs OS trust for public certificates through a library not yet approved.                                                                                                                                                          |
+| Signed feeds          | `rust-spike/module-host/src/trust.rs:3` uses ring Ed25519; `src/registry.rs:50-53,75-78` hold the index serial and anti-rollback record. `.github/workflows/rust-modules-registry.yml:27-28` reads two signing secrets; line 43 builds on three OSes; publish goes to the rolling `rust-modules` release through `tools/release_transport.py:48`.                                | Whether the two registry signing secrets exist is unverified; the exit report (line 82) says only that its task did not provision them. No app update feed.                                                                                          |
+| Per-module recovery   | `rust-spike/module-host/src/recovery.rs:192,374` snapshot and restore one module.                                                                                                                                                                                                                                                                                                | Nothing instance-wide.                                                                                                                                                                                                                               |
+| Windows CI            | `rust-windows-supervisor.yml:20` runs on `windows-latest`; lines 63-70 run setup, start, stop and restart as a standard user. Slice 28 report lines 47-69.                                                                                                                                                                                                                       | App buttons never clicked (debug port never opened). Firewall with a second machine unproven. Bundled OpenSSL is Git's copy. No Mac runner for these proofs.                                                                                         |
+| macOS signing         | `proof/mac/sign.sh` signs with an identity or ad hoc. Phase 1 report lines 21-22, 28, 40-45.                                                                                                                                                                                                                                                                                     | Library validation refused ad-hoc bundled libraries; pgvector loaded only with it off. Developer ID signing plus notarization is untested. The Phase 1 Mac kill gate is still open.                                                                  |
+| Docker installs       | `docs/operations/backup.md`; `scripts/backup-database.ts`, `scripts/backup-full.sh`, `scripts/restore-database.ts`. Image published by `.github/workflows/release-image.yml`.                                                                                                                                                                                                    | The Docker backup is an unencrypted tar.gz of a dump and the vault, with no keys. There is no exporter that carries keys or an importer on the Rust side.                                                                                            |
+| App map               | `packages/shared/src/app-map-desktop.ts` declares the desktop connect screen, desktop settings, nine errors and their remedies. `packages/shared/src/app-map-core.ts:205` declares Sharing. Test `tests/unit/app-map-integrity.test.ts`.                                                                                                                                         | No backup, recovery key, update, tray or Docker import entries.                                                                                                                                                                                      |
+
+### Unproven, so each becomes an early part
+
+- A pinned Postgres bundle with `pg_dump` and `pg_restore` on all three OSes (part 1).
+- One Developer ID signing every bundled library so pgvector loads with library validation on
+  (part 17a, the inherited Mac kill gate).
+- A server that starts at login as a per-user service on each OS (part 2).
+- Key storage in Secret Service, Keychain and DPAPI without a plaintext fallback (part 3).
+- A second machine reaching the server through each OS firewall (part 11).
+- A clean VM on the box. The box has `/dev/kvm` but no VM tool; `lxc` is an uninstalled stub
+  (part 18, decision D5).
+
+## Seams and decisions
+
+| Needed seam          | Anchor                                                                 | Decision                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Snapshot and restore | `bundled-db/src/main.rs:21-30`; `src/cluster.rs`                       | Add `moss-db dump` and `moss-db restore` around the bundled `pg_dump`/`pg_restore`. The server owns them; the app calls the server.                                                                                                                                                                                                                            |
+| Backup crypto        | Companion doc 263-276; `rust-spike/portability`, `rust-spike/keystore` | Promote the spikes into one `moss-backup` crate. Fresh 256-bit data key per archive, AES-256-GCM chunks, wrapped by the recovery key. Credentials go in a separately wrapped bundle.                                                                                                                                                                           |
+| Key custody          | `provision.rs:220-222`; `keystore/src/lib.rs`                          | Secret Service, Keychain, DPAPI. No plaintext fallback except a key file the owner chooses for a headless server. Existing `credentials.json` installs migrate once, then the file is removed.                                                                                                                                                                 |
+| Update feed trust    | `module-host/src/trust.rs:3`; `registry.rs:50-53,75-78`                | Reuse the Ed25519 signed index, monotonic serial and expiry. Separate key, named `MOSS_APP_UPDATE_SIGNING_KEY_ID` and `MOSS_APP_UPDATE_SIGNING_PRIVATE_KEY`. Unsigned or older-serial feeds are refused (port plan 3.8).                                                                                                                                       |
+| Program versions     | `stage-install.py:2`; `uninstall.py:2`                                 | Versions live side by side under the per-user program folder, apart from data, so the old program survives for rollback. The native package installs a small launcher that points at the current version.                                                                                                                                                      |
+| Update switch        | Port plan 3.8; companion doc 263-276                                   | Encrypted snapshot, restore to a staged cluster, migrate, check, then switch. The old cluster stays stopped for rollback. A journal makes each step restartable after power loss.                                                                                                                                                                              |
+| Server lifecycle     | `desktop.rs:327-362`; `macos.rs:464,490`; `windows.rs:463,480`         | Per instance, one user service: a systemd user unit on Linux, a LaunchAgent on macOS, a Task Scheduler logon task on Windows. The app's own login entry stays.                                                                                                                                                                                                 |
+| Firewall             | Slice 28 report 56-60; desktop plan C2 (line 952)                      | Sharing stays off until turned on. Turning it on asks the OS once: one elevation on Windows, one native administrator dialog for the application firewall on macOS, on Linux a graphical password prompt (polkit) that adds the rule through `firewalld` or `ufw`. Never a terminal (port plan line 363). Unproven, so part 11 proves it on Ubuntu and Fedora. |
+| Public certificates  | Split design 6.3                                                       | Add the `rustls-platform-verifier` crate for public certificates only; pinned self-signed trust is unchanged. Raised here as a new dependency for approval.                                                                                                                                                                                                    |
+| Docker move          | `docs/operations/backup.md`; companion doc 106-119                     | A Rust exporter runs on the Docker host, stops the app and worker containers, dumps through `docker exec` and writes a phase 7 encrypted archive with the key bundle. A TypeScript exporter would break the TypeScript freeze.                                                                                                                                 |
+| Signing              | Forks 7.6, 7.7; `proof/mac/sign.sh`                                    | Isolated in part 17. Parts 1-16 build unsigned or ad hoc. Real secrets arrive only as named CI secrets.                                                                                                                                                                                                                                                        |
+
+**Chosen updater.** Our own, built on the module registry trust. A generic installer and updater
+such as `cargo-packager` would steelman well because one config covers all three OSes and it
+ships a working updater. It loses here because its updater swaps files and cannot snapshot,
+stage and migrate a database cluster, and it would bring a second signature format beside the
+registry's. Packaging tools may still be used for the native package step if a part proves it
+helps; that would be a raised tool, not a silent install.
+
+**Linux layout fork.** Option A installs a `.deb`/`.rpm` launcher and keeps program versions in
+the per-user folder, so rollback keeps the old binaries. Option B ships everything as a system
+package from a signed apt/rpm repository, which loses the old binaries on upgrade and breaks
+rollback. Option C ships AppImage only, which skips the package manager. Recommend A, with
+AppImage as the fallback (port plan 3.8).
+
+**Determinism boundary.** Every status, progress stage, warning and result on these screens
+renders from server records: the backup ledger, the update journal, the import report. No model
+has a role in install, backup, update or import, and no model text crosses into user data. The
+two-job model budget is unused.
+
+## Ordered parts
+
+Platform order is Linux, then macOS, then Windows (fork 7.7). Parts 1-16 work unsigned or ad hoc.
+Screen parts wait for Ben's approval of the mockups below. Every product PR updates its app-map
+entries in the same PR.
+
+| Part / size                     | Builds                                                                                                                                                                                                                                                                                                                                                               | Depends on                | Named proof and why a broken build fails it                                                                                                                                                                                                                                                                                                                                                                                                                                    | App-map additions                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| 1 / M Pinned database bundle    | One pinned Postgres 17 plus pgvector 0.8.7 build per OS, from source with hashes, including `pg_dump` and `pg_restore`. `stage-install.py` checks both. Windows CI stops using the runner's Postgres.                                                                                                                                                                | Phase 6 exit              | `phase7_pg_bundle` on three CI OSes: start, create the vector extension, dump and restore a planted row. Fails if a tool is missing or the Windows job still finds the runner copy.                                                                                                                                                                                                                                                                                            | None                                                                                             |
+| 2 / M Program layout, service   | Side-by-side version folders and a launcher. Rename the server program to `moss-server`. Per-instance user service on Linux first, then macOS and Windows. Stop in the app stops the service.                                                                                                                                                                        | 1                         | `phase7_instance_service`: install, log out and in (CI: restart the user manager), server comes back; Stop keeps it down until Start. Fails if only the app autostarts.                                                                                                                                                                                                                                                                                                        | Server status and Stop on `rust-desktop-connect`; `app_server_service_failed`                    |
+| 3 / M Key custody               | OS key store adapters, recovery key generation (24 words), one-time migration off `credentials.json`. The headless key file is a setup choice only on Linux with no keychain session, never a fallback (install rules line 241).                                                                                                                                     | 2                         | `phase7_key_custody`: locked key store refuses to start with a plain reason; no plaintext copy remains after migration (file search); recovery words restore the wrapped bundle; on a desktop session with the key store missing or broken, setup stops with Try again and no key-file option. Negative control writes plaintext and must fail.                                                                                                                                | Recovery key screen; `app_keystore_locked`, `app_keystore_unavailable`                           |
+| 4 / M Backup engine             | `moss-db dump`, encrypted archive writer, ledger, 7 daily and 4 weekly retention that never prunes the last verified or pinned backup, writes fenced, or a shared database and file snapshot watermark, for the whole capture (install rules line 268). Verify by restore drill to a scratch root with workers and outbound traffic blocked.                         | 1, 3                      | `phase7_backup_engine`: back up, flip one byte, verify fails; a write made during backup is in both the dump and the files or in neither; the drill proves a restored attachment matches its record and wrapped credentials decrypt; no job or outbound call runs in the drill; retention keeps the pinned and last verified archive; archive holds no plaintext secret (byte search). Fails if verify only checks the hash.                                                   | None (server only)                                                                               |
+| 5 / M Restore                   | Restore to a new staging root, then switch. First-run Restore on a new machine: pick the file, see where it came from and where it goes, enter the recovery words (M5, new computer).                                                                                                                                                                                | 4                         | `phase7_restore_new_machine`: back up on one machine image, restore on a clean one through first-run Restore a backup, sign in, see the planted item. Wrong words and a damaged archive fail with plain reasons and leave nothing half-restored.                                                                                                                                                                                                                               | `app_backup_wrong_key`, `app_backup_damaged`                                                     |
+| 6 / M Backup screens            | M2 recovery key and M5 backups and restore, per the mockups. Admin only; never shows content. The recovery words show only in the desktop app on the server's own computer after the OS password prompt, never through Settings (install rules line 212).                                                                                                            | 4, 5; Ben approves M1-M7  | `phase7_backup_screens` Playwright on a real dev instance, desktop and phone: Back up now, verify, pin, restore flow, locked store and failed verify states. A signed-in remote admin cannot get the recovery words from any screen or API. Real records, no intercepted responses.                                                                                                                                                                                            | `/settings/backups` surface; `app_backup_verify_failed`                                          |
+| 7 / M Update feed and release   | Signed app update index (serial, expiry, per-OS artifacts and hashes), release workflow publishing to a test feed with a throwaway key.                                                                                                                                                                                                                              | 1                         | `phase7_update_feed`: unsigned, older-serial, expired and wrong-hash feeds are refused; a correctly signed build for the wrong OS, architecture or schema range is refused before shutdown and the server keeps running on its data (install rules line 271). Fails if the client accepts any of them.                                                                                                                                                                         | None                                                                                             |
+| 8 / M Update staging and switch | Download, verify, snapshot, stage cluster, migrate, check, switch, keep old cluster and program stopped. Old writers stay fenced from snapshot through switch. Journal per step. Activation is recorded durably before any new writer or worker starts.                                                                                                              | 2, 4, 7                   | `phase7_update_switch`: version N to N+1 with planted data; data and sign-in survive; old version folder and cluster remain; a write attempted after the snapshot is refused, not lost.                                                                                                                                                                                                                                                                                        | None                                                                                             |
+| 9 / M Update rollback           | Before activation, failure at any journal step restarts the old cluster and program. After activation Moss never rolls back by itself: it stays on the new version or stops in recovery with both clusters kept, for the owner to decide. Power loss at each step resumes or recovers on next start.                                                                 | 8                         | `phase7_update_rollback`: N+1 with a deliberately failing migration falls back to N with data intact; kill the process at every step before activation and restart; kill it after the first accepted write on N+1 and restart, and that write survives or Moss stops in recovery needed; kill it at the first outbound action on N+1, and the old version never repeats that action. Fails if any step leaves neither version runnable, or a rollback drops an accepted write. | `app_update_failed_rolled_back`, `app_update_recovery_needed`, `app_update_verify_failed`        |
+| 10 / M App and update screens   | M1 first run (adds Restore, Move from Docker and the disk encryption result: on, off or unknown, install rules line 252), M3 servers and tray, M6 update states.                                                                                                                                                                                                     | 2, 8, 9; Ben approves     | `phase7_app_screens`: real app on Linux, click each choice, tray Stop, update available, updating, failed and rolled back; unknown disk encryption shows no protection claim and does not block setup. Desktop and phone where the screen exists on phone (version row in Settings).                                                                                                                                                                                           | `rust-desktop-updates`; tray items; updated first-run description; disk encryption state         |
+| 11 / M Sharing and firewall     | M4 sharing prompt. Turning sharing on asks the OS firewall once per OS. Turning it off removes the rule.                                                                                                                                                                                                                                                             | 2; Ben approves           | `phase7_sharing_firewall`: a second machine (or second VM) reaches the server only after sharing is on, not after the OS prompt is refused, and not after sharing is off. Linux runs through the graphical prompt on Ubuntu and Fedora with no terminal. Fails if the rule stays behind.                                                                                                                                                                                       | Updated `rust-network-sharing`; `app_firewall_refused`                                           |
+| 12 / S OS certificate trust     | Public certificates through the OS trust store; pinned self-signed path unchanged.                                                                                                                                                                                                                                                                                   | New crate approved        | `phase7_os_trust`: a public-CA test server connects without pinning; a changed self-signed certificate still triggers the existing warning.                                                                                                                                                                                                                                                                                                                                    | None                                                                                             |
+| 13 / M Linux packages           | Unsigned `.deb` and `.rpm` launcher packages plus AppImage. Uninstall keeps data unless the owner deletes it. Follow the Linux installer firewalld contract below (preload service, install-time reload only).                                                                                                                                                       | 2, 8                      | `phase7_linux_packages`: install with the desktop software tool on Ubuntu 24.04 and Fedora VMs, start, uninstall, reinstall, data still there.                                                                                                                                                                                                                                                                                                                                 | None                                                                                             |
+| 14 / M macOS package            | Ad-hoc-signed app bundle and disk image. Refuse to run from a translocated path (desktop plan C1, line 941).                                                                                                                                                                                                                                                         | 2, 8                      | `phase7_mac_package` on `macos-latest`: launch, database starts, pgvector loads. Records whether library validation had to be off.                                                                                                                                                                                                                                                                                                                                             | `app_mac_translocated`                                                                           |
+| 15 / M Windows package          | Per-user installer (no machine-wide install), bundled OpenSSL with its licence, 60-character path test (desktop plan C2, line 952). Fix the button-click proof (slice 28 lines 47-55).                                                                                                                                                                               | 2, 8, 11                  | `phase7_windows_package` on `windows-latest`: install as a standard user, start, Stop and Open clicked, uninstall keeps data. Fails if any step needs elevation other than the firewall.                                                                                                                                                                                                                                                                                       | None                                                                                             |
+| 16a / M Docker exporter         | Rust exporter for the Docker host. Fences the source and stops app and worker containers with restart turned off, dumps, packs the vault and the key bundle into an encrypted archive.                                                                                                                                                                               | 4                         | `phase7_docker_export` on a throwaway Docker stack built from the published image: after a host reboot the old containers stay stopped. Never against the production install.                                                                                                                                                                                                                                                                                                  | None                                                                                             |
+| 16b / M Import                  | Preflight report (version, size, accounts, modules not yet ported, filename collisions, unportable credentials). Refuse a nonempty destination. Import into a new install, remap paths, reconcile file hashes, decrypt every credential envelope. The owner sees the reconciliation and approves before exactly one worker set starts (install rules lines 108-118). | 5, 16a                    | `phase7_docker_import`: planted items from every account appear after import; a vault with two names differing only in case is reported, not overwritten; a nonempty destination is refused; file hashes and credentials match; leaving the screen without approval starts no worker, and approval starts exactly one set; a damaged archive and a wrong key fail cleanly.                                                                                                     | None                                                                                             |
+| 16c / S Import screen           | M7 Docker import screen, ending in the reconciliation report and Activate this Moss.                                                                                                                                                                                                                                                                                 | 16b; Ben approves         | `phase7_import_screen` Playwright through the real app: file and words, preflight, progress, result, error states.                                                                                                                                                                                                                                                                                                                                                             | `rust-docker-import` surface; `app_import_wrong_key`, `app_import_damaged`, `app_import_too_new` |
+| 17a / S Mac signing probe       | Developer ID signing of every bundled binary and library, hardened runtime, notarization, stapling. Library validation stays on.                                                                                                                                                                                                                                     | D1; may run right after 1 | `phase7_mac_signing`: notarized build launches on a Mac that never saw it, pgvector loads. This closes or fires the Phase 1 Mac gate.                                                                                                                                                                                                                                                                                                                                          | None                                                                                             |
+| 17b / M Real signing            | Release workflow signs macOS (D1), Windows (D2) and the app feed (D4). Secrets only as named CI secrets.                                                                                                                                                                                                                                                             | 13-15, 17a; D1, D2, D4    | `phase7_signed_release`: a release build verifies on each OS (`codesign`/`spctl`, `signtool verify`, feed signature). Logs searched for key material.                                                                                                                                                                                                                                                                                                                          | None                                                                                             |
+| 18 / M Kill gate runs           | The fresh-machine runs below, one OS at a time.                                                                                                                                                                                                                                                                                                                      | 1-17b; D5, D6             | `phase7_kill_gate_linux`, `_mac`, `_windows`. Screenshots and a short recording each.                                                                                                                                                                                                                                                                                                                                                                                          | None                                                                                             |
+| 19 / S Phase exit               | Phase 7 report with every proof, the app-map check and what stays unproven.                                                                                                                                                                                                                                                                                          | 18                        | Report only. Coordinator records go or stop.                                                                                                                                                                                                                                                                                                                                                                                                                                   | Final app-map check                                                                              |
+
+**Kill gate after part 1.** The coordinator watches the pinned bundle dump and restore on all three
+OSes. If Windows cannot build from pinned source, stop and resize parts 1 and 15 before anything
+else depends on them.
+
+## Kill gate (Phase 7 exit)
+
+On each OS, a fresh machine, with clicks only:
+
+1. Download the installer from a staged test release.
+2. Install, start, choose "This computer", create the owner, sign in, open Today.
+3. Setup shows disk encryption as on, off or unknown.
+4. Back up now with verify. Restore that backup on a second fresh machine through first-run
+   "Restore a backup" and see the planted item.
+5. Install version N with planted data. Publish N+1 with a deliberately failing migration to the
+   test feed. Update. The app shows "Update failed. Your previous version is running." and the
+   planted data is intact on the old cluster.
+
+6. On Windows, sign out and back in (including after reboot): the own-user Task Scheduler
+   logon task starts the server without the desktop app. Stop keeps it down until Start.
+   Part 2 CI replays the exact action read back from Task Scheduler; it does not prove real logon.
+
+7. On Ubuntu 24.04 and Fedora VMs, approve and refuse Sharing's real graphical polkit prompt
+   with no terminal. On Windows, approve and refuse the elevation; on macOS, approve and refuse
+   the native administrator dialog for the application firewall. With the macOS firewall off,
+   confirm no entry is added and the disabled state is recorded. Use a real second machine to
+   confirm access only while sharing is on, including after a refused prompt and after off.
+   Turn sharing off and uninstall the instance; confirm its own rule is gone and foreign rules
+   remain. On Fedora, also prove the installer preloads the service and performs its one
+   install-time reload; runtime never reloads.
+
+The coordinator records each result. Ben decides a stop. If the Mac gate fails, Mac installs both
+programs but uses another computer as its server (split design section 11). The click-only run on
+macOS and Windows needs part 17b; an unsigned rehearsal runs first and is reported separately.
+
+### How each fresh machine is obtained
+
+| OS      | CI can prove                                                                                         | Needs a real machine                                                                    | Fresh machine                                                                                                                                                                                         |
+| ------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux   | `ubuntu-latest`: build, package, scripted install, service restart, backup, restore, update rollback | Clicks in the desktop software tool, login after reboot, firewall with a second machine | Ubuntu 24.04 and Fedora VMs on the box, reset from a snapshot before each run. Needs a VM tool (D5)                                                                                                   |
+| macOS   | `macos-latest`: build, ad-hoc or Developer ID signing, notarization, launch, pgvector load           | Gatekeeper first-open dialog, Keychain prompt, firewall prompt, clicks                  | A macOS VM on the MacBook, reset from a clean snapshot. A new user account counts only as a rehearsal, because machine-wide settings carry over. Ben runs it with the steps in the part 18 brief (D6) |
+| Windows | `windows-latest`: build, per-user install, scripted start and stop, signature check                  | SmartScreen dialog, firewall prompt, clicks, a second machine reaching the server       | A Windows 11 evaluation VM on the box, reset from a snapshot (D5). Never the work laptop                                                                                                              |
+
+### Verification policy for builders
+
+Each part names a new test; none exists yet. Builders register a focused runner and record its
+exact unpiped command and exit code. Example shape, expected exit 0:
+
+```bash
+LANE=js-000-part4; RUSTUP_HOME="$HOME/.rustup" CARGO_TARGET_DIR="/media/$USER/Downloads/unity-scratch/$LANE/target" pnpm test:rust-phase7-backup > "/tmp/p7-$LANE.log" 2>&1; echo "EXIT=$?"
+```
+
+- Read `.claude/skills/verify-gate/SKILL.md` before any database-touching run.
+- Screen parts use Playwright on a real dev instance with no intercepted responses.
+- Every security claim (no plaintext key, refused feed, refused archive) has a negative control
+  observed failing with its guard removed.
+- Docker import proofs use a throwaway stack, never the production install.
+- No real signing key enters the repo, logs, artifacts or CI output; fixtures use throwaway keys.
+
+## Decisions for Ben
+
+Each decision says what it is for, the choices, what it costs, who owns it, what it holds up, and
+a recommendation.
+
+| #   | Decision                                    | Choices                                                                                                                                                                                  | Cost                                                                                                                                                                       | Owner                            | Holds up                    | Recommendation                                                           |
+| --- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | --------------------------- | ------------------------------------------------------------------------ |
+| D1  | Apple account, so Macs trust Moss           | (a) Individual account in Ben's name. (b) Organisation account, which needs a registered company and a D-U-N-S number. (c) None: Mac stays ad hoc and every user must override a warning | $99 a year either way. (b) adds company verification. Moving owner later re-signs Macs                                                                                     | Ben buys; coordinator uses       | 17a, 17b, Mac gate          | (a), early, because 17a is the open Mac kill gate                        |
+| D2  | Windows signing, so SmartScreen trusts Moss | (a) Microsoft's Artifact Signing service (formerly Trusted Signing). (b) A bought OV certificate on a hardware key. (c) None: users see a SmartScreen warning                            | (a) monthly fee; Microsoft's page shows no price without sign-in, so confirm the tier and whether an individual is eligible. (b) a few hundred dollars a year plus the key | Ben buys                         | 17b, Windows gate           | (a), if Ben is eligible; else (c) for the first testers and decide again |
+| D3  | Where installers and the update feed live   | (a) GitHub Releases on this public repo, as the module registry already does. (b) Own web host or storage bucket                                                                         | (a) free. (b) hosting bill and another login to guard                                                                                                                      | Ben                              | 7, 17b                      | (a)                                                                      |
+| D4  | Signing keys for the first real publish     | Ben generates the module registry key and the app update key, stores each as a GitHub secret, and keeps an offline backup in his password manager. Agents only use the secret names      | Free. Losing a key means every install must be reinstalled to trust a new one                                                                                              | Ben generates; coordinator wires | 17b, first registry publish | Do it once for both keys in one sitting                                  |
+| D5  | Windows and Linux test machines             | (a) VMs on the box, which needs a free VM tool installed (QEMU with virt-manager, or LXD). (b) A cheap second-hand Windows PC. (c) Only CI                                               | (a) free, uses box memory during runs. (b) a few hundred dollars. (c) free but cannot click real dialogs                                                                   | Ben approves the tool or buys    | 11, 13, 18                  | (a). Never the work laptop                                               |
+| D6  | Mac test machine                            | (a) A macOS VM on the MacBook, reset from a clean snapshot. (b) Erase and reinstall a spare Mac. (c) A fresh user account, rehearsal only                                                | (a) needs a free VM app on the Mac. (b) needs a spare Mac                                                                                                                  | Ben                              | 18                          | (a), run by Ben from written steps; (c) first as a rehearsal             |
+| D7  | Which Linux systems Moss promises           | (a) Ubuntu 24.04 and current Fedora, Intel/AMD only. (b) Also ARM. (c) Any distribution via AppImage                                                                                     | (b) doubles the build and test load                                                                                                                                        | Ben                              | 13                          | (a), with AppImage offered unpromised                                    |
+
+Sources for D1 and D2 prices, read 2026-11-25:
+[Apple enrollment help](https://developer.apple.com/help/account/membership/program-enrollment/),
+[Apple D-U-N-S help](https://developer.apple.com/support/d-u-n-s/),
+[Artifact Signing pricing](https://azure.microsoft.com/pricing/details/artifact-signing/).
+
+## Mockups and approval handoff
+
+Open [the static screen set](../mockups/rust-phase7-screens/index.html), served from the
+repository root (recipe in its README). It loads the shipped tokens and `@moss/ui` CSS, with
+layout-only mockup CSS. Values are illustrative.
+
+| Screen                        | Where                    | Phone            |
+| ----------------------------- | ------------------------ | ---------------- |
+| M1 First run                  | Desktop app              | No               |
+| M2 Recovery key               | Desktop app, first run   | No               |
+| M3 Servers, status, tray menu | Desktop app              | No               |
+| M4 Sharing prompt             | Settings, Sharing        | Yes              |
+| M5 Backups and restore        | Settings, Backups        | Yes              |
+| M6 Update states              | Desktop app and Settings | Version row only |
+| M7 Docker import              | Desktop app, first run   | No               |
+
+Each has empty, loading and error states. The coordinator sends the set to Ben and records his
+approval in this plan before parts 6, 10, 11 and 16c start.
+
+### Linux installer firewalld contract (part 13 checklist)
+
+- Before first launch, provision `/etc/firewalld/services/moss-<instance>.xml` and the instance's
+  `firewalld-service.json` receipt. `<instance>` is the folder basename, sanitized to ASCII
+  letters, digits, `-_.`, truncated to 24 characters (the server uses the same rule). Generate
+  one UUID-simple token per instance and preserve it across reinstall and sharing toggles.
+  The receipt is `{"service":"moss-<instance>","token":"<token>","port":<instance-port>,"zone":"<zone>"}`.
+  Capture the zone with an authorized `firewall-cmd --get-default-zone` during installation.
+  Runtime uses that recorded zone; it never asks for authorization just to discover a zone.
+  Use the configured server TCP port in both places; a changed port requires installer
+  reprovisioning before sharing can resume. Tokens here are public ownership markers.
+- The XML is exactly (including the final newline):
+
+  ```xml
+  <?xml version="1.0" encoding="utf-8"?>
+  <service>
+    <short>moss-INSTANCE</short>
+    <description>TOKEN</description>
+    <port port="PORT" protocol="tcp"/>
+  </service>
+  ```
+
+- Package installation loads the definition with one install-time firewalld reload, following
+  distro package practice. Do not assign the service to a zone at install time. Protect foreign
+  definitions: never overwrite a file whose marker does not match the instance receipt.
+  Runtime only adds/removes this already-loaded service in the recorded zone (permanent and
+  runtime assignments), never reloads and never edits/removes the service definition. Off
+  leaves the definition unassigned. Instance uninstall first closes verified assignments, then
+  removes only the matching definition and receipt; service definitions alone open no port.
+- If the definition is missing, stale, wrong-port or not loaded, runtime refuses sharing with
+  `app_firewall_refused`: “Reinstall Moss or restart the firewall.” CI exercises a real unloaded
+  service; part 18 also proves package install/reinstall and graphical approval on Fedora.
+
+## Rulings ledger
+
+- 2026-11-26, coordinator ruling for JS-435: macOS uses one native administrator dialog on
+  owner turn-on, then `socketfilterfw` for the exact `moss-server` path. A separate ALF
+  Allow/Deny dialog is not required. If the application firewall is disabled, add nothing and
+  record that state; a later enabled firewall requires a verified rule before restart sharing.
+  Declining the administrator dialog leaves sharing off. Part 18 proves the real dialog.
+
+- 2026-11-26, coordinator ruling for JS-435: runtime must never reload firewalld. Part 13
+  installers preload the per-instance service at installation and reload once there. Part 11
+  only adds/removes the loaded service in its zone; a missing runtime service fails closed with
+  the reinstall/restart-firewall remedy. Contract and part 13 checklist are above. No separate
+  runtime-preservation design is authorized.
+
+- 2026-11-26, coordinator ruling for JS-435: never prompt for authorization at startup. If a
+  live firewall-marker check needs root or cannot succeed silently, listen on loopback only and
+  preserve the rule/token as paused. Settings > Sharing shows Paused and one Resume button.
+  Resume authorizes a read-only check of the live marker on the current port; only a confirmed
+  check resumes network listening. Refusal or failure stays paused. Keep silent checks where
+  they work without root (firewalld, Windows and macOS).
+
+- 2026-11-26, coordinator ruling for JS-429: CI may replay the exact registered Windows
+  task action read back from Task Scheduler. Assert an own-user logon trigger, least privilege,
+  real server health and native task removal. Linux and macOS also read back from their native
+  managers. Actual Windows logon remains in the part 18 fresh-machine checklist.
+
+- 2026-11-26, JS-435: CI proves sharing off is loopback-only and that the real rule commands
+  add and remove the rule (Linux also proves a second client is blocked). Part 18 fresh-machine
+  checklist: the real graphical firewall prompt on Ubuntu and Fedora VMs (approve, refuse, off,
+  uninstall leaves no rule), the Windows prompt and the macOS native administrator dialog (approve and decline), and a real second machine on the
+  network reaching Moss only while sharing is on. A rule names the program path, so a version
+  update that moves the program needs the rule added again. CI also proves a rule Moss did not
+  create is never changed or deleted, and a Windows rule that already holds Moss's exact
+  marker name (moss-<instance>-<token>) makes turning on refuse. A rule that holds only the
+  bare moss- prefix, or the same port under another name, is foreign and stays untouched
+  while Moss turns on and off with its own marker. Not run in CI, so also on the part 18 checklist: the launcher's instance
+  removal running the rule cleanup, the settings rollback when saving fails after the rule
+  opened, and the Linux no-firewall-manager refusal on a machine with neither ufw nor firewalld.
+
+- 2026-11-25, Ben: mockups M1 to M7 approved as drawn. Screen parts 6, 10, 11 and 16c may start
+  when their dependencies merge.
+- 2026-11-25, Ben: all decisions as recommended.
+  - D1: individual Apple Developer account in Ben's name, enrolled early for part 17a.
+  - D2: Microsoft Artifact Signing if Ben is eligible; otherwise unsigned Windows for first testers,
+    then decide again.
+  - D3: installers and the update feed on GitHub Releases in this repository.
+  - D4: Ben generates the module registry key and the app update key in one sitting, stores both
+    as GitHub secrets and keeps an offline backup.
+  - D5: virtual machines on the build box (QEMU). Installing the VM tool is approved. Never the
+    work laptop.
+  - D6: a macOS virtual machine on the MacBook from a clean snapshot, run by Ben from written
+    steps; a fresh user account first as a rehearsal.
+  - D7: Ubuntu 24.04 and current Fedora on x86-64, with an unpromised AppImage.
+- 2026-11-25: the server and app split is final (split design); Phase 7 packages both programs.
+- 2026-11-25: no updater code exists; `reach.rs:66-67` only tells the user to update.
+- 2026-11-25: `lxc` on the box is a stub that tries to install a snap and fails; there is no VM
+  tool. Part 18 depends on D5.
+- 2026-11-25: Windows CI's database is the runner's copy and pgvector v0.8.0, not the pinned
+  bundle (`rust-windows-supervisor.yml:40-42`).
+- 2026-11-25, review round 1 (Codex), accepted and fixed:
+  - Automatic rollback is safe only before activation. After the new version accepts a write,
+    Moss stays on it or stops in recovery (parts 8, 9).
+  - A verified backup needs a write fence or shared snapshot watermark, and its drill runs with
+    workers and outbound traffic blocked (install rules line 268; part 4).
+  - The headless key file is never offered as a fallback for a missing desktop key store
+    (install rules line 241; part 3, mockup M2).
+  - Docker import must refuse a nonempty destination, report filename collisions, reconcile file
+    hashes and credentials, and keep the old host fenced across reboot (install rules lines
+    108-118; parts 16a, 16b).
+  - A new Mac user account is only a rehearsal; the gate needs a clean VM snapshot (D6).
+  - Linux sharing uses a graphical prompt, never a terminal (port plan line 363; part 11).
+  - First run shows disk encryption as on, off or unknown (install rules line 252; part 10, M1).
+  - A new machine restores from a chosen file, not from a backups list it cannot have (part 5,
+    M5 new computer).
+  - The phone view of M6 shows the version row only.
+  - The registry signing secrets are unverified, not absent (exit report line 82).
+- 2026-11-25, review round 2 (Codex), accepted and fixed:
+  - Old writers stay fenced from snapshot through switch, and activation is recorded before any
+    new writer or worker starts. A crash at the first outbound action never repeats it (parts 8,
+    9).
+  - Remote Settings never shows the recovery words; only the desktop app on the server's own
+    computer does, after the OS password prompt (install rules line 212; part 6, M5).
+  - The update client refuses a signed build for the wrong OS, architecture or schema range
+    before shutdown (install rules line 271; part 7).
+  - Docker import ends in a reconciliation report and an explicit Activate this Moss (install
+    rules line 117; parts 16b, 16c, M7).
+  - The phone view of M6 hides Retry.
+- 2026-11-25, review round 1, partly accepted: the verification example now uses a real lane
+  variable. The trailing `echo "EXIT=$?"` stays, because it is the repo's unpiped-gate form
+  (plan-build skill section 5) and reports the gate's own exit code.
