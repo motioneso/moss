@@ -72,3 +72,26 @@ rust-spike/module-publisher/Cargo.toml`. Its artifact gate is `pnpm test:rust-ph
   marking ready.
 - `pnpm test:rust-phase6-exit-journey` needs `EXIT_LAN_HOST` when the first non-loopback IPv4 is
   not the LAN or tailnet interface. Owner setup stays on localhost.
+- A new CI workflow needs the exact concurrency group that `tests/unit/ci-phase-deadlines.test.ts`
+  checks: `${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{
+github.event_name == 'pull_request' && 'pr' || github.run_id }}`.
+- Module server CI jobs run on PRs only when their paths change. A change to shared server
+  behaviour must make those jobs run on its own PR.
+- Tests that need LAN sharing turn it on through the authenticated settings route. Writing
+  `"sharing":true` into `network.json` now starts the server loopback-only and paused.
+- The `phase7_pg_bundle` runner takes `--postgres` and `--scratch`. Windows CI installs only the
+  hash-locked Meson and Ninja requirements; never install them on this box.
+- Windows `pg_ctl` proof commands need file-backed output. Inherited capture pipes keep the
+  caller waiting after startup.
+- Keep one task-owned `CARGO_HOME` for the update-feed negative controls and the real-server
+  gate, or shared dependencies rebuild from different registry paths.
+- OS-trust fixtures are built before Linux certificate roots are isolated. Windows mutation
+  controls keep the source bytes exact.
+- Windows service gates keep checkout bytes exact, write Task Scheduler XML as UTF-16LE with a
+  BOM, resolve exported account names to SIDs and read default privileges through COM.
+- Windows supervisor fixtures write instance records as their standard-user owner. The elevated
+  parent only changes marked OS rules.
+- Windows alternate-user tests use `rust-spike/portability/proof/windows-child.ps1`, which
+  rebuilds the child's profile so known-folder lookup and DPAPI use that account.
+- Linux restart-limit checks assert the unit reaches the failed state with a stable
+  `NRestarts`. `Result` can stay `exit-code`.
