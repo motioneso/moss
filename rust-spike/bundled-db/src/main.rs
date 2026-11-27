@@ -8,10 +8,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
+use bundled_db::at_rest;
 use bundled_db::cluster::{self, Bundle, Endpoint, Listen, StopMode};
 use bundled_db::layout::Layout;
-use bundled_db::at_rest;
-use bundled_db::{migrate, procs, secrets, APP_DATABASE, SUPERUSER};
+use bundled_db::{dump, migrate, procs, secrets, APP_DATABASE, SUPERUSER};
 use serde_json::{json, Value};
 #[cfg(unix)]
 use signal_hook::consts::{SIGCHLD, SIGHUP, SIGINT, SIGTERM};
@@ -28,6 +28,8 @@ usage:
   moss-db check   --root DIR [--write NOTE]
   moss-db hold    --root DIR --seconds N
   moss-db at-rest [--root DIR] [--path LABEL=DIR]... 
+  moss-db dump    --root DIR --pg DIR --out FILE
+  moss-db restore --root DIR --pg DIR --in FILE
 ";
 
 /// Windows has no termination signal for a background program, so Stop is a file in the
@@ -71,6 +73,8 @@ fn main() -> ExitCode {
         "check" => check(&options),
         "hold" => hold(&options),
         "at-rest" => at_rest_report(&options),
+        "dump" => dump(&options),
+        "restore" => restore(&options),
         _ => {
             eprint!("{USAGE}");
             return ExitCode::from(2);
@@ -94,6 +98,8 @@ struct Options {
     write: Option<String>,
     seconds: Option<u32>,
     paths: Vec<(String, PathBuf)>,
+    out: Option<PathBuf>,
+    input: Option<PathBuf>,
 }
 
 impl Options {
@@ -123,6 +129,8 @@ impl Options {
                     options.port_range = Some(range);
                 }
                 "--write" => options.write = Some(value()?),
+                "--out" => options.out = Some(value()?.into()),
+                "--in" => options.input = Some(value()?.into()),
                 "--seconds" => {
                     options.seconds =
                         Some(value()?.parse().map_err(|_| "--seconds needs a number")?)
@@ -587,6 +595,65 @@ fn at_rest_report(options: &Options) -> Result<ExitCode, String> {
     };
     emit_pretty(&report.to_json());
     Ok(ExitCode::SUCCESS)
+}
+
+/// Dumps the app database of a running install, as the superuser, to a new owner-only file.
+fn dump(options: &Options) -> Result<ExitCode, String> {
+    let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
+    let bundle = options.bundle()?;
+    let state = cluster::read_state(&layout)?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run)
+        .ok_or("the state file has no endpoint")?;
+    let out = options.out.as_deref().ok_or("--out is required")?;
+    let password = secrets::existing(&layout, SUPERUSER)?;
+    let target = dump::Target {
+        layout: &layout,
+        bundle: &bundle,
+        endpoint: &endpoint,
+        role: SUPERUSER,
+        password: &password,
+    };
+    let mut file = new_private_file(out)?;
+    let bytes = dump::dump(&target, APP_DATABASE, &mut file)?;
+    file.sync_all()
+        .map_err(|e| format!("{}: {e}", out.display()))?;
+    emit(&json!({ "event": "dumped", "bytes": bytes }));
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Restores a dump into a running install that does not have the app database yet.
+fn restore(options: &Options) -> Result<ExitCode, String> {
+    let layout = Layout::open(options.root()?).map_err(|e| e.to_string())?;
+    let bundle = options.bundle()?;
+    let state = cluster::read_state(&layout)?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run)
+        .ok_or("the state file has no endpoint")?;
+    let input = options.input.as_deref().ok_or("--in is required")?;
+    let password = secrets::existing(&layout, SUPERUSER)?;
+    let target = dump::Target {
+        layout: &layout,
+        bundle: &bundle,
+        endpoint: &endpoint,
+        role: SUPERUSER,
+        password: &password,
+    };
+    let mut file = std::fs::File::open(input).map_err(|e| format!("{}: {e}", input.display()))?;
+    let bytes = dump::restore(&target, "postgres", &mut file)?;
+    emit(&json!({ "event": "restored", "bytes": bytes }));
+    Ok(ExitCode::SUCCESS)
+}
+
+fn new_private_file(path: &Path) -> Result<std::fs::File, String> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options
+        .open(path)
+        .map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn mode_name(mode: StopMode) -> &'static str {

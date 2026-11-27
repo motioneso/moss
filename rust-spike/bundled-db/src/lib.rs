@@ -4,6 +4,7 @@
 
 pub mod at_rest;
 pub mod cluster;
+pub mod dump;
 pub mod layout;
 pub mod migrate;
 #[cfg(unix)]

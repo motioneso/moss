@@ -88,11 +88,9 @@ pub(crate) fn restore(root: &Path, values: &BTreeMap<String, String>) -> Result<
     Ok(())
 }
 
-/// Reads one database supervisor credential after migration. No plaintext file fallback.
-pub fn read(root: &Path, name: &str) -> Result<String, CustodyError> {
-    if !NAMES.contains(&name) {
-        return Err(CustodyError::Damaged("unknown database credential".into()));
-    }
+/// Loads an instance's master key the way a server start does: the OS key store first, then
+/// the key file recorded at headless setup.
+pub fn instance_master(root: &Path) -> Result<custody::MasterKey, CustodyError> {
     let service = root
         .file_name()
         .and_then(|s| s.to_str())
@@ -100,7 +98,15 @@ pub fn read(root: &Path, name: &str) -> Result<String, CustodyError> {
         .ok_or_else(|| CustodyError::Damaged("invalid instance folder".into()))?;
     let store = crate::platform::platform_store();
     let choice = custody::recorded_key_file(root);
-    let master = custody::load_master(store.as_ref(), &service, choice.as_deref())?;
+    custody::load_master(store.as_ref(), &service, choice.as_deref())
+}
+
+/// Reads one database supervisor credential after migration. No plaintext file fallback.
+pub fn read(root: &Path, name: &str) -> Result<String, CustodyError> {
+    if !NAMES.contains(&name) {
+        return Err(CustodyError::Damaged("unknown database credential".into()));
+    }
+    let master = instance_master(root)?;
     let bundle = custody::read_bundle(root)?;
     let payload: Value = serde_json::from_slice(&custody::unwrap_with_master(&bundle, &master)?)
         .map_err(|_| CustodyError::Damaged("invalid bundle credentials".into()))?;

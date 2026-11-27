@@ -1262,6 +1262,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-backup"
+version = "0.0.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "bundled-db",
+ "hex",
+ "keystore",
+ "portability",
+ "postgres",
+ "rand 0.8.8",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -30,7 +30,7 @@ pub type DbChild = Child;
 pub type DbChild = portability::windows_child::Child;
 
 /// A path as the database programs should see it: Windows tools do not take `\\?\` paths.
-fn tool_path(path: &Path) -> PathBuf {
+pub(crate) fn tool_path(path: &Path) -> PathBuf {
     #[cfg(windows)]
     {
         let text = path.to_string_lossy();
@@ -189,7 +189,7 @@ fn hba() -> String {
 }
 
 #[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Creates the cluster on first run. Returns whether it was created.
 ///
@@ -694,7 +694,7 @@ fn log_tail(log: &mut File, from: u64) -> String {
 }
 
 /// Postgres and its tools read `PG*` variables; none from the user's shell may steer them.
-fn clean_env(command: &mut Command) {
+pub(crate) fn clean_env(command: &mut Command) {
     for (name, _) in std::env::vars_os() {
         // Windows names are not case sensitive.
         if name.to_string_lossy().to_ascii_uppercase().starts_with("PG") {

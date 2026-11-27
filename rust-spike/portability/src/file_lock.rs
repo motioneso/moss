@@ -17,6 +17,11 @@ pub fn try_exclusive(file: &File) -> io::Result<bool> {
     acquire(file, false, false)
 }
 
+/// Waits for a shared lock. Shared holders run together; an exclusive holder waits for all.
+pub fn shared(file: &File) -> io::Result<()> {
+    acquire(file, true, true).map(|_| ())
+}
+
 /// Attempts a shared lock without waiting. `false` means an exclusive holder exists.
 pub fn try_shared(file: &File) -> io::Result<bool> {
     acquire(file, true, false)
