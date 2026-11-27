@@ -25,7 +25,10 @@ const ROLES: [&str; 5] = [
 ];
 
 fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned()
+    args.iter()
+        .position(|a| a == name)
+        .and_then(|i| args.get(i + 1))
+        .cloned()
 }
 
 fn required(args: &[String], name: &str) -> Result<String, String> {
@@ -33,7 +36,10 @@ fn required(args: &[String], name: &str) -> Result<String, String> {
 }
 
 fn all(args: &[String], name: &str) -> Vec<String> {
-    args.windows(2).filter(|w| w[0] == name).map(|w| w[1].clone()).collect()
+    args.windows(2)
+        .filter(|w| w[0] == name)
+        .map(|w| w[1].clone())
+        .collect()
 }
 
 fn sha(bytes: &[u8]) -> String {
@@ -48,7 +54,8 @@ fn db(error: postgres::Error) -> String {
 fn live(instance: &Path) -> Result<postgres::Client, String> {
     let layout = Layout::open(&instance.join("database")).map_err(|e| e.to_string())?;
     let state = cluster::read_state(&layout)?;
-    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run).ok_or("the database is not running")?;
+    let endpoint = Endpoint::from_json(&state["endpoint"], &layout.run)
+        .ok_or("the database is not running")?;
     let password = secrets::existing(&layout, SUPERUSER)?;
     endpoint.connect(SUPERUSER, &password, APP_DATABASE)
 }
@@ -58,7 +65,9 @@ fn write_file(instance: &Path, relative: &str, bytes: &[u8]) -> Result<(), Strin
     let path = instance.join(relative);
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
-    file.write_all(bytes).and_then(|()| file.sync_all()).map_err(|e| e.to_string())
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .map_err(|e| e.to_string())
 }
 
 /// Plants an attachment with its database record, a job that would call the canary if any
@@ -67,7 +76,10 @@ fn plant(args: &[String]) -> Result<Value, String> {
     let instance = PathBuf::from(required(args, "--instance")?);
     let canary = required(args, "--canary")?;
     let marker = required(args, "--marker")?;
-    let content = format!("attachment body {}", hex::encode(rand::random::<[u8; 16]>()));
+    let content = format!(
+        "attachment body {}",
+        hex::encode(rand::random::<[u8; 16]>())
+    );
     let relative = "vault/attachments/proof-attachment.txt";
     let _fence = fence::writer(&instance).map_err(|e| e.to_string())?;
     write_file(&instance, relative, content.as_bytes())?;
@@ -88,9 +100,14 @@ fn plant(args: &[String]) -> Result<Value, String> {
         )
         .map_err(db)?;
     client
-        .execute("INSERT INTO backup_proof.jobs (url, state) VALUES ($1, 'queued')", &[&canary])
+        .execute(
+            "INSERT INTO backup_proof.jobs (url, state) VALUES ($1, 'queued')",
+            &[&canary],
+        )
         .map_err(db)?;
-    client.execute("INSERT INTO backup_proof.markers VALUES ($1)", &[&marker]).map_err(db)?;
+    client
+        .execute("INSERT INTO backup_proof.markers VALUES ($1)", &[&marker])
+        .map_err(db)?;
     Ok(json!({ "attachment": relative, "sha256": sha(content.as_bytes()), "content": content }))
 }
 
@@ -98,24 +115,42 @@ fn plant(args: &[String]) -> Result<Value, String> {
 fn writer(args: &[String]) -> Result<Value, String> {
     let instance = PathBuf::from(required(args, "--instance")?);
     let name = required(args, "--name")?;
-    let hold: u64 = required(args, "--hold-ms")?.parse().map_err(|_| "--hold-ms is a number")?;
+    let hold: u64 = required(args, "--hold-ms")?
+        .parse()
+        .map_err(|_| "--hold-ms is a number")?;
     let _fence = fence::writer(&instance).map_err(|e| e.to_string())?;
     let body = format!("note {name} {}", hex::encode(rand::random::<[u8; 8]>()));
-    write_file(&instance, &format!("vault/notes/{name}.txt"), body.as_bytes())?;
+    write_file(
+        &instance,
+        &format!("vault/notes/{name}.txt"),
+        body.as_bytes(),
+    )?;
     println!("{}", json!({ "entered": name }));
     std::io::stdout().flush().ok();
     std::thread::sleep(Duration::from_millis(hold));
     let mut client = live(&instance)?;
     client
-        .execute("INSERT INTO backup_proof.notes VALUES ($1, $2)", &[&name, &sha(body.as_bytes())])
+        .execute(
+            "INSERT INTO backup_proof.notes VALUES ($1, $2)",
+            &[&name, &sha(body.as_bytes())],
+        )
         .map_err(db)?;
     Ok(json!({ "written": name }))
 }
 
 /// Connects to a database endpoint the way a worker would.
-fn try_connect(socket_dir: Option<&str>, port: u16, role: &str, password: &str) -> Result<postgres::Client, String> {
+fn try_connect(
+    socket_dir: Option<&str>,
+    port: u16,
+    role: &str,
+    password: &str,
+) -> Result<postgres::Client, String> {
     let mut config = postgres::Config::new();
-    config.user(role).password(password).dbname(APP_DATABASE).connect_timeout(Duration::from_secs(5));
+    config
+        .user(role)
+        .password(password)
+        .dbname(APP_DATABASE)
+        .connect_timeout(Duration::from_secs(5));
     #[cfg(unix)]
     if let Some(dir) = socket_dir {
         config.host_path(dir);
@@ -152,12 +187,16 @@ fn hostile_worker(args: &[String]) -> Result<Value, String> {
     let mut accepted = Vec::new();
     let mut called = 0;
     for role in ROLES {
-        let password = keystore::database_secrets::read(&instance, role).map_err(|e| e.to_string())?;
+        let password =
+            keystore::database_secrets::read(&instance, role).map_err(|e| e.to_string())?;
         match try_connect(socket_dir, port, role, &password) {
             Err(_) => refused.push(role),
             Ok(mut client) => {
                 accepted.push(role);
-                if let Ok(rows) = client.query("SELECT url FROM backup_proof.jobs WHERE state = 'queued'", &[]) {
+                if let Ok(rows) = client.query(
+                    "SELECT url FROM backup_proof.jobs WHERE state = 'queued'",
+                    &[],
+                ) {
                     for row in rows {
                         if call(&row.get::<_, String>(0)).is_ok() {
                             called += 1;
@@ -176,7 +215,11 @@ fn inspect_drill(args: &[String]) -> Result<Value, String> {
         &std::fs::read(required(args, "--pause")?).map_err(|e| format!("pause marker: {e}"))?,
     )
     .map_err(|_| "pause marker is not JSON")?;
-    let scratch = PathBuf::from(pause["scratch"].as_str().ok_or("pause marker has no scratch")?);
+    let scratch = PathBuf::from(
+        pause["scratch"]
+            .as_str()
+            .ok_or("pause marker has no scratch")?,
+    );
     let files = PathBuf::from(pause["files"].as_str().ok_or("pause marker has no files")?);
     let layout = Layout::open(&scratch.join("cluster")).map_err(|e| e.to_string())?;
     let endpoint = Endpoint {
@@ -186,7 +229,13 @@ fn inspect_drill(args: &[String]) -> Result<Value, String> {
     let password = secrets::existing(&layout, SUPERUSER)?;
     let mut client = endpoint.connect(SUPERUSER, &password, APP_DATABASE)?;
     let mut attachments = Vec::new();
-    for row in client.query("SELECT path, size, sha256 FROM backup_proof.attachments", &[]).map_err(db)? {
+    for row in client
+        .query(
+            "SELECT path, size, sha256 FROM backup_proof.attachments",
+            &[],
+        )
+        .map_err(db)?
+    {
         let path: String = row.get(0);
         let restored = std::fs::read(files.join(&path)).ok();
         attachments.push(json!({
@@ -197,23 +246,37 @@ fn inspect_drill(args: &[String]) -> Result<Value, String> {
             "fileSize": restored.as_ref().map(Vec::len),
         }));
     }
-    let rows: Vec<String> =
-        client.query("SELECT name FROM backup_proof.notes ORDER BY 1", &[]).map_err(db)?.iter().map(|r| r.get(0)).collect();
+    let rows: Vec<String> = client
+        .query("SELECT name FROM backup_proof.notes ORDER BY 1", &[])
+        .map_err(db)?
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
     let mut note_files = Vec::new();
     if let Ok(dir) = std::fs::read_dir(files.join("vault/notes")) {
         for entry in dir.flatten() {
-            if let Some(name) = entry.file_name().to_str().and_then(|n| n.strip_suffix(".txt")) {
+            if let Some(name) = entry
+                .file_name()
+                .to_str()
+                .and_then(|n| n.strip_suffix(".txt"))
+            {
                 note_files.push(name.to_owned());
             }
         }
     }
     note_files.sort();
     let jobs: i64 = client
-        .query_one("SELECT count(*) FROM backup_proof.jobs WHERE state = 'queued'", &[])
+        .query_one(
+            "SELECT count(*) FROM backup_proof.jobs WHERE state = 'queued'",
+            &[],
+        )
         .map_err(db)?
         .get(0);
     let logins: Vec<String> = client
-        .query("SELECT rolname FROM pg_roles WHERE rolcanlogin AND rolname <> current_user", &[])
+        .query(
+            "SELECT rolname FROM pg_roles WHERE rolcanlogin AND rolname <> current_user",
+            &[],
+        )
         .map_err(db)?
         .iter()
         .map(|r| r.get(0))
@@ -231,8 +294,16 @@ fn inspect_drill(args: &[String]) -> Result<Value, String> {
 fn encodings(list: &mut Vec<Vec<u8>>, needle: &[u8]) {
     list.push(needle.to_vec());
     list.push(hex::encode(needle).into_bytes());
-    list.push(base64::engine::general_purpose::STANDARD.encode(needle).into_bytes());
-    list.push(base64::engine::general_purpose::STANDARD_NO_PAD.encode(needle).into_bytes());
+    list.push(
+        base64::engine::general_purpose::STANDARD
+            .encode(needle)
+            .into_bytes(),
+    );
+    list.push(
+        base64::engine::general_purpose::STANDARD_NO_PAD
+            .encode(needle)
+            .into_bytes(),
+    );
 }
 
 /// Searches every byte under `--root` for the instance's credentials, master key, every
@@ -240,10 +311,13 @@ fn encodings(list: &mut Vec<Vec<u8>>, needle: &[u8]) {
 fn scan(args: &[String]) -> Result<Value, String> {
     let instance = PathBuf::from(required(args, "--instance")?);
     let root = PathBuf::from(required(args, "--root")?);
-    let master = keystore::database_secrets::instance_master(&instance).map_err(|e| e.to_string())?;
+    let master =
+        keystore::database_secrets::instance_master(&instance).map_err(|e| e.to_string())?;
     let bundle = custody::read_bundle(&instance).map_err(|e| e.to_string())?;
-    let payload: Value = serde_json::from_slice(&custody::unwrap_with_master(&bundle, &master).map_err(|e| e.to_string())?)
-        .map_err(|_| "credentials are not JSON")?;
+    let payload: Value = serde_json::from_slice(
+        &custody::unwrap_with_master(&bundle, &master).map_err(|e| e.to_string())?,
+    )
+    .map_err(|_| "credentials are not JSON")?;
     let mut needles = Vec::new();
     let mut leaves = Vec::new();
     collect_strings(&payload, &mut leaves);
@@ -254,7 +328,8 @@ fn scan(args: &[String]) -> Result<Value, String> {
     let mut archives = 0;
     for entry in ledger::list(&instance)? {
         let path = ledger::archive_path(&instance, &entry.id);
-        let mut input = std::io::BufReader::new(std::fs::File::open(&path).map_err(|e| e.to_string())?);
+        let mut input =
+            std::io::BufReader::new(std::fs::File::open(&path).map_err(|e| e.to_string())?);
         let header = archive::read_header(&mut input)?;
         let key = archive::open_data_key(&header, &master)?;
         encodings(&mut needles, key.bytes());
@@ -263,8 +338,10 @@ fn scan(args: &[String]) -> Result<Value, String> {
     for marker in all(args, "--marker") {
         needles.push(marker.into_bytes());
     }
-    let hits: Vec<String> =
-        custody::find_plaintext(&root, &needles).iter().map(|p| p.display().to_string()).collect();
+    let hits: Vec<String> = custody::find_plaintext(&root, &needles)
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
     Ok(json!({ "needles": needles.len(), "archives": archives, "hits": hits }))
 }
 
@@ -281,9 +358,17 @@ fn collect_strings(value: &Value, out: &mut Vec<String>) {
 /// with matching archive files. `--pin N` and `--verify N` mark the backup N days back.
 fn seed_ledger(args: &[String]) -> Result<Value, String> {
     let instance = PathBuf::from(required(args, "--instance")?);
-    let days: u64 = required(args, "--days")?.parse().map_err(|_| "--days is a number")?;
-    let pins: Vec<u64> = all(args, "--pin").iter().filter_map(|s| s.parse().ok()).collect();
-    let verified: Vec<u64> = all(args, "--verify").iter().filter_map(|s| s.parse().ok()).collect();
+    let days: u64 = required(args, "--days")?
+        .parse()
+        .map_err(|_| "--days is a number")?;
+    let pins: Vec<u64> = all(args, "--pin")
+        .iter()
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let verified: Vec<u64> = all(args, "--verify")
+        .iter()
+        .filter_map(|s| s.parse().ok())
+        .collect();
     let now = moss_backup::now_seconds();
     let mut made = Vec::new();
     ledger::update(&instance, |entries| {
@@ -315,7 +400,10 @@ fn rehash(args: &[String]) -> Result<Value, String> {
     let id = required(args, "--id")?;
     let bytes = std::fs::read(ledger::archive_path(&instance, &id)).map_err(|e| e.to_string())?;
     ledger::update(&instance, |entries| {
-        let entry = entries.iter_mut().find(|e| e.id == id).ok_or("no such backup")?;
+        let entry = entries
+            .iter_mut()
+            .find(|e| e.id == id)
+            .ok_or("no such backup")?;
         entry.size = bytes.len() as u64;
         entry.sha256 = sha(&bytes);
         Ok(())
@@ -326,7 +414,8 @@ fn rehash(args: &[String]) -> Result<Value, String> {
 /// A digest of the instance's own wrapped credentials, to compare with an opened archive.
 fn credentials_digest(args: &[String]) -> Result<Value, String> {
     let instance = PathBuf::from(required(args, "--instance")?);
-    let master = keystore::database_secrets::instance_master(&instance).map_err(|e| e.to_string())?;
+    let master =
+        keystore::database_secrets::instance_master(&instance).map_err(|e| e.to_string())?;
     let bundle = custody::read_bundle(&instance).map_err(|e| e.to_string())?;
     let payload = custody::unwrap_with_master(&bundle, &master).map_err(|e| e.to_string())?;
     Ok(json!({ "credentialsSha256": sha(&payload) }))

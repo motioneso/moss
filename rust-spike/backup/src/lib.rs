@@ -146,6 +146,21 @@ pub fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
+/// Resolves an existing instance folder. Windows keeps the plain drive form, because the
+/// private-folder checks refuse the `\\?\` form that `canonicalize` returns there.
+pub fn resolve_instance(path: &Path) -> Result<PathBuf, String> {
+    let real = path
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    #[cfg(windows)]
+    {
+        let _ = real;
+        std::path::absolute(path).map_err(|e| format!("{}: {e}", path.display()))
+    }
+    #[cfg(not(windows))]
+    Ok(real)
+}
+
 /// Creates a new owner-only file. Fails if it exists.
 pub fn create_private_file(path: &Path) -> std::io::Result<std::fs::File> {
     let mut options = std::fs::OpenOptions::new();

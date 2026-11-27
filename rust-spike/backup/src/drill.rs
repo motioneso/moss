@@ -85,9 +85,7 @@ pub fn verify(
     scratch_parent: &Path,
     pause: Option<&Path>,
 ) -> Result<Report, String> {
-    let instance = instance
-        .canonicalize()
-        .map_err(|e| format!("{}: {e}", instance.display()))?;
+    let instance = crate::resolve_instance(instance)?;
     let entry = ledger::find(&instance, id)?;
     let folder = scratch_parent.join(format!(
         "drill-{id}-{}",

@@ -92,9 +92,7 @@ fn roles(client: &mut impl GenericClient) -> Result<Value, String> {
 
 /// Backs up a running instance into `backups/<id>.mossbak` and records it, unverified.
 pub fn backup(instance: &Path, bundle: &Bundle, pause: Option<&Path>) -> Result<Captured, String> {
-    let instance = instance
-        .canonicalize()
-        .map_err(|e| format!("{}: {e}", instance.display()))?;
+    let instance = crate::resolve_instance(instance)?;
     if instance.join(custody::LEGACY_CREDENTIALS).exists() {
         return Err(
             "this instance still has a plain credentials file; finish key custody first".into(),
