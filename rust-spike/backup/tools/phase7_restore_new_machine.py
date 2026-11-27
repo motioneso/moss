@@ -136,8 +136,9 @@ class RestoreRunner(Runner):
         wait_http(origin + "/sign-in", source)
         password = secrets.token_hex(24)
         email = f"restore-{secrets.token_hex(8)}@example.test"
+        name = "Restore fixture " + secrets.token_hex(8)
         signup = urllib.request.Request(origin + "/api/auth/sign-up/email",
-            data=json.dumps({"name": "Restore fixture owner", "email": email, "password": password}).encode(),
+            data=json.dumps({"name": name, "email": email, "password": password}).encode(),
             headers={"content-type": "application/json", "origin": origin})
         with urllib.request.urlopen(signup, context=ssl._create_unverified_context(), timeout=60) as response:
             expect(response.status == 200, "source owner is created through the real authenticated setup route")
@@ -145,6 +146,8 @@ class RestoreRunner(Runner):
         source.wait(timeout=60)
         marker = "restore-item-" + secrets.token_hex(16)
         self.json("backup-fixture", "plant", "--instance", self.instance, "--canary", "http://127.0.0.1:1/never", "--marker", marker)
+        # Force multiple authenticated chunks and place the damaged byte at the end.
+        (self.instance / "vault/late-chunk.bin").write_bytes(secrets.token_bytes(2 * 1024 * 1024))
         good = self.backup()
         archive = self.instance / "backups" / (good["id"] + ".mossbak")
         bad_settings = self.instance / "modules.json"
@@ -166,7 +169,7 @@ class RestoreRunner(Runner):
         wait_http(f"http://127.0.0.1:{app_port}", app)
         config = {"origin": f"http://127.0.0.1:{app_port}", "data": str(self.data), "trace": str(trace),
                   "archive": str(archive), "damaged": str(damaged), "partial": str(partial_archive),
-                  "words": self.words, "email": email, "password": password, "proof": str(Path(self.args.proof).resolve())}
+                  "words": self.words, "name": name, "email": email, "password": password, "proof": str(Path(self.args.proof).resolve())}
         # Generated fixture words travel on stdin, never command arguments or logged files.
         result = subprocess.run(["node", str(REPO / "rust-spike/backup/tools/restore-browser.mjs")],
                                 input=json.dumps(config), text=True, capture_output=True, timeout=1800)

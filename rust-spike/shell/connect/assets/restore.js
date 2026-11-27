@@ -1,4 +1,4 @@
-/* global el, heading, muted, button, post */
+/* global el, heading, muted, button, post, window */
 "use strict";
 
 // Approved M5 New computer panel. Selection belongs to the shell, never a backups list.
@@ -96,3 +96,9 @@ function restoreDoneScreen() {
     )
   ];
 }
+
+window.mossRestoreScreens = {
+  restore: restoreScreen,
+  restoring: restoringScreen,
+  done: restoreDoneScreen
+};

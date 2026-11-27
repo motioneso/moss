@@ -13,11 +13,12 @@ pub struct Flow {
 }
 impl Flow {
     pub fn new(data: &Path, install: &Path) -> Self {
+        let data = std::path::absolute(data).unwrap_or_else(|_| data.into());
         Self {
             destination: data
                 .join("servers")
                 .join(format!("restored-{}", uuid::Uuid::new_v4().simple())),
-            install: install.into(),
+            install: std::path::absolute(install).unwrap_or_else(|_| install.into()),
             selected: None,
             facts: Value::Null,
         }

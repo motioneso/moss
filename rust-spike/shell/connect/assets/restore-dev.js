@@ -1,4 +1,4 @@
-/* global window, document, fetch */
+/* global window, document */
 "use strict";
 // Transport for the real dev example; native builds use wry IPC and the OS file chooser.
 window.ipc = {

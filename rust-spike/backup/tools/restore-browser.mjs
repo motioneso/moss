@@ -7,7 +7,6 @@ import path from "node:path";
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const config = JSON.parse(input);
-input = "";
 const browser = await chromium.launch({ args: ["--no-sandbox", "--force-prefers-reduced-motion"] });
 try {
   const context = await browser.newContext({
@@ -41,7 +40,11 @@ try {
   }
   async function restore(file, words) {
     await choose(file);
-    await page.getByRole("textbox", { name: "Recovery key words" }).fill(words.join(" "));
+    try {
+      await page.getByRole("textbox", { name: "Recovery key words" }).fill(words.join(" "));
+    } catch {
+      throw new Error("Recovery words entry failed; input omitted");
+    }
     await page.getByRole("button", { name: "Restore", exact: true }).click();
   }
   await choose(config.archive);
@@ -78,7 +81,11 @@ try {
   assert.equal(roots.length, 1, "only one complete instance was published");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByLabel("Email", { exact: true }).fill(config.email);
-  await page.getByLabel("Password", { exact: true }).fill(config.password);
+  try {
+    await page.getByLabel("Password", { exact: true }).fill(config.password);
+  } catch {
+    throw new Error("Password entry failed; input omitted");
+  }
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
   const session = await page.evaluate(async () => {
@@ -88,6 +95,7 @@ try {
   assert.equal(session.status, 200, "restored server accepts the real sign-in");
   assert.equal(session.session.user.email, config.email, "the restored account signs in");
   await page.getByRole("heading", { name: "Today", exact: true }).waitFor();
+  await page.getByText(config.name, { exact: true }).waitFor();
   await shot("signed-in");
   console.log(
     "ok: selected file, source facts, wrong words, damaged archive, staging cleanup, restore and real sign-in"
