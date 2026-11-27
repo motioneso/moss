@@ -45,6 +45,7 @@ const fixture = spawn(
     env: {
       ...process.env,
       LIFECYCLE_SCREENS: "1",
+      MOSS_TEST_REFRESH_DIAGNOSTICS: "1",
       CATALOG_HOLD: hold,
       CATALOG_WEB: join(target, "web"),
       JS43_APP_URL: urls.app,
@@ -153,15 +154,33 @@ try {
     await page.setViewportSize({ width: pixels, height: 1000 });
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
+    page.on("response", (response) => {
+      if (response.url().startsWith(`${origin}/api/modules/`) && response.status() >= 400) {
+        console.error(`Module API failure (${width}): ${response.status()} ${response.url()}`);
+      }
+    });
+    page.on("requestfailed", (request) => {
+      if (request.url().startsWith(`${origin}/api/modules/`)) {
+        console.error(`Module request failed (${width}): ${request.url()}`, request.failure());
+      }
+    });
     async function install() {
-      await page.goto(detail);
-      await page.getByRole("link", { name: `Install ${name}`, exact: true }).click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await page.getByRole("button", { name: `Install ${name}`, exact: true }).click();
-      await expect(
-        page.getByRole("heading", { name: `${name} is ready`, exact: true })
-      ).toBeVisible();
-      assert.equal((await saved(page)).stage, "succeeded");
+      try {
+        await page.goto(detail);
+        await page.getByRole("link", { name: `Install ${name}`, exact: true }).click();
+        await expect(page.getByRole("dialog")).toBeVisible();
+        await page.getByRole("button", { name: `Install ${name}`, exact: true }).click();
+        await expect(
+          page.getByRole("heading", { name: `${name} is ready`, exact: true })
+        ).toBeVisible();
+        assert.equal((await saved(page)).stage, "succeeded");
+      } catch (error) {
+        console.error(`Install diagnostics (${width}), browser errors:`, errors);
+        console.error(
+          readFileSync(join(instance, "server.log"), "utf8").split("\n").slice(-50).join("\n")
+        );
+        throw error;
+      }
     }
     await install();
     await command("plant", width);
@@ -197,9 +216,31 @@ try {
     assert.equal((await saved(page)).stage, "reviewed");
     await fits(page);
     await page.screenshot({ path: join(out, `${width}-update-review.png`) });
+    // Exercise the real WASM startup with a cold cache and delayed transport.
+    const startupNetwork = await page.context().newCDPSession(page);
+    await startupNetwork.send("Network.enable");
+    await startupNetwork.send("Network.setCacheDisabled", { cacheDisabled: true });
+    await startupNetwork.send("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 50,
+      downloadThroughput: 4 * 1024 * 1024,
+      uploadThroughput: -1
+    });
     await dialog.getByRole("button", { name: "Skip", exact: true }).click();
     await expect(page).toHaveURL(`${origin}/settings/modules`);
+    // URL commitment precedes the new document's WASM startup. Reloading here
+    // can abort compilation and report a pageerror from the discarded document.
+    await expect(page.getByRole("heading", { name: "Modules", exact: true })).toBeVisible();
     await page.reload();
+    await expect(page.getByRole("heading", { name: "Modules", exact: true })).toBeVisible();
+    await startupNetwork.send("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1
+    });
+    await startupNetwork.send("Network.setCacheDisabled", { cacheDisabled: false });
+    await startupNetwork.detach();
     const skipped = await (await admin.request.get(`${origin}/api/modules/catalog`)).json();
     assert.equal(
       skipped.modules.find((m: { id: string }) => m.id === module).skippedDigest,

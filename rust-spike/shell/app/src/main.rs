@@ -15,7 +15,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use moss_network::{
     config::Config,
-    instance, tls,
+    firewall, instance, tls,
     web::{self, Network},
 };
 use moss_shell_contract::stub::StubShellData;
@@ -465,6 +465,14 @@ fn main() {
         }
         return;
     }
+    if matches!(
+        std::env::args().nth(1).as_deref(),
+        Some("firewall-rule" | "firewall-close")
+    ) {
+        std::process::exit(firewall::command(
+            &std::env::args().skip(1).collect::<Vec<_>>(),
+        ));
+    }
     if std::env::args().nth(1).as_deref() == Some("apply-module-package") {
         supply_or_stop();
         if module_package_apply::run(std::env::args().skip(2).collect()).is_err() {
@@ -513,7 +521,23 @@ fn main() {
             .filter(|path| path.is_file())
     });
     let prepared = runtime.block_on(async {
-        let config = Config::read(&args.network)?;
+        let mut config = Config::read(&args.network)?;
+        let folder = args
+            .instance
+            .clone()
+            .or_else(|| args.network.parent().map(Path::to_path_buf))
+            .ok_or("The network file needs a folder")?;
+        let firewall = firewall::Firewall::new(
+            &folder,
+            std::env::current_exe().map_err(|_| "Cannot find the server program")?,
+        );
+        // Saved sharing reopens the network only when the live rule still carries Moss's
+        // marker for the current port. That check runs against the real rule, with no
+        // stand-in shortcut, and the record is kept when it fails.
+        // No prompt at startup. Keep the saved intent and rule token; the local app offers
+        // Resume when verifying the live marker needs authorization or cannot succeed.
+        config.sharing = firewall.startup(config.sharing, config.listen.port())
+            .map_err(|_| "Cannot record the sharing startup state")?;
         if let Ok(raw) = moss_network::config::private_read(&config.credentials) {
             if !moss_network::config::is_bundle(&raw) {
                 eprintln!("moss-server: this instance still keeps its keys in a plain file. Run moss-server migrate-keys --instance <folder> to move them into the key store.");
@@ -532,18 +556,19 @@ fn main() {
             });
         }
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
-        let listener = tokio::net::TcpListener::bind(config.listen)
-            .await
-            .map_err(|_| "Cannot bind the configured HTTPS listener")?;
-        let port = listener
-            .local_addr()
-            .map_err(|_| "Cannot read the listening port")?
-            .port();
+        // Sharing off binds loopback only. The switch rebinds when the owner changes it.
+        let (listening, switch) = tls::Listening::bind(config.listen, config.sharing).await?;
+        let port = listening.port();
         let running = match &args.instance {
             Some(folder) => Some(running_record(folder, &config, port)?),
             None => None,
         };
-        let network = Network::new(platform.clone(), config, args.network)?;
+        let control = moss_network::sharing::Control {
+            switch,
+            firewall,
+            port,
+        };
+        let network = Network::with_control(platform.clone(), config, args.network, Some(control))?;
         // The registry and file-import paths do not run install-module. Prepare the core
         // device lookup before loading modules or accepting a pairing request.
         if companion_startup::prepare(&platform.auth, modules_path.as_deref(), args.instance.as_deref())
@@ -623,9 +648,9 @@ fn main() {
         };
         let private = private.layer(Extension(modules.clone()));
         let app = web::router(network, private, args.web);
-        Ok::<_, String>((listener, acceptor, app, running, modules, loader))
+        Ok::<_, String>((listening, acceptor, app, running, modules, loader))
     });
-    let (listener, acceptor, app, running, modules, loader) = match prepared {
+    let (listening, acceptor, app, running, modules, loader) = match prepared {
         Ok(parts) => parts,
         Err(reason) => {
             // The reasons are fixed messages that never carry secrets.
@@ -639,8 +664,8 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let served = runtime.block_on(tls::serve_in(
-        listener,
+    let served = runtime.block_on(tls::serve_switched(
+        listening,
         acceptor,
         app,
         args.instance.as_deref(),

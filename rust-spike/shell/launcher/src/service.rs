@@ -234,6 +234,12 @@ fn unload(folder: &Path) -> Result<(), String> {
 pub fn remove(install: &Path, folder: &Path) -> Result<(), String> {
     stop(install, folder)?;
     let folder = canonical(folder)?;
+    // A sharing rule left open would outlive the instance, so removal fails if it stays.
+    checked(crate::runtime::command(install, "moss-server").args([
+        "firewall-close".as_ref(),
+        "--instance".as_ref(),
+        folder.as_os_str(),
+    ]))?;
     #[cfg(windows)]
     checked(Command::new("schtasks.exe").args(["/Delete", "/TN", &name(&folder), "/F"]))?;
     std::fs::remove_file(registration(&folder)?).map_err(|_| REMEDY)?;

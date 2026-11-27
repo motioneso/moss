@@ -194,6 +194,11 @@ fn run(
     let output = command
         .output()
         .map_err(|_| "Cannot start the installer".to_owned())?;
+    // Real-server fixtures need full helper errors, including successful refreshes
+    // reporting individual failures. This private stderr never changes the API error.
+    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+    }
     if output.status.success() {
         return String::from_utf8(output.stdout).map_err(|_| "Unreadable installer output".into());
     }
@@ -208,6 +213,13 @@ fn run(
         .chars()
         .take(300)
         .collect())
+}
+
+/// Opt-in private diagnostics for real-server fixtures; public errors stay generic.
+pub(crate) fn test_diagnostic(label: &str, error: impl std::fmt::Display) {
+    if std::env::var_os("MOSS_TEST_REFRESH_DIAGNOSTICS").is_some() {
+        eprintln!("{label}: {error:#}");
+    }
 }
 
 pub(crate) fn run_json(

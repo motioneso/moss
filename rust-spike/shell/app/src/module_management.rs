@@ -75,7 +75,10 @@ async fn projection(
                     result.sources.push(ModuleSource { id: source.id.clone(), name: value["name"].as_str().unwrap_or(&source.id).into(), error: None });
                     result.modules.extend(modules);
                 }
-                Err(_) => result.sources.push(ModuleSource { id: source.id, name: "Unavailable registry".into(), error: Some("The signed registry could not be read; check its configuration and try again".into()) }),
+                Err(error) => {
+                    module_admin::test_diagnostic(&format!("Catalog source {} failed", source.id), error);
+                    result.sources.push(ModuleSource { id: source.id, name: "Unavailable registry".into(), error: Some("The signed registry could not be read; check its configuration and try again".into()) });
+                }
             }
         }
         Ok(result)
@@ -191,7 +194,14 @@ pub(crate) async fn review_selected(
     .await;
     match result {
         Ok(Ok(record)) => Json(record.view).into_response(),
-        _ => unavailable(),
+        Ok(Err(error)) => {
+            module_admin::test_diagnostic("Module review failed", error);
+            unavailable()
+        }
+        Err(error) => {
+            module_admin::test_diagnostic("Module review task failed", error);
+            unavailable()
+        }
     }
 }
 async fn operation(

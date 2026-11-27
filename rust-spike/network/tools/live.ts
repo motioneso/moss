@@ -239,7 +239,7 @@ try {
     );
   }
   console.log("PASS signed-out API, chat, private page and app files refused");
-  assert.equal((await request(second, "/sign-in")).status, 403);
+  await assert.rejects(request(second, "/sign-in"), /ECONNREFUSED/);
   console.log("PASS second network address refused while sharing is off");
   const signup = await request(local, "/api/auth/sign-up/email", {
     method: "POST",
@@ -276,227 +276,243 @@ try {
   console.log(
     "PASS first local owner created, setup closed, password stored as a hash, token absent from browser JSON"
   );
-  assert.equal(
-    (
-      await request(local, "/api/network", {
-        method: "PUT",
-        cookie: localCookie,
-        body: { sharing: true }
-      })
-    ).status,
-    200
-  );
-  assert(
-    JSON.parse(readFileSync(configFile, "utf8")).sharing === true,
-    "Sharing was not persisted"
-  );
-  assert.equal(
-    (
-      await request(second, "/api/auth/sign-up/email", {
-        method: "POST",
-        body: { name: "Remote", email: "remote@example.com", password }
-      })
-    ).status,
-    403
-  );
-  const status = await request(local, "/api/network", { cookie: localCookie });
-  const certificateReply = await request(local, "/api/network/certificate", {
-    cookie: localCookie
-  });
-  assert.equal(certificateReply.status, 200);
-  assert.equal(certificateReply.headers["content-type"], "application/pkix-cert");
-  assert.deepEqual(
-    certificateReply.bytes,
-    new X509Certificate(ca).raw,
-    "Download must contain exactly the public leaf certificate"
-  );
-  assert.equal(
-    JSON.parse(status.body).fingerprint.replaceAll(" ", ""),
-    new X509Certificate(ca).fingerprint256
-  );
-  console.log(
-    "PASS sharing page supplies the actual public certificate fingerprint and certificate download"
-  );
-  const remoteLogin = await request(second, "/api/auth/sign-in/email", {
-    method: "POST",
-    body: { email, password }
-  });
-  assert.equal(remoteLogin.status, 200, "Real sign-in through the second network address failed");
-  const remoteCookie = cookie(remoteLogin);
-  assert.equal((await request(second, "/api/me", { cookie: remoteCookie })).status, 200);
-  assert.equal((await request(second, "/api/today", { cookie: remoteCookie })).status, 200);
-  const shell = await request(second, "/api/shell", { cookie: remoteCookie });
-  assert.equal(shell.status, 200);
-  assert.equal(JSON.parse(shell.body).account.display_name, "Rust proof owner");
-  // Four incomplete bodies must never occupy the four password-check slots.
-  const stalled = Array.from({ length: 4 }, () => {
-    const req = https.request({
-      hostname: "127.0.0.1",
-      port,
-      localAddress: "127.0.0.3",
-      ca,
-      rejectUnauthorized: true,
-      servername: "localhost",
-      method: "POST",
-      path: "/api/auth/sign-in/email",
-      headers: { origin: local, "content-type": "application/json", "content-length": "100" }
-    });
-    req.on("error", () => {});
-    req.flushHeaders();
-    return req;
-  });
-  try {
-    await delay(300);
-    const normal = await request(local, "/api/auth/sign-in/email", {
-      method: "POST",
-      body: { email, password }
-    });
-    assert.equal(normal.status, 200, "Stalled bodies blocked normal sign-in");
-    cookie(normal);
-    console.log("PASS four stalled sign-in bodies do not block a complete password sign-in");
-  } finally {
-    for (const req of stalled) req.destroy();
-  }
-
-  console.log(
-    "PASS second network address: real password sign-in, private account and Today read over verified TLS"
-  );
-  assert.equal(
-    (
-      await request(second, "/api/network", {
-        method: "PUT",
-        cookie: remoteCookie,
-        body: { sharing: false },
-        headers: { origin: local }
-      })
-    ).status,
-    403
-  );
-  assert.equal(
-    (
-      await request(second, "/api/network", {
-        method: "PUT",
-        cookie: remoteCookie,
-        body: { sharing: false },
-        headers: { "sec-fetch-site": "cross-site" }
-      })
-    ).status,
-    403
-  );
-  const incompleteStarted = Date.now();
-  try {
-    const reply = await request(local, "/api/auth/sign-in/email", {
-      method: "POST",
-      peer: "127.0.0.4",
-      headers: { "content-length": "100", "content-type": "application/json" }
-    });
-    assert.equal(reply.status, 408, "Incomplete sign-in body did not reach its deadline");
-  } catch (error) {
-    // Hyper may close an incomplete HTTP/1 request when its body is dropped at the deadline.
-    assert(
-      error instanceof Error && "code" in error && error.code === "ECONNRESET",
-      "Incomplete body failed unexpectedly"
-    );
-  }
-  assert(
-    Date.now() - incompleteStarted >= 2500 && Date.now() - incompleteStarted < 10000,
-    "Incomplete sign-in connection did not close at its three-second deadline"
-  );
-  console.log("PASS incomplete sign-in body is refused at its three-second deadline");
-  try {
-    const oversized = await request(local, "/api/auth/sign-in/email", {
-      method: "POST",
-      peer: "127.0.0.4",
-      body: { padding: "x".repeat(17000) }
-    });
-    assert.equal(oversized.status, 413, "Oversized sign-in body was not refused");
-  } catch (error) {
-    // Closing a connection with an unread, rejected body is also a safe HTTP refusal.
-    assert(
-      error instanceof Error && "code" in error && error.code === "ECONNRESET",
-      "Oversized body failed unexpectedly"
-    );
-  }
-  assert(
-    new X509Certificate(ca).keyUsage?.includes("1.3.6.1.5.5.7.3.1"),
-    "Local certificate lacks serverAuth usage"
-  );
-  console.log(
-    "PASS incomplete and oversized sign-in bodies refused; local certificate declares serverAuth"
-  );
-  const token = secrets[secrets.length - 2];
-  assert(token, "A real sign-in token is required for the log probes");
-  await request(second, `/private/${token}?session=${token}`, {
-    cookie: remoteCookie,
-    headers: { "user-agent": token }
-  });
-  await request(second, `/api/me?session=${token}`, { cookie: remoteCookie });
-  scanLogs();
-  console.log(
-    "PASS real session token absent from logs after cookie, path, query and header probes"
-  );
-  assert.equal(
-    (
-      await request(second, "/api/auth/sign-out", {
-        method: "POST",
-        cookie: remoteCookie,
-        body: {}
-      })
-    ).status,
-    200
-  );
-  assert.equal((await request(second, "/api/me", { cookie: remoteCookie })).status, 401);
-  assert.equal(
-    (
-      await request(local, "/api/network", {
-        method: "PUT",
-        cookie: localCookie,
-        body: { sharing: false }
-      })
-    ).status,
-    200
-  );
-  assert.equal((await request(second, "/api/me", { cookie: localCookie })).status, 403);
-  console.log(
-    "PASS cross-site writes refused, sign-out revoked the session, disabling sharing cut off remote reads"
-  );
-  for (let i = 0; i < 5; i++) {
-    assert.equal(
-      (
-        await request(local, "/api/auth/sign-in/email", {
-          method: "POST",
-          peer: "127.0.0.2",
-          body: { email, password: "incorrect-password" },
-          headers: { "x-forwarded-for": `192.0.2.${i + 1}` }
-        })
-      ).status,
-      401
-    );
-  }
-  const limited = await request(local, "/api/auth/sign-in/email", {
-    method: "POST",
-    peer: "127.0.0.2",
-    body: { email, password },
-    headers: { "x-forwarded-for": "192.0.2.99" }
-  });
-  assert.equal(limited.status, 429);
-  assert.equal(limited.headers["retry-after"], "60");
-  scanLogs();
-  console.log("PASS sign-in rate limit uses the real peer and ignores forged forwarded headers");
-  if (process.env.JS44_HOLD === "1") {
-    writeFileSync(
-      join(out, "browser-fixture.json"),
-      JSON.stringify({ local, second, email, password }),
-      { mode: 0o600 }
-    );
-    writeFileSync(join(out, "browser-ready"), "ready", { mode: 0o600 });
-    console.log(
-      "READY browser proof; isolated server remains running until browser-finished appears"
-    );
+  if (process.env.JS435_BROWSER === "1") {
+    // A real authenticated browser against the production server and isolated gate database.
+    // Keep its session file private; never log or commit it.
+    writeFileSync(join(out, "browser-cookies.txt"), `Cookie: ${localCookie}`, { mode: 0o600 });
+    writeFileSync(join(out, "browser-ready"), local, { mode: 0o600 });
+    console.log("READY sharing browser proof; server and database are isolated");
     for (let i = 0; i < 1200 && !existsSync(join(out, "browser-finished")); i++) await delay(1000);
     assert(existsSync(join(out, "browser-finished")), "Browser proof completion deadline exceeded");
     scanLogs();
-    console.log("PASS browser proof completed and final server log scan stayed clean");
+    console.log("PASS sharing browser proof completed; server logs contain no fixture secrets");
+  } else {
+    assert.equal(
+      (
+        await request(local, "/api/network", {
+          method: "PUT",
+          cookie: localCookie,
+          body: { sharing: true }
+        })
+      ).status,
+      200
+    );
+    assert(
+      JSON.parse(readFileSync(configFile, "utf8")).sharing === true,
+      "Sharing was not persisted"
+    );
+    assert.equal(
+      (
+        await request(second, "/api/auth/sign-up/email", {
+          method: "POST",
+          body: { name: "Remote", email: "remote@example.com", password }
+        })
+      ).status,
+      403
+    );
+    const status = await request(local, "/api/network", { cookie: localCookie });
+    const certificateReply = await request(local, "/api/network/certificate", {
+      cookie: localCookie
+    });
+    assert.equal(certificateReply.status, 200);
+    assert.equal(certificateReply.headers["content-type"], "application/pkix-cert");
+    assert.deepEqual(
+      certificateReply.bytes,
+      new X509Certificate(ca).raw,
+      "Download must contain exactly the public leaf certificate"
+    );
+    assert.equal(
+      JSON.parse(status.body).fingerprint.replaceAll(" ", ""),
+      new X509Certificate(ca).fingerprint256
+    );
+    console.log(
+      "PASS sharing page supplies the actual public certificate fingerprint and certificate download"
+    );
+    const remoteLogin = await request(second, "/api/auth/sign-in/email", {
+      method: "POST",
+      body: { email, password }
+    });
+    assert.equal(remoteLogin.status, 200, "Real sign-in through the second network address failed");
+    const remoteCookie = cookie(remoteLogin);
+    assert.equal((await request(second, "/api/me", { cookie: remoteCookie })).status, 200);
+    assert.equal((await request(second, "/api/today", { cookie: remoteCookie })).status, 200);
+    const shell = await request(second, "/api/shell", { cookie: remoteCookie });
+    assert.equal(shell.status, 200);
+    assert.equal(JSON.parse(shell.body).account.display_name, "Rust proof owner");
+    // Four incomplete bodies must never occupy the four password-check slots.
+    const stalled = Array.from({ length: 4 }, () => {
+      const req = https.request({
+        hostname: "127.0.0.1",
+        port,
+        localAddress: "127.0.0.3",
+        ca,
+        rejectUnauthorized: true,
+        servername: "localhost",
+        method: "POST",
+        path: "/api/auth/sign-in/email",
+        headers: { origin: local, "content-type": "application/json", "content-length": "100" }
+      });
+      req.on("error", () => {});
+      req.flushHeaders();
+      return req;
+    });
+    try {
+      await delay(300);
+      const normal = await request(local, "/api/auth/sign-in/email", {
+        method: "POST",
+        body: { email, password }
+      });
+      assert.equal(normal.status, 200, "Stalled bodies blocked normal sign-in");
+      cookie(normal);
+      console.log("PASS four stalled sign-in bodies do not block a complete password sign-in");
+    } finally {
+      for (const req of stalled) req.destroy();
+    }
+
+    console.log(
+      "PASS second network address: real password sign-in, private account and Today read over verified TLS"
+    );
+    assert.equal(
+      (
+        await request(second, "/api/network", {
+          method: "PUT",
+          cookie: remoteCookie,
+          body: { sharing: false },
+          headers: { origin: local }
+        })
+      ).status,
+      403
+    );
+    assert.equal(
+      (
+        await request(second, "/api/network", {
+          method: "PUT",
+          cookie: remoteCookie,
+          body: { sharing: false },
+          headers: { "sec-fetch-site": "cross-site" }
+        })
+      ).status,
+      403
+    );
+    const incompleteStarted = Date.now();
+    try {
+      const reply = await request(local, "/api/auth/sign-in/email", {
+        method: "POST",
+        peer: "127.0.0.4",
+        headers: { "content-length": "100", "content-type": "application/json" }
+      });
+      assert.equal(reply.status, 408, "Incomplete sign-in body did not reach its deadline");
+    } catch (error) {
+      // Hyper may close an incomplete HTTP/1 request when its body is dropped at the deadline.
+      assert(
+        error instanceof Error && "code" in error && error.code === "ECONNRESET",
+        "Incomplete body failed unexpectedly"
+      );
+    }
+    assert(
+      Date.now() - incompleteStarted >= 2500 && Date.now() - incompleteStarted < 10000,
+      "Incomplete sign-in connection did not close at its three-second deadline"
+    );
+    console.log("PASS incomplete sign-in body is refused at its three-second deadline");
+    try {
+      const oversized = await request(local, "/api/auth/sign-in/email", {
+        method: "POST",
+        peer: "127.0.0.4",
+        body: { padding: "x".repeat(17000) }
+      });
+      assert.equal(oversized.status, 413, "Oversized sign-in body was not refused");
+    } catch (error) {
+      // Closing a connection with an unread, rejected body is also a safe HTTP refusal.
+      assert(
+        error instanceof Error && "code" in error && error.code === "ECONNRESET",
+        "Oversized body failed unexpectedly"
+      );
+    }
+    assert(
+      new X509Certificate(ca).keyUsage?.includes("1.3.6.1.5.5.7.3.1"),
+      "Local certificate lacks serverAuth usage"
+    );
+    console.log(
+      "PASS incomplete and oversized sign-in bodies refused; local certificate declares serverAuth"
+    );
+    const token = secrets[secrets.length - 2];
+    assert(token, "A real sign-in token is required for the log probes");
+    await request(second, `/private/${token}?session=${token}`, {
+      cookie: remoteCookie,
+      headers: { "user-agent": token }
+    });
+    await request(second, `/api/me?session=${token}`, { cookie: remoteCookie });
+    scanLogs();
+    console.log(
+      "PASS real session token absent from logs after cookie, path, query and header probes"
+    );
+    assert.equal(
+      (
+        await request(second, "/api/auth/sign-out", {
+          method: "POST",
+          cookie: remoteCookie,
+          body: {}
+        })
+      ).status,
+      200
+    );
+    assert.equal((await request(second, "/api/me", { cookie: remoteCookie })).status, 401);
+    assert.equal(
+      (
+        await request(local, "/api/network", {
+          method: "PUT",
+          cookie: localCookie,
+          body: { sharing: false }
+        })
+      ).status,
+      200
+    );
+    await assert.rejects(request(second, "/api/me", { cookie: localCookie }), /ECONNREFUSED/);
+    console.log(
+      "PASS cross-site writes refused, sign-out revoked the session, disabling sharing cut off remote reads"
+    );
+    for (let i = 0; i < 5; i++) {
+      assert.equal(
+        (
+          await request(local, "/api/auth/sign-in/email", {
+            method: "POST",
+            peer: "127.0.0.2",
+            body: { email, password: "incorrect-password" },
+            headers: { "x-forwarded-for": `192.0.2.${i + 1}` }
+          })
+        ).status,
+        401
+      );
+    }
+    const limited = await request(local, "/api/auth/sign-in/email", {
+      method: "POST",
+      peer: "127.0.0.2",
+      body: { email, password },
+      headers: { "x-forwarded-for": "192.0.2.99" }
+    });
+    assert.equal(limited.status, 429);
+    assert.equal(limited.headers["retry-after"], "60");
+    scanLogs();
+    console.log("PASS sign-in rate limit uses the real peer and ignores forged forwarded headers");
+    if (process.env.JS44_HOLD === "1") {
+      writeFileSync(
+        join(out, "browser-fixture.json"),
+        JSON.stringify({ local, second, email, password }),
+        { mode: 0o600 }
+      );
+      writeFileSync(join(out, "browser-ready"), "ready", { mode: 0o600 });
+      console.log(
+        "READY browser proof; isolated server remains running until browser-finished appears"
+      );
+      for (let i = 0; i < 1200 && !existsSync(join(out, "browser-finished")); i++)
+        await delay(1000);
+      assert(
+        existsSync(join(out, "browser-finished")),
+        "Browser proof completion deadline exceeded"
+      );
+      scanLogs();
+      console.log("PASS browser proof completed and final server log scan stayed clean");
+    }
   }
 } finally {
   await db.end();

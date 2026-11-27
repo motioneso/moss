@@ -121,6 +121,7 @@ fn phase6_module_policy() {
     let mut command = Command::new(std::env::var("JS170_SERVER").unwrap());
     command
         .env("MOSS_DB_PROGRAM", &supervisor)
+        .env("MOSS_TEST_REFRESH_DIAGNOSTICS", "1")
         .arg("serve")
         .arg("--instance")
         .arg(root)
@@ -396,7 +397,17 @@ fn phase6_module_policy() {
                 .unwrap()
                 .iter()
                 .all(|s| s["error"].is_null()),
-            "refresh source failed: {response:?}"
+            "refresh source failed: {response:?}\nServer log (last 30 lines):\n{}",
+            fs::read_to_string(root.join("server.log"))
+                .unwrap_or_else(|error| format!("Could not read server log: {error}"))
+                .lines()
+                .rev()
+                .take(30)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     };
     let policy = |automatic: bool, quiet: bool| {
