@@ -298,7 +298,9 @@ fn main() {
         std::env::args().nth(1).as_deref(),
         Some("firewall-rule" | "firewall-close")
     ) {
-        std::process::exit(firewall::command(&std::env::args().skip(1).collect::<Vec<_>>()));
+        std::process::exit(firewall::command(
+            &std::env::args().skip(1).collect::<Vec<_>>(),
+        ));
     }
     if std::env::args().nth(1).as_deref() == Some("apply-module-package") {
         if module_package_apply::run(std::env::args().skip(2).collect()).is_err() {
@@ -363,7 +365,7 @@ fn main() {
             firewall,
             port,
         };
-        let network = Network::new(platform.clone(), config, args.network, Some(control))?;
+        let network = Network::with_control(platform.clone(), config, args.network, Some(control))?;
         // The registry and file-import paths do not run install-module. Prepare the core
         // device lookup before loading modules or accepting a pairing request.
         if companion_startup::prepare(&platform.auth, modules_path.as_deref(), args.instance.as_deref())

@@ -47,7 +47,17 @@ pub struct Network {
 }
 
 impl Network {
+    /// Standalone module fixtures supply their own listener; the installed server uses
+    /// `with_control` to coordinate its listener and operating-system firewall.
     pub fn new(
+        platform: Arc<Platform>,
+        config: Config,
+        path: PathBuf,
+    ) -> Result<Arc<Self>, String> {
+        Self::with_control(platform, config, path, None)
+    }
+
+    pub fn with_control(
         platform: Arc<Platform>,
         config: Config,
         path: PathBuf,
