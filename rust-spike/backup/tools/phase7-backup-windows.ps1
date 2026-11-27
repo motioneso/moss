@@ -31,16 +31,35 @@ try {
     $credential = [pscredential]::new("$env:COMPUTERNAME\$account", $password)
     $python = (Get-Command python.exe).Source
     $tools = Join-Path $Repo 'rust-spike/backup/tools'
+
+    # Start-Process -Credential inherits runneradmin's profile variables, and Windows resolves the
+    # key store's known folder from them. Point them at the standard account's own profile.
+
+    $launcher = Join-Path $work 'launch.ps1'
+    @'
+$ErrorActionPreference = 'Stop'
+$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$key = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
+$env:USERPROFILE = [Environment]::ExpandEnvironmentVariables((Get-ItemPropertyValue -LiteralPath $key -Name ProfileImagePath))
+$env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local'
+$env:APPDATA = Join-Path $env:USERPROFILE 'AppData\Roaming'
+$env:HOMEDRIVE = [IO.Path]::GetPathRoot($env:USERPROFILE).TrimEnd('\')
+$env:HOMEPATH = $env:USERPROFILE.Substring($env:HOMEDRIVE.Length)
+& $env:MOSS_PROOF_PYTHON @args
+exit $LASTEXITCODE
+'@ | Set-Content -LiteralPath $launcher
     $steps = @(
-        @{ name = 'runner'; args = '"{0}" --postgres "{1}" --scratch "{2}"' -f (Join-Path $tools 'phase7_backup_engine.py'), $Postgres, (Join-Path $work 'proof'); expect = 'phase7_backup_engine PASS' },
-        @{ name = 'controls'; args = '"{0}" -- --postgres "{1}" --scratch "{2}"' -f (Join-Path $tools 'backup_negative_controls.py'), $Postgres, (Join-Path $work 'negative'); expect = 'backup negative controls PASS' }
+        @{ name = 'runner'; args = @((Join-Path $tools 'phase7_backup_engine.py'), '--postgres', $Postgres, '--scratch', (Join-Path $work 'proof')); expect = 'phase7_backup_engine PASS' },
+        @{ name = 'controls'; args = @((Join-Path $tools 'backup_negative_controls.py'), '--', '--postgres', $Postgres, '--scratch', (Join-Path $work 'negative')); expect = 'backup negative controls PASS' }
     )
     foreach ($step in $steps) {
         $out = Join-Path $work "$($step.name).out"
         $err = Join-Path $work "$($step.name).err"
-        Write-Host "COMMAND: python $($step.args)"
-        $process = Start-Process $python -Credential $credential -LoadUserProfile -WorkingDirectory $Repo -ArgumentList $step.args `
-            -Environment @{ RUSTUP_HOME = $rustupHome; CARGO_HOME = $cargoHome; TEMP = $temp; TMP = $temp } `
+        $quoted = @('-NoProfile', '-NonInteractive', '-File', ('"' + $launcher + '"')) + ($step.args | ForEach-Object { '"' + $_ + '"' })
+        Write-Host "COMMAND: python $($step.args -join ' ')"
+        $process = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList $quoted `
+            -Credential $credential -LoadUserProfile -WorkingDirectory $Repo `
+            -Environment @{ RUSTUP_HOME = $rustupHome; CARGO_HOME = $cargoHome; TEMP = $temp; TMP = $temp; MOSS_PROOF_PYTHON = $python } `
             -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
         if (-not $process.WaitForExit(5400000)) { $process.Kill($true); throw "Backup $($step.name) exceeded its deadline" }
         Get-Content $out -Tail 80
