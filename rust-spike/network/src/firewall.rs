@@ -1238,8 +1238,10 @@ fn program_for_action(action: Action, program: &Path, current: &Path) -> bool {
     }
     if action != Action::Remove
         || program
-            .components()
-            .any(|part| part == std::path::Component::ParentDir)
+            .as_os_str()
+            .to_string_lossy()
+            .split(std::path::is_separator)
+            .any(|part| part == "..")
     {
         return false;
     }
@@ -1432,11 +1434,17 @@ mod tests {
         assert!(program_for_action(Action::Remove, &old, &current));
         assert!(!program_for_action(Action::Add, &old, &current));
         assert!(!program_for_action(Action::Check, &old, &current));
-        assert!(!program_for_action(
-            Action::Remove,
-            &root.join("versions/7.1.0/../7.0.0").join(&name),
-            &current
+        // Windows PathBuf::join normalizes traversal under a verbatim root. Preserve the
+        // raw record value so this fixture actually reaches the traversal guard.
+        let separator = std::path::MAIN_SEPARATOR;
+        let traversal = PathBuf::from(format!(
+            "{}{separator}versions{separator}7.1.0{separator}..{separator}7.0.0{separator}{name}",
+            root.display()
         ));
+        assert!(traversal
+            .to_string_lossy()
+            .contains(&format!("{separator}..{separator}")));
+        assert!(!program_for_action(Action::Remove, &traversal, &current));
         let foreign = root.join("other/versions/7.0.0").join(&name);
         std::fs::create_dir_all(foreign.parent().unwrap()).unwrap();
         std::fs::write(&foreign, b"foreign").unwrap();

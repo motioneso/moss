@@ -56,6 +56,7 @@ jobs:
         if: runner.os == 'Linux'
         run: python3 rust-spike/shell/tools/phase7_sharing_marker_controls.py
       - name: Build the probe server
+        id: build_probe
         run: cargo +1.95.0 build --locked --manifest-path rust-spike/network/Cargo.toml --examples
       - name: Turn the Linux firewall on, denying incoming connections
         if: runner.os == 'Linux'
@@ -74,7 +75,7 @@ jobs:
           echo "phase7_sharing_firewall exit: $code (expected 0)"
           exit $code
       - name: Current version removes its own old-version firewall rule
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.build_probe.outcome == 'success' }}
         shell: bash
         run: python3 rust-spike/shell/tools/phase7_sharing_firewall.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/sharing-versioned" --port 5198 --versioned-cleanup
       - name: Negative control, off that leaves the rule behind, must fail
