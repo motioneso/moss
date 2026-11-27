@@ -553,7 +553,8 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 403, "the second person is refused before anything runs: {text}");
     let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
-    assert_eq!(json_of(&text)["data"], json!({"restored":1,"skipped":0}), "{text}");
+    assert_eq!(json_of(&text)["data"]["restored"], json!(1), "{text}");
+    assert_eq!(json_of(&text)["data"]["skipped"], json!(0), "{text}");
     let (_, back) = tool("meals.pantry.get", json!({}), false);
     assert!(back.contains("\"quantity\":5"), "undo put the milk back: {back}");
     let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
