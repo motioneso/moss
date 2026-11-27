@@ -39,7 +39,11 @@ impl Keychain {
 /// Probes the session bus this process was started with.
 pub fn probe() -> Keychain {
     let address = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok().filter(|a| !a.is_empty());
-    let folder = runtime_dir(std::env::var_os("XDG_RUNTIME_DIR"), unsafe { libc::geteuid() });
+    #[cfg(unix)]
+    let euid = unsafe { libc::geteuid() };
+    #[cfg(not(unix))]
+    let euid = 0;
+    let folder = runtime_dir(std::env::var_os("XDG_RUNTIME_DIR"), euid);
     probe_session(address.as_deref(), &folder)
 }
 
@@ -54,6 +58,16 @@ pub fn runtime_dir(value: Option<OsString>, euid: u32) -> PathBuf {
 
 /// Finds the session bus the way D-Bus clients do: the address if one is set, else the `bus`
 /// socket in the runtime folder. There is no session bus only when neither exists.
+#[cfg(not(unix))]
+pub fn probe_session(address: Option<&str>, runtime_dir: &Path) -> Keychain {
+    let _ = runtime_dir;
+    match address {
+        Some(address) => probe_address(address),
+        None => Keychain::Broken("no session bus on this system".to_string()),
+    }
+}
+
+#[cfg(unix)]
 pub fn probe_session(address: Option<&str>, runtime_dir: &Path) -> Keychain {
     if let Some(address) = address {
         return probe_address(address);

@@ -1,0 +1,138 @@
+name: Rust phase7_key_custody
+on:
+  pull_request:
+    paths:
+      - "rust-spike/keystore/**"
+      - "rust-spike/bundled-db/**"
+      - "rust-spike/shell/app/**"
+      - "packages/shared/src/app-map-desktop.ts"
+      - "tests/unit/app-map-integrity.test.ts"
+      - "tests/unit/ci-phase-deadlines.test.ts"
+      - "rust-spike/network/**"
+      - "rust-spike/portability/**"
+      - "rust-spike/shell/connect/**"
+      - ".github/workflows/rust-phase7-key-custody.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_key_custody:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Select task-owned Rust paths
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/.rust-locks/target" >> "$GITHUB_ENV"
+          else
+            echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-key-custody/target" >> "$GITHUB_ENV"
+          fi
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+      - name: Provision declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Live socket regression must fail without its protection
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cp rust-spike/keystore/src/plaintext_scan.rs "$RUNNER_TEMP/plaintext-scan-protected.rs"
+          python3 -c 'from pathlib import Path; p=Path("rust-spike/keystore/src/plaintext_scan.rs"); s=p.read_text(); a=s.index("    // Sockets"); b=s.index("    let overlap",a); p.write_text(s[:a]+"    let mut file = File::open(path)?;\n"+s[b:])'
+          set +e
+          cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p keystore --test custody migration_scans_regular_database_files_beside_a_live_socket -- --test-threads=1 > "$RUNNER_TEMP/socket-negative.log" 2>&1
+          code=$?
+          set -e
+          cp "$RUNNER_TEMP/plaintext-scan-protected.rs" rust-spike/keystore/src/plaintext_scan.rs
+          cat "$RUNNER_TEMP/socket-negative.log"
+          echo "Socket protection negative control exit: $code"
+          test "$code" -ne 0
+          grep -q 'plaintext remains in' "$RUNNER_TEMP/socket-negative.log"
+          grep -q '.s.PGSQL.5432' "$RUNNER_TEMP/socket-negative.log"
+      - name: Key custody unit tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p keystore --test custody -- --test-threads=1
+      - name: Database supervisor custody tests
+        if: runner.os != 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib custody_tests -- --test-threads=1
+      - name: Build Windows database custody tests
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .rust-locks -Force | Out-Null
+          cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib --no-run --message-format=json > .rust-locks/custody-build.jsonl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Database supervisor custody tests as a standard Windows user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./rust-spike/portability/proof/windows-child.ps1 -BuildReport '.rust-locks/custody-build.jsonl' -TestTarget bundled_db -Filter 'secrets::custody_tests' -ExpectedSummary 'test result: ok\. 2 passed; 0 failed; 1 ignored'
+      - name: Server bundle unlock tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/network/Cargo.toml -p moss-network --lib custody -- --test-threads=1
+      - name: Native Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev
+      - name: Check native desktop custody dispatch
+        run: cargo +1.95.0 check --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app
+      - name: Build key custody driver
+        run: cargo +1.95.0 build --locked --manifest-path rust-spike/Cargo.toml -p keystore --bin key-custody
+      - name: Linux keyring session for the custody proof
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y gnome-keyring dbus-x11
+      - name: phase7_key_custody on Linux inside a keyring session
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dbus-run-session -- bash -e -c '
+            mkdir -p "$HOME/.local/share/keyrings"
+            printf login > "$HOME/.local/share/keyrings/default"
+            printf "testpw\n" | gnome-keyring-daemon --unlock --components=secrets
+            python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-proof"
+          '
+      - name: phase7_key_custody
+        if: runner.os != 'Linux'
+        shell: bash
+        run: python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-proof"
+      - name: Negative control must fail on Linux inside a keyring session
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set +e
+          dbus-run-session -- bash -e -c '
+            mkdir -p "$HOME/.local/share/keyrings"
+            printf login > "$HOME/.local/share/keyrings/default"
+            printf "testpw\n" | gnome-keyring-daemon --unlock --components=secrets
+            python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-negative" --negative-plaintext
+          ' > "$RUNNER_TEMP/key-custody-negative.log" 2>&1
+          code=$?
+          echo "Negative control script exit: $code"
+          cat "$RUNNER_TEMP/key-custody-negative.log"
+          test "$code" -ne 0
+          grep -q "plaintext remains in" "$RUNNER_TEMP/key-custody-negative.log"
+      - name: Negative control must fail
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          set +e
+          python3 rust-spike/keystore/tools/phase7_key_custody.py --bin "$CARGO_TARGET_DIR/debug" --scratch "$RUNNER_TEMP/key-custody-negative" --negative-plaintext > "$RUNNER_TEMP/key-custody-negative.log" 2>&1
+          code=$?
+          echo "Negative control script exit: $code"
+          cat "$RUNNER_TEMP/key-custody-negative.log"
+          test "$code" -ne 0
+          grep -q "plaintext remains in" "$RUNNER_TEMP/key-custody-negative.log"

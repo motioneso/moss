@@ -9,6 +9,7 @@
 
 use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{ErrorKind, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -157,8 +158,15 @@ struct Bundle {
 }
 
 fn current_uid() -> u32 {
-    // SAFETY: getuid has no preconditions and cannot fail.
-    unsafe { libc::getuid() }
+    #[cfg(unix)]
+    {
+        // SAFETY: getuid has no preconditions and cannot fail.
+        unsafe { libc::getuid() }
+    }
+    #[cfg(not(unix))]
+    {
+        0
+    }
 }
 
 /// Seals one bundle part. Both parts carry the exact header text as authenticated data, so a
@@ -230,11 +238,19 @@ fn test_credential_opens(paths: &Paths, keys: &CredentialKeys, installation_id: 
 /// Writes a file only this account can read, replacing any old one in a single step.
 fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let folder = path.parent().expect("files live in a folder");
-    DirBuilder::new().recursive(true).mode(0o700).create(folder)?;
+    let mut builder = DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    builder.mode(0o700);
+    builder.create(folder)?;
     let staging = path.with_extension("staging");
     let _ = fs::remove_file(&staging);
     let staged = (|| {
-        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&staging)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&staging)?;
         file.write_all(bytes)?;
         file.sync_all()?;
         fs::rename(&staging, path)
@@ -326,18 +342,28 @@ pub fn status(paths: &Paths) -> State {
         Err(error) => return State::KeyFileDamaged { needs, detail: error.to_string() },
     };
     let folder = fs::symlink_metadata(&paths.key_folder);
-    if !file.file_type().is_file() || file.uid() != current_uid() {
+    if !file.file_type().is_file() {
         return State::KeyFileNotOurs { detail: "not a plain file owned by this account".to_string() };
     }
-    match folder {
-        Ok(folder) if folder.is_dir() && folder.uid() == current_uid() => {
-            if folder.mode() & 0o077 != 0 || file.mode() & 0o077 != 0 {
-                return State::KeyFileExposed { needs };
+    #[cfg(unix)]
+    {
+        if file.uid() != current_uid() {
+            return State::KeyFileNotOurs { detail: "not a plain file owned by this account".to_string() };
+        }
+        match folder {
+            Ok(folder) if folder.is_dir() && folder.uid() == current_uid() => {
+                if folder.mode() & 0o077 != 0 || file.mode() & 0o077 != 0 {
+                    return State::KeyFileExposed { needs };
+                }
+            }
+            _ => {
+                return State::KeyFileNotOurs { detail: "its folder is not owned by this account".to_string() }
             }
         }
-        _ => {
-            return State::KeyFileNotOurs { detail: "its folder is not owned by this account".to_string() }
-        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = folder;
     }
 
     let recovery = match read_key_file(paths) {
@@ -404,7 +430,10 @@ pub fn recover(paths: &Paths, recovery: &RecoveryKey) -> Result<Unlocked, Recove
     }
     if fs::symlink_metadata(&paths.key_file).is_ok() {
         let aside = move_aside(&paths.key_file).map_err(|error| RecoverError::Io(error.to_string()))?;
-        let _ = fs::set_permissions(&aside, fs::Permissions::from_mode(0o600));
+        #[cfg(unix)]
+        {
+            let _ = fs::set_permissions(&aside, fs::Permissions::from_mode(0o600));
+        }
     }
     write_key_file(paths, recovery, &unlocked.installation_id)
         .map_err(|error| RecoverError::Io(error.to_string()))?;
@@ -421,19 +450,31 @@ pub fn secure(paths: &Paths) -> Result<(), String> {
 /// opened, so a path swapped for a link after the check cannot redirect the change, and a
 /// pipe in its place cannot block the open.
 fn make_private(path: &Path, mode: u32, folder: bool) -> Result<(), String> {
-    let opened = File::options()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(path)
-        .map_err(|error| error.to_string())?;
-    let metadata = opened.metadata().map_err(|error| error.to_string())?;
-    if metadata.uid() != current_uid() {
-        return Err("it belongs to another account".to_string());
+    #[cfg(not(unix))]
+    {
+        let _ = mode;
+        let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
+        if folder != metadata.is_dir() || !(folder || metadata.is_file()) {
+            return Err(format!("it is not a {}", if folder { "folder" } else { "plain file" }));
+        }
+        return Ok(());
     }
-    if folder != metadata.is_dir() || !(folder || metadata.is_file()) {
-        return Err(format!("it is not a {}", if folder { "folder" } else { "plain file" }));
+    #[cfg(unix)]
+    {
+        let opened = File::options()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(path)
+            .map_err(|error| error.to_string())?;
+        let metadata = opened.metadata().map_err(|error| error.to_string())?;
+        if metadata.uid() != current_uid() {
+            return Err("it belongs to another account".to_string());
+        }
+        if folder != metadata.is_dir() || !(folder || metadata.is_file()) {
+            return Err(format!("it is not a {}", if folder { "folder" } else { "plain file" }));
+        }
+        opened.set_permissions(fs::Permissions::from_mode(mode)).map_err(|error| error.to_string())
     }
-    opened.set_permissions(fs::Permissions::from_mode(mode)).map_err(|error| error.to_string())
 }
 
 /// Moves a file to an unused `replaced-<seconds>-<n>` name. Linking fails rather than
@@ -476,13 +517,14 @@ pub fn local_signing_key(paths: &Paths, create: bool) -> Result<LocalSigningKey,
         return Err("Unlock host secret storage before signing local packages".into());
     };
     let path = paths.bundle.with_file_name("install-local-key.json");
-    let lock = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
+    let mut lock_options = OpenOptions::new();
+    lock_options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        lock_options.mode(0o600);
+        lock_options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let lock = lock_options
         .open(path.with_extension("lock"))
         .map_err(|_| "Cannot lock local signing key")?;
     lock.lock().map_err(|_| "Cannot lock local signing key")?;

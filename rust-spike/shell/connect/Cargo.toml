@@ -7,6 +7,7 @@ description = "The Moss desktop app: connects to a Moss server on this or anothe
 
 [dependencies]
 moss-launcher = { path = "../launcher" }
+keystore = { path = "../../keystore" }
 moss-network = { path = "../../network" }
 portability = { path = "../../portability" }
 serde = { version = "1", features = ["derive"] }

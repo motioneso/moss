@@ -35,6 +35,23 @@ try {
     $temp = Join-Path $state 'standard-user-temp'
     New-Item -ItemType Directory -Path $temp -Force | Out-Null
     $credential = [pscredential]::new("$env:COMPUTERNAME\$account", $password)
+    # Start-Process -Credential loads the account hive but otherwise inherits the caller's
+    # user-profile environment. Expand known-folder registry values against the actual child's
+    # profile, not runneradmin's. Keep this inside the standard-user process: no extra grants.
+    $launcher = Join-Path $state 'windows-child-launch.ps1'
+    @'
+$ErrorActionPreference = 'Stop'
+$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$accountProfileKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
+$accountProfilePath = Get-ItemPropertyValue -LiteralPath $accountProfileKey -Name ProfileImagePath
+$env:USERPROFILE = [Environment]::ExpandEnvironmentVariables($accountProfilePath)
+$env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local'
+$env:APPDATA = Join-Path $env:USERPROFILE 'AppData\Roaming'
+$env:HOMEDRIVE = [IO.Path]::GetPathRoot($env:USERPROFILE).TrimEnd('\')
+$env:HOMEPATH = $env:USERPROFILE.Substring($env:HOMEDRIVE.Length)
+& $env:MOSS_PROOF_BINARY $env:MOSS_PROOF_FILTER '--nocapture' '--test-threads=1'
+exit $LASTEXITCODE
+'@ | Set-Content -LiteralPath $launcher
     $out = Join-Path $state 'windows-child.out'
     $err = Join-Path $state 'windows-child.err'
     # A launch error is not a test failure. Record resource facts without credentials so the
@@ -42,9 +59,10 @@ try {
     Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' |
         Select-Object DeviceID, FreeSpace, Size | ConvertTo-Json -Compress | Write-Output
     try {
-        $process = Start-Process -FilePath $binary -ArgumentList @($Filter, '--nocapture', '--test-threads=1') `
+        $process = Start-Process -FilePath (Get-Process -Id $PID).Path `
+            -ArgumentList @('-NoProfile', '-NonInteractive', '-File', ('"' + $launcher + '"')) `
             -Credential $credential -LoadUserProfile -WorkingDirectory $root `
-            -Environment @{ TEMP = $temp; TMP = $temp } `
+            -Environment @{ TEMP = $temp; TMP = $temp; MOSS_PROOF_BINARY = $binary; MOSS_PROOF_FILTER = $Filter } `
             -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
     } catch {
         $cause = $_.Exception.GetBaseException()

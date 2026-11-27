@@ -208,6 +208,60 @@ const screens = {
     button("Quit app", "quiet", () => post({ do: "quit" }))
   ],
 
+  "recovery-key": (s) => {
+    if (!s.words) {
+      return [
+        heading("Your recovery key"),
+        el("p", { class: "connect-error", role: "alert" }, s.reason || "No key store found."),
+        el(
+          "div",
+          { class: "connect-actions" },
+          s.code === "app_keystore_locked"
+            ? button("Unlock and retry", "primary", () => post({ do: "recovery-retry" }))
+            : button("Try again", "primary", () => post({ do: "recovery-retry" }))
+        )
+      ];
+    }
+    const inputs = (s.ask || []).map((position) => {
+      const input = el("input", {
+        class: "jds-input",
+        type: "text",
+        autocomplete: "off",
+        spellcheck: "false",
+        "data-position": String(position)
+      });
+      return el(
+        "div",
+        { class: "jds-field" },
+        el("label", { class: "jds-label" }, `Word ${position}`),
+        input
+      );
+    });
+    return [
+      heading("Your recovery key"),
+      muted("Backups open only with these words."),
+      el(
+        "ol",
+        { class: "connect-words", "aria-label": "Recovery words" },
+        ...s.words.map((word, index) => el("li", {}, `${index + 1}. ${word}`))
+      ),
+      el("h2", {}, "Check your key"),
+      el("div", { class: "connect-check" }, ...inputs),
+      s.error ? el("p", { class: "connect-error", role: "alert" }, s.error) : "",
+      el(
+        "div",
+        { class: "connect-actions" },
+        button("Continue", "primary", () => {
+          const checked = {};
+          for (const node of root.querySelectorAll("[data-position]")) {
+            checked[node.dataset.position] = node.value;
+          }
+          post({ do: "recovery-check", checked });
+        })
+      )
+    ];
+  },
+
   "setting-up": (s) => [heading(s.name), muted("Setting up. The first start can take a minute.")],
 
   connecting: (s) => [heading(s.name), muted("Connecting…")],

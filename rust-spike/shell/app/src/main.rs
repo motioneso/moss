@@ -284,8 +284,179 @@ fn running_record(folder: &Path, config: &Config, port: u16) -> Result<instance:
     })
 }
 
+/// Reads the bundle beside an --instance argument and supplies its module
+/// secrets, for the separate installer and package processes.
+/// Moves one instance's plain credentials into the key store. The one place
+/// recovery words are printed, for the owner running setup in a terminal.
+fn migrate_keys(raw: Vec<String>) -> Result<(), String> {
+    use keystore::custody::{prepare_instance, setup_route, KeyFileStore, SetupRoute};
+    let mut instance: Option<std::path::PathBuf> = None;
+    let mut key_file: Option<std::path::PathBuf> = None;
+    let mut iter = raw.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--instance" => instance = iter.next().map(std::path::PathBuf::from),
+            "--key-file" => key_file = iter.next().map(std::path::PathBuf::from),
+            _ => {}
+        }
+    }
+    let folder =
+        instance.ok_or("usage: moss-server migrate-keys --instance DIR [--key-file FILE]")?;
+    let network_file = folder.join("network.json");
+    let mut config = moss_network::config::Config::read(&network_file)
+        .map_err(|e| format!("cannot read the instance settings: {e}"))?;
+    if !folder.join(keystore::custody::LEGACY_CREDENTIALS).exists() {
+        return Err("this instance has no plain credentials file to migrate".into());
+    }
+    let name = folder
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "default".into());
+    let service = keystore::platform::service_name(&name);
+    let platform = keystore::platform::platform_store();
+    // The key file belongs to a headless server. A graphical login is a
+    // desktop session even when its key store cannot be reached, and there
+    // the brief forbids offering the file at all.
+    let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    let desktop_session = matches!(session_type.as_str(), "x11" | "wayland" | "mir")
+        || std::env::var_os("XDG_CURRENT_DESKTOP").is_some()
+        || std::env::var_os("DESKTOP_SESSION").is_some();
+    let route = setup_route(desktop_session, platform.probe());
+    let mut store: Box<dyn keystore::custody::OsKeyStore> = match &route {
+        SetupRoute::OsStore => keystore::platform::platform_store(),
+        SetupRoute::KeyFileChoice => {
+            let path = key_file
+                .as_ref()
+                .ok_or("no keychain session here. Name the key file to create with --key-file")?;
+            let path = keystore::custody::headless_key_file_path(&folder, &path)
+                .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+            Box::new(KeyFileStore::new(path))
+        }
+        SetupRoute::Stop(error) => return Err(format!("{}: {}", error.code(), error.reason())),
+    };
+    let prepared = prepare_instance(&folder, store.as_mut(), &service)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    // The route selected for this attempt owns its commit store. A stale
+    // record from an abandoned setup must never select a different store.
+    match route {
+        SetupRoute::OsStore => keystore::custody::clear_key_file_choice(&folder),
+        SetupRoute::KeyFileChoice => keystore::custody::record_key_file_choice(
+            &folder,
+            &key_file.expect("key-file route checked above"),
+        ),
+        SetupRoute::Stop(error) => return Err(format!("{}: {}", error.code(), error.reason())),
+    }
+    .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    config.credentials = prepared.bundle_path().to_path_buf();
+    config
+        .write(&network_file)
+        .map_err(|e| format!("cannot save the instance settings: {e}"))?;
+    let words = prepared.words().join(" ");
+    println!("Write these recovery words down. They are shown once:");
+    println!("{words}");
+    // The plain file is deleted only after the owner confirms the copy.
+    // Quitting here leaves it standing, and running this again shows fresh words.
+    println!("When the words are written down, type SAVED and press Enter.");
+    let mut answer = String::new();
+    std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer)
+        .map_err(|e| format!("cannot read the confirmation: {e}"))?;
+    if answer.trim() != "SAVED" {
+        return Err(
+            "the words were not confirmed, so nothing was finished. Run this again when ready."
+                .into(),
+        );
+    }
+    if let Err(error) = prepared.commit_with(store.as_mut(), &service) {
+        // The finish rolled the bundle back. Point the settings at the plain
+        // file again, so the usual start path stays retryable.
+        let mut config = moss_network::config::Config::read(&network_file)
+            .map_err(|e| format!("cannot read the instance settings: {e}"))?;
+        config.credentials = folder.join(keystore::custody::LEGACY_CREDENTIALS);
+        let _ = config.write(&network_file);
+        return Err(format!("{}: {}", error.code(), error.reason()));
+    }
+    Ok(())
+}
+
+/// Puts the master key back into this machine's key store from the owner's
+/// recovery words, read from one line on stdin.
+fn restore_keys(raw: Vec<String>) -> Result<(), String> {
+    let mut instance: Option<std::path::PathBuf> = None;
+    let mut iter = raw.iter();
+    while let Some(arg) = iter.next() {
+        if arg.as_str() == "--instance" {
+            instance = iter.next().map(std::path::PathBuf::from);
+        }
+    }
+    let folder = instance.ok_or("usage: moss-server restore-keys --instance DIR")?;
+    let name = folder
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "default".into());
+    let service = keystore::platform::service_name(&name);
+    let bundle = keystore::custody::read_bundle(&folder)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    let mut line = String::new();
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut line)
+        .map_err(|e| format!("cannot read the recovery words: {e}"))?;
+    let typed = keystore::recovery::split_pasted(&line);
+    let recorded = keystore::custody::recorded_key_file(&folder);
+    let mut store: Box<dyn keystore::custody::OsKeyStore> = match recorded {
+        Some(path) => Box::new(keystore::custody::KeyFileStore::new(path)),
+        None => keystore::platform::platform_store(),
+    };
+    keystore::custody::restore_to_store(&bundle, &typed, store.as_mut(), &service)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    println!("The master key is back in this machine's key store.");
+    Ok(())
+}
+
+/// Loads the replacement module secrets from the wrapped bundle for a child
+/// process. A store that cannot open the bundle stops the child here, with
+/// the custody error itself, instead of a misleading settings complaint.
+fn supply_module_secrets_from_args() -> Result<(), String> {
+    let args: Vec<String> = std::env::args().collect();
+    let Some(position) = args.iter().position(|arg| arg == "--instance") else {
+        return Ok(());
+    };
+    let Some(instance) = args.get(position + 1) else {
+        return Ok(());
+    };
+    let folder = std::path::PathBuf::from(instance);
+    // No instance settings means the child is not running against a set-up
+    // instance; its own entry point reports that as before.
+    let Ok(config) = moss_network::config::Config::read(&folder.join("network.json")) else {
+        return Ok(());
+    };
+    // Only a wrapped bundle needs the key store. A plain credentials file
+    // carries its own values and the settings file still holds the rest.
+    let credentials = folder.join("credentials.json");
+    if credentials.exists() && !folder.join(keystore::custody::BUNDLE_FILE).exists() {
+        return Ok(());
+    }
+    let secrets = config.module_secrets()?;
+    modules::set_module_secrets(modules::ModuleSecrets {
+        connector_key: secrets.connector_key,
+        ai_key: secrets.ai_key,
+        producer_url: secrets.producer_url,
+        migrations_url: secrets.migrations_url,
+        worker_url: secrets.worker_url,
+        embeddings_api_key: secrets.embeddings_api_key,
+    });
+    Ok(())
+}
+
+/// Runs the secret supply for a child process, stopping it on failure.
+fn supply_or_stop() {
+    if let Err(error) = supply_module_secrets_from_args() {
+        eprintln!("moss-server: {error}");
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     if std::env::args().nth(1).as_deref() == Some("lifecycle-module") {
+        supply_or_stop();
         if module_lifecycle_service::run(std::env::args().skip(2).collect()).is_err() {
             eprintln!(
                 "moss-server: The module lifecycle service stopped; read the operation result"
@@ -303,13 +474,29 @@ fn main() {
         ));
     }
     if std::env::args().nth(1).as_deref() == Some("apply-module-package") {
+        supply_or_stop();
         if module_package_apply::run(std::env::args().skip(2).collect()).is_err() {
             eprintln!("Package activation failed");
             std::process::exit(1);
         }
         return;
     }
+    if std::env::args().nth(1).as_deref() == Some("migrate-keys") {
+        if let Err(error) = migrate_keys(std::env::args().skip(2).collect()) {
+            eprintln!("moss-server migrate-keys: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    if std::env::args().nth(1).as_deref() == Some("restore-keys") {
+        if let Err(error) = restore_keys(std::env::args().skip(2).collect()) {
+            eprintln!("moss-server restore-keys: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("install-module") {
+        supply_or_stop();
         let runtime_free = module_install::run(std::env::args().skip(2).collect());
         if let Err(error) = runtime_free {
             eprintln!("moss-server: {error:#}");
@@ -351,7 +538,23 @@ fn main() {
         // Resume when verifying the live marker needs authorization or cannot succeed.
         config.sharing = firewall.startup(config.sharing, config.listen.port())
             .map_err(|_| "Cannot record the sharing startup state")?;
+        if let Ok(raw) = moss_network::config::private_read(&config.credentials) {
+            if !moss_network::config::is_bundle(&raw) {
+                eprintln!("moss-server: this instance still keeps its keys in a plain file. Run moss-server migrate-keys --instance <folder> to move them into the key store.");
+            }
+        }
         let platform = config.platform().await?;
+        // Module settings no longer hold their secrets after key custody.
+        if let Ok(secrets) = config.module_secrets() {
+            modules::set_module_secrets(modules::ModuleSecrets {
+                connector_key: secrets.connector_key,
+                ai_key: secrets.ai_key,
+                producer_url: secrets.producer_url,
+                migrations_url: secrets.migrations_url,
+                worker_url: secrets.worker_url,
+                embeddings_api_key: secrets.embeddings_api_key,
+            });
+        }
         let acceptor = tls::acceptor(&config.certificate, &config.private_key)?;
         // Sharing off binds loopback only. The switch rebinds when the owner changes it.
         let (listening, switch) = tls::Listening::bind(config.listen, config.sharing).await?;

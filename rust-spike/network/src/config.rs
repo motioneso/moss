@@ -27,6 +27,15 @@ pub struct Config {
     pub credentials: PathBuf,
 }
 
+// Runtime consumes its own fields; module and database fields share the bundle.
+#[derive(Deserialize)]
+struct Credentials {
+    app_url: String,
+    auth_url: String,
+    auth_secret: String,
+    connector_key: String,
+}
+
 impl Config {
     pub fn read(path: &Path) -> Result<Self, String> {
         let bytes = private_read(path)?;
@@ -91,16 +100,36 @@ impl Config {
     }
 
     pub async fn platform(&self) -> Result<Arc<Platform>, String> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Credentials {
-            app_url: String,
-            auth_url: String,
-            auth_secret: String,
-            connector_key: String,
-        }
-        let c: Credentials = serde_json::from_slice(&private_read(&self.credentials)?)
-            .map_err(|_| "Invalid credential file")?;
+        let raw = private_read(&self.credentials)?;
+        // A wrapped key bundle holds the same credentials with no plaintext. A locked
+        // key store refuses to start with that reason.
+        let plain: Vec<u8> = if is_bundle(&raw) {
+            let instance = self
+                .credentials
+                .parent()
+                .and_then(|f| f.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "default".into());
+            let root = self
+                .credentials
+                .parent()
+                .map(|f| f.to_path_buf())
+                .unwrap_or_default();
+            // Only a key file the owner recorded at setup counts. An environment
+            // setting on its own never unlocks a desktop server from a plain file.
+            let key_file = agreed_key_file(&root);
+            let store = keystore::platform::platform_store();
+            open_bundle_credentials(
+                &raw,
+                store.as_ref(),
+                &keystore::platform::service_name(&instance),
+                key_file.as_deref(),
+            )?
+        } else {
+            raw
+        };
+        let c: Credentials =
+            serde_json::from_slice(&plain).map_err(|_| "Invalid credential file")?;
         if c.auth_secret.len() < 32 {
             return Err("The session signing secret needs at least thirty-two characters".into());
         }
@@ -192,4 +221,184 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         let _ = fs::remove_file(tmp);
     }
     result
+}
+
+/// Secrets the module settings used to hold in plain text. They now come from
+/// the wrapped credential bundle.
+#[derive(Clone)]
+pub struct ModuleSecrets {
+    pub connector_key: String,
+    pub ai_key: Option<String>,
+    pub producer_url: String,
+    pub migrations_url: Option<String>,
+    pub worker_url: Option<String>,
+    pub embeddings_api_key: Option<String>,
+}
+
+/// The recorded key file for an instance, when present. An environment
+/// setting may point at it, but may never substitute a different file.
+fn agreed_key_file(root: &Path) -> Option<std::path::PathBuf> {
+    let recorded = keystore::custody::recorded_key_file(root)?;
+    let env_path = std::env::var_os("MOSS_KEY_FILE").map(std::path::PathBuf::from);
+    match env_path {
+        Some(env) if env != recorded => None,
+        _ => Some(recorded),
+    }
+}
+
+/// Whether these bytes are a wrapped key custody bundle, read from its own header.
+pub fn is_bundle(raw: &[u8]) -> bool {
+    let Ok(bundle) = serde_json::from_slice::<serde_json::Value>(raw) else {
+        return false;
+    };
+    let Some(header) = bundle.get("header").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(header)
+        .map(|header| {
+            header.get("kind").and_then(serde_json::Value::as_str)
+                == Some("moss-key-custody-bundle")
+        })
+        .unwrap_or(false)
+}
+
+/// Opens wrapped bundle credentials with a key store. A locked store refuses.
+pub fn open_bundle_credentials(
+    raw: &[u8],
+    store: &dyn keystore::custody::OsKeyStore,
+    service: &str,
+    key_file: Option<&Path>,
+) -> Result<Vec<u8>, String> {
+    let bundle: serde_json::Value =
+        serde_json::from_slice(raw).map_err(|_| "Invalid credential file")?;
+    let master = keystore::custody::load_master(store, service, key_file)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))?;
+    keystore::custody::unwrap_with_master(&bundle, &master)
+        .map_err(|e| format!("{}: {}", e.code(), e.reason()))
+}
+
+impl Config {
+    /// The module secrets from the credentials, opening a wrapped bundle if
+    /// present: connector key, module AI key if any, and the app address that
+    /// the module settings used to repeat as their producer address.
+    pub fn module_secrets(&self) -> Result<ModuleSecrets, String> {
+        #[derive(Deserialize)]
+        struct OnlyKeys {
+            connector_key: String,
+            #[serde(default)]
+            module_ai_key: Option<String>,
+            app_url: String,
+            #[serde(default)]
+            module_migrations_url: Option<String>,
+            #[serde(default)]
+            module_worker_url: Option<String>,
+            #[serde(default)]
+            module_embeddings_key: Option<String>,
+            #[serde(default)]
+            module_producer_url: Option<String>,
+            #[serde(default)]
+            module_connector_key: Option<String>,
+        }
+        let raw = private_read(&self.credentials)?;
+        let plain = if is_bundle(&raw) {
+            let instance = self
+                .credentials
+                .parent()
+                .and_then(|f| f.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "default".into());
+            let root = self
+                .credentials
+                .parent()
+                .map(|f| f.to_path_buf())
+                .unwrap_or_default();
+            let key_file = agreed_key_file(&root);
+            let store = keystore::platform::platform_store();
+            open_bundle_credentials(
+                &raw,
+                store.as_ref(),
+                &keystore::platform::service_name(&instance),
+                key_file.as_deref(),
+            )?
+        } else {
+            raw
+        };
+        let parsed: OnlyKeys =
+            serde_json::from_slice(&plain).map_err(|_| "Invalid credential file")?;
+        Ok(ModuleSecrets {
+            // Module-specific values ride in the bundle when they differ
+            // from the credentials file's own values, and win here.
+            connector_key: parsed.module_connector_key.unwrap_or(parsed.connector_key),
+            ai_key: parsed.module_ai_key,
+            producer_url: parsed.module_producer_url.unwrap_or(parsed.app_url),
+            migrations_url: parsed.module_migrations_url,
+            worker_url: parsed.module_worker_url,
+            embeddings_api_key: parsed.module_embeddings_key,
+        })
+    }
+
+    /// The connector key from the credentials, opening a wrapped bundle if present.
+    pub fn connector_key(&self) -> Result<String, String> {
+        Ok(self.module_secrets()?.connector_key)
+    }
+}
+
+#[cfg(test)]
+mod custody_tests {
+    use super::*;
+    use keystore::custody::{wrap_bundle, FakeMode, MasterKey, MemoryStore, OsKeyStore};
+    use keystore::recovery::RecoveryKey;
+
+    #[test]
+    fn custody_bundle_with_database_and_module_keys_opens_for_runtime() {
+        let root = tempfile::tempdir().unwrap();
+        let generated: String = MasterKey::generate()
+            .bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let role = root.path().join("database/secrets/moss_admin");
+        std::fs::create_dir_all(role.parent().unwrap()).unwrap();
+        std::fs::write(&role, &generated).unwrap();
+        let plain = serde_json::json!({"app_url":"postgres://runtime@localhost/db", "auth_url":"postgres://auth@localhost/db", "auth_secret":generated, "connector_key":generated});
+        std::fs::write(
+            root.path().join("credentials.json"),
+            serde_json::to_vec(&plain).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            root.path().join("modules.json"),
+            serde_json::to_vec(&serde_json::json!({"ai_key":generated})).unwrap(),
+        )
+        .unwrap();
+        let mut store = MemoryStore::new(FakeMode::Working);
+        keystore::custody::prepare_instance(root.path(), &mut store, "svc")
+            .unwrap()
+            .commit_with(&mut store, "svc")
+            .unwrap();
+        let raw = std::fs::read(root.path().join(keystore::custody::BUNDLE_FILE)).unwrap();
+        let opened = open_bundle_credentials(&raw, &store, "svc", None).unwrap();
+        let credentials: Credentials = serde_json::from_slice(&opened)
+            .expect("runtime must accept the real migrated bundle payload");
+        assert!(credentials.auth_secret == generated && credentials.connector_key == generated);
+    }
+
+    #[test]
+    fn bundle_is_recognised_and_locked_store_refuses() {
+        let creds = br#"{"app_url":"x","auth_url":"y","auth_secret":"z","connector_key":"k"}"#;
+        assert!(!is_bundle(creds));
+        let master = MasterKey::generate();
+        let bundle = wrap_bundle(&master, &RecoveryKey::generate(), creds);
+        let raw = serde_json::to_vec(&bundle).unwrap();
+        assert!(is_bundle(&raw));
+        let mut store = MemoryStore::new(FakeMode::Working);
+        store.store_master("svc", &master).unwrap();
+        assert_eq!(
+            open_bundle_credentials(&raw, &store, "svc", None).unwrap(),
+            creds
+        );
+        let locked = MemoryStore::new(FakeMode::Locked);
+        let error = open_bundle_credentials(&raw, &locked, "svc", None).unwrap_err();
+        assert!(error.starts_with("app_keystore_locked"), "{error}");
+    }
 }
