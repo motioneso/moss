@@ -119,8 +119,19 @@ pub fn backup(instance: &Path, bundle: &Bundle, pause: Option<&Path>) -> Result<
         crate::create_private_file(&partial).map_err(|e| format!("{}: {e}", partial.display()))?;
     let written = (|| {
         let out = HashingWriter::new(BufWriter::new(file));
-        let mut writer = ArchiveWriter::new(out, &id, created_at, &master, &key_bundle)
-            .map_err(|e| format!("archive: {e}"))?;
+        let mut client = endpoint.connect(SUPERUSER, &password, APP_DATABASE)?;
+        let accounts: i64 = client
+            .query_one("SELECT count(*) FROM app.users", &[])
+            .map_err(|e| cluster::db_error(&e))?
+            .get(0);
+        let source = json!({
+            "machine": std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| instance.file_name().unwrap_or_default().to_string_lossy().into_owned()),
+            "version": env!("CARGO_PKG_VERSION"),
+            "accounts": accounts,
+        });
+        let mut writer =
+            ArchiveWriter::with_source(out, &id, created_at, &master, &key_bundle, source)
+                .map_err(|e| format!("archive: {e}"))?;
         let manifest = capture(
             &instance,
             &layout,

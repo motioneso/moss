@@ -149,11 +149,23 @@ pub struct ArchiveWriter<W: Write> {
 
 impl<W: Write> ArchiveWriter<W> {
     pub fn new(
+        out: W,
+        backup_id: &str,
+        created_at: u64,
+        master: &MasterKey,
+        key_bundle: &Value,
+    ) -> io::Result<ArchiveWriter<W>> {
+        Self::with_source(out, backup_id, created_at, master, key_bundle, Value::Null)
+    }
+
+    /// Source facts are visible before entering words; chunk authentication verifies them.
+    pub fn with_source(
         mut out: W,
         backup_id: &str,
         created_at: u64,
         master: &MasterKey,
         key_bundle: &Value,
+        source: Value,
     ) -> io::Result<ArchiveWriter<W>> {
         let key = DataKey::generate();
         let recovery_key_id = key_bundle["header"]
@@ -166,6 +178,7 @@ impl<W: Write> ArchiveWriter<W> {
             "backupId": backup_id,
             "createdAt": created_at,
             "chunkSize": CHUNK_SIZE,
+            "source": source,
             "recoveryKeyId": recovery_key_id,
             "dataKey": seal_data_key(master, backup_id, &key),
             "keyBundle": key_bundle,

@@ -450,3 +450,9 @@ fn check_secret_name(role: &str) -> std::io::Result<()> {
     }
     Ok(())
 }
+
+/// Socket directory a new instance will use, without creating the instance.
+#[cfg(unix)]
+pub fn prospective_run(root: &Path) -> io::Result<PathBuf> {
+    socket_dir(root)
+}
