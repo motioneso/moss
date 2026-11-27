@@ -166,19 +166,66 @@ async fn windows_server_answers_on_the_network_address_only_when_sharing_is_on()
         config.sharing = false;
         config.write(&config_path).unwrap();
     }
-    assert_eq!(config.sharing, phase == "on");
+    let token = std::env::var("MOSS_PROOF_NETWORK_TOKEN").expect("parent's public rule token");
+    let rule = serde_json::json!({"name":format!("moss-default-{token}"), "port":port,
+        "program":install.join("moss-server.exe"), "token":token});
+    let record_path = folder.join(moss_network::firewall::RECORD_FILE);
+    if phase == "on" {
+        // Only the instance owner writes its protected files. The elevated parent has
+        // already added and checked this exact token, port and program through the helper.
+        let mut record: serde_json::Value =
+            serde_json::from_slice(&moss_network::config::private_read(&record_path).unwrap())
+                .unwrap();
+        assert_eq!(record["rule"], rule);
+        record["confirmed"] = true.into();
+        moss_network::config::private_write(&record_path, &serde_json::to_vec(&record).unwrap())
+            .unwrap();
+    } else if phase == "after-off" {
+        // Removal is privileged; checking absence is not. An error or a foreign live
+        // entry never counts as absent and never clears the owner's intent.
+        config.sharing = false;
+        config.write(&config_path).unwrap();
+        let record: serde_json::Value =
+            serde_json::from_slice(&moss_network::config::private_read(&record_path).unwrap())
+                .unwrap();
+        assert_eq!(record["rule"], rule);
+        let shown = std::process::Command::new("netsh")
+            .args([
+                "advfirewall",
+                "firewall",
+                "show",
+                "rule",
+                &format!("name=moss-default-{token}"),
+                "verbose",
+            ])
+            .output()
+            .expect("read the exact rule after removal");
+        assert_eq!(
+            shown.status.code(),
+            Some(1),
+            "rule lookup clearly reports absence"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&shown.stdout).trim(),
+            "No rules match the specified criteria."
+        );
+        std::fs::remove_file(&record_path).unwrap();
+    }
     let firewall = moss_network::firewall::Firewall::new(&folder, install.join("moss-server.exe"));
     if phase == "on" {
         assert!(
             firewall.rule_intact(port),
             "sharing on has a live owned marker"
         );
+        config.sharing = true;
+        config.write(&config_path).unwrap();
     } else {
         assert!(
             !folder.join(moss_network::firewall::RECORD_FILE).exists(),
             "sharing off has no firewall record"
         );
     }
+    assert_eq!(config.sharing, phase == "on");
     println!("network address {lan_origin}, phase {phase}");
     let (running, certificate) = reach::local_or_start(&install, &folder)
         .await
@@ -219,6 +266,15 @@ async fn windows_server_answers_on_the_network_address_only_when_sharing_is_on()
         !reach::alive(running.pid),
         "server stopped before the next firewall phase"
     );
+    if phase == "off" {
+        // Save intent before the parent performs any privileged add. This lives in the
+        // owner's protected folder, not in the elevated runner's account.
+        let record = serde_json::json!({"rule":rule, "paused":false, "confirmed":false,
+            "preexisting":false, "mac_disabled":false, "added":true});
+        moss_network::config::private_write(&record_path, &serde_json::to_vec(&record).unwrap())
+            .unwrap();
+    } else if phase == "after-off" {
+        std::fs::remove_dir_all(&data).unwrap();
+    }
     println!("WINDOWS NETWORK ADDRESS PROOF: {phase} passed");
-    // The parent retains the record until its ownership-checked removal has succeeded.
 }
