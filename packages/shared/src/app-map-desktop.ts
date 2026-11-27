@@ -8,6 +8,15 @@ import type {
 
 export const DESKTOP_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
+    id: "rust-desktop-restore",
+    runtime: "rust",
+    label: "Restore a backup on a new computer",
+    description:
+      "Desktop first-run restore entry point, awaiting the first-run chooser in phase 7 part 10. Choose a backup file, inspect its source computer, date, Moss version and accounts, see the new destination, enter the recovery words and Restore. Every archive chunk is checked before staging is created. The database, files and credentials are checked in staging before a new instance is published. Existing instances are retained. Restored master keys use this computer's OS key store. Sign in with the restored account afterwards. This entry point has no backups list and does not provide the Settings Backups restore dialog.",
+    path: "moss-app://localhost/index.html",
+    scope: "system"
+  },
+  {
     id: "rust-desktop-connect",
     runtime: "rust",
     label: "Rust Moss desktop app - choose and connect to a server",
@@ -40,6 +49,34 @@ export const DESKTOP_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 ];
 
 export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  {
+    code: "app_backup_wrong_key",
+    runtime: "rust",
+    class: "validation",
+    remediationRef: "rust-app-restore",
+    description: "Those recovery words do not open this backup. Check all 24 words and try again."
+  },
+  {
+    code: "app_backup_damaged",
+    runtime: "rust",
+    class: "validation",
+    remediationRef: "rust-app-restore",
+    description: "The chosen backup is damaged or incomplete. Choose another copy."
+  },
+  {
+    code: "app_restore_destination",
+    runtime: "rust",
+    class: "prerequisite",
+    remediationRef: "rust-app-restore",
+    description: "Choose a new destination. An existing instance or key entry is never overwritten."
+  },
+  {
+    code: "app_restore_failed",
+    runtime: "rust",
+    class: "transient",
+    remediationRef: "rust-app-restore",
+    description: "Restore could not finish. Check free space and folder permissions and try again."
+  },
   {
     code: "app_firewall_refused",
     runtime: "rust",
@@ -142,6 +179,14 @@ export const DESKTOP_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const DESKTOP_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "rust-app-restore",
+    runtime: "rust",
+    description:
+      "For wrong words, check all 24 words against the recovery sheet for this backup. For a damaged archive, choose another copy. Unlock the computer's key store if requested. Check free space and destination folder permissions before retrying. Existing instances stay available; restore creates a new instance, then asks you to sign in with your restored account.",
+    path: "moss-app://localhost/index.html",
+    scope: "system"
+  },
   {
     id: "rust-app-keystore-retry",
     runtime: "rust",

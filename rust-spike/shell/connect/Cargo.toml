@@ -6,6 +6,8 @@ publish.workspace = true
 description = "The Moss desktop app: connects to a Moss server on this or another computer"
 
 [dependencies]
+moss-backup = { path = "../../backup" }
+bundled-db = { path = "../../bundled-db" }
 moss-launcher = { path = "../launcher" }
 keystore = { path = "../../keystore" }
 moss-network = { path = "../../network" }
@@ -25,6 +27,7 @@ libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gio = "0.18"
+gtk = "0.18"
 webkit2gtk = { version = "=2.0.1", features = ["v2_38"] }
 
 [dev-dependencies]

@@ -1,4 +1,4 @@
-/* global document, window */
+/* global document, window, restoreScreen, restoringScreen, restoreDoneScreen */
 // The app's own screens. Actions go to the app through window.ipc; the app answers by
 // calling window.moss.show(state).
 "use strict";
@@ -37,6 +37,9 @@ function stopRetry() {
 }
 
 const screens = {
+  restore: restoreScreen,
+  restoring: restoringScreen,
+  "restore-done": restoreDoneScreen,
   "first-run": () => [
     heading("Where does your Moss live?"),
     el(

@@ -561,6 +561,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bundled-db"
+version = "0.0.0"
+dependencies = [
+ "hex",
+ "keystore",
+ "libc",
+ "portability",
+ "postgres",
+ "postgres-protocol",
+ "rand 0.8.8",
+ "serde_json",
+ "sha2 0.10.9",
+ "signal-hook",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3362,9 +3378,12 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "block2",
+ "bundled-db",
  "gio",
+ "gtk",
  "keystore",
  "libc",
+ "moss-backup",
  "moss-launcher",
  "moss-network",
  "objc2",
@@ -3412,6 +3431,22 @@ dependencies = [
  "sha2 0.10.9",
  "unicode-normalization",
  "wit-bindgen",
+]
+
+[[package]]
+name = "moss-backup"
+version = "0.0.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "bundled-db",
+ "hex",
+ "keystore",
+ "portability",
+ "postgres",
+ "rand 0.8.8",
+ "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -4578,6 +4613,20 @@ dependencies = [
  "embedded-io 0.4.0",
  "embedded-io 0.6.1",
  "serde",
+]
+
+[[package]]
+name = "postgres"
+version = "0.19.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33ad20e0aa0b24f5a394eab4f78c781d248982b22b25cecc7e3aa46a681605bd"
+dependencies = [
+ "bytes",
+ "fallible-iterator 0.2.0",
+ "futures-util",
+ "log",
+ "tokio",
+ "tokio-postgres",
 ]
 
 [[package]]
@@ -5766,6 +5815,16 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "signal-hook"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
 
 [[package]]
 name = "signal-hook-registry"

@@ -12,6 +12,8 @@ mod notifier;
 mod pin;
 mod provision;
 mod reach;
+mod restore_picker;
+use moss_app::restore::Flow as RestoreFlow;
 #[cfg(all(test, target_os = "linux"))]
 mod runtime_proof;
 mod store;
@@ -147,6 +149,8 @@ struct App {
     turn: u64,
     screen: String,
     pending_stop: Option<String>,
+    restore: Option<RestoreFlow>,
+    restore_entry: bool,
     pending_recovery: Option<(Vec<String>, Vec<usize>, String)>,
     pending_custody: Option<(String, String)>,
     pending_custody_state: Option<PendingCustody>,
@@ -158,6 +162,7 @@ struct App {
 }
 
 struct Args {
+    restore_entry: bool,
     data: PathBuf,
     install: PathBuf,
 }
@@ -264,6 +269,7 @@ fn parse_args() -> Result<Args, String> {
         .and_then(|p| p.parent().map(PathBuf::from))
         .unwrap_or_default();
     let mut args = Args {
+        restore_entry: false,
         data: store::default_data_dir().ok_or("no home folder")?,
         install,
     };
@@ -271,6 +277,7 @@ fn parse_args() -> Result<Args, String> {
     while let Some(flag) = raw.next() {
         let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
         match flag.as_str() {
+            "--entry" if value == "restore" => args.restore_entry = true,
             "--data" => args.data = PathBuf::from(value),
             "--install" => args.install = PathBuf::from(value),
             _ => return Err(format!("unknown option {flag}")),
@@ -399,6 +406,8 @@ fn main() {
         pending_custody: None,
         pending_custody_state: None,
         pending_stop: None,
+        restore: None,
+        restore_entry: args.restore_entry,
         stopping: None,
         preferences,
         last_notice: [None; 2],
@@ -448,6 +457,7 @@ fn asset(web: &std::path::Path, request: Request<Vec<u8>>) -> Response<Cow<'stat
     let path = request.uri().path();
     let embedded: Option<(&str, &'static [u8])> = match path {
         "/" | "/index.html" => Some(("text/html", include_bytes!("../assets/index.html"))),
+        "/restore.js" => Some(("text/javascript", include_bytes!("../assets/restore.js"))),
         "/connect.js" => Some(("text/javascript", include_bytes!("../assets/connect.js"))),
         "/connect.css" => Some(("text/css", include_bytes!("../assets/connect.css"))),
         _ => None,
@@ -675,6 +685,13 @@ impl App {
         }
     }
 
+    fn begin_restore(&mut self) {
+        let flow = RestoreFlow::new(&self.store.data, &self.install);
+        let state = flow.state();
+        self.restore = Some(flow);
+        self.show(state);
+    }
+
     fn action(&mut self, message: &Value) {
         let text = |key: &str| {
             message
@@ -688,6 +705,41 @@ impl App {
             .and_then(Value::as_str)
             .unwrap_or_default()
         {
+            "retry" if self.restore_entry => {
+                self.restore_entry = false;
+                self.begin_restore();
+            }
+            "restore" => self.begin_restore(),
+            "restore-pick" if self.screen == "restore" => {
+                if let Some(path) = restore_picker::choose() {
+                    if let Some(flow) = self.restore.as_mut() {
+                        let state = flow.select(path);
+                        self.show(state);
+                    }
+                }
+            }
+            "restore-run" if self.screen == "restore" => {
+                if let Some(flow) = self.restore.clone() {
+                    let words: Vec<String> = text("words")
+                        .split_whitespace()
+                        .map(str::to_owned)
+                        .collect();
+                    self.show(json!({"screen":"restoring"}));
+                    let proxy = self.proxy.clone();
+                    self.runtime.spawn_blocking(move || {
+                        let state = flow.run(&words, |_| ());
+                        let _ = proxy.send_event(UserEvent::Show(state));
+                    });
+                }
+            }
+            "restore-open" if self.screen == "restore-done" => {
+                if let Some(flow) = self.restore.take() {
+                    self.choose(format!(
+                        "local:{}",
+                        flow.destination.file_name().unwrap().to_string_lossy()
+                    ));
+                }
+            }
             "retry" => match self.current.clone().or_else(|| self.servers.last.clone()) {
                 Some(id) => self.choose(id),
                 None => self.show(json!({"screen":"first-run"})),
