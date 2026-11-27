@@ -20,11 +20,14 @@ pub fn name(folder: &Path) -> String {
     format!("moss-server-{hash:016x}")
 }
 fn checked(command: &mut Command) -> Result<(), String> {
-    let output = command.stdin(Stdio::null()).output().map_err(|_| REMEDY)?;
+    checked_remedy(command, REMEDY)
+}
+fn checked_remedy(command: &mut Command, remedy: &str) -> Result<(), String> {
+    let output = command.stdin(Stdio::null()).output().map_err(|_| remedy)?;
     if output.status.success() {
         Ok(())
     } else {
-        Err(REMEDY.into())
+        Err(remedy.into())
     }
 }
 fn canonical(folder: &Path) -> Result<PathBuf, String> {
@@ -92,7 +95,7 @@ fn register(install: &Path, folder: &Path) -> Result<(), String> {
         .canonicalize()
         .map_err(|_| REMEDY)?;
     #[cfg(target_os = "linux")]
-    let contents = format!("[Unit]\nDescription=Moss server\n[Service]\nType=simple\nExecStart={} service-run {}\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=200\n[Install]\nWantedBy=default.target\n", unit_arg(&launcher), unit_arg(folder));
+    let contents = format!("[Unit]\nDescription=Moss server\nStartLimitIntervalSec=infinity\nStartLimitBurst=3\n[Service]\nType=simple\nExecStart={} service-run {}\nRestart=on-failure\nRestartSec=5\nTimeoutStopSec=200\n[Install]\nWantedBy=default.target\n", unit_arg(&launcher), unit_arg(folder));
     #[cfg(target_os = "macos")]
     let contents = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>Label</key><string>{}</string><key>ProgramArguments</key><array><string>{}</string><string>service-run</string><string>{}</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ProcessType</key><string>Background</string><key>ExitTimeOut</key><integer>200</integer></dict></plist>", name(folder), xml(&launcher.to_string_lossy()), xml(&folder.to_string_lossy()));
     #[cfg(windows)]
@@ -174,62 +177,149 @@ pub fn start(install: &Path, folder: &Path) -> Result<(), String> {
 /// Disable future login starts before requesting graceful shutdown. The marker also prevents
 /// app autostart, reconnect and an already queued service restart from undoing Stop.
 pub fn stop(_install: &Path, folder: &Path) -> Result<(), String> {
-    let folder = canonical(folder)?;
-    private_write(&folder.join(STOPPED), b"Stopped by the owner\n")?;
+    let folder = canonical(folder).map_err(|_| {
+        "Moss cannot find this server's folder. Restore the folder, then press Stop."
+    })?;
+    private_write(&folder.join(STOPPED), b"Stopped by the owner\n")
+        .map_err(|_| "Moss could not save Stop. Check write permission for this server's folder, then press Stop again.")?;
     #[cfg(target_os = "linux")]
-    checked(Command::new("systemctl").args([
-        "--user",
-        "disable",
-        &format!("{}.service", name(&folder)),
-    ]))?;
+    checked_remedy(Command::new("systemctl").args([
+        "--user", "disable", &format!("{}.service", name(&folder)),
+    ]), "Moss could not disable this server's sign-in service. Check your sign-in services, then press Stop again.")?;
     #[cfg(windows)]
-    if Command::new("schtasks.exe")
-        .args(["/Query", "/TN", &name(&folder)])
-        .output()
-        .is_ok_and(|o| o.status.success())
     {
-        checked(Command::new("schtasks.exe").args(["/Change", "/TN", &name(&folder), "/Disable"]))?;
+        let query = Command::new("schtasks.exe").args(["/Query", "/TN", &name(&folder)])
+            .output().map_err(|_| "Moss could not check its sign-in task. Open Task Scheduler, check your account's Moss task, then press Stop again.")?;
+        if query.status.success() {
+            checked_remedy(Command::new("schtasks.exe").args(["/Change", "/TN", &name(&folder), "/Disable"]),
+                "Moss could not disable its sign-in task. Disable this server's task in Task Scheduler, then press Stop again.")?;
+        } else {
+            // A failed query is not proof that the task is absent. Listing all tasks must
+            // succeed and confirm absence before Stop may continue.
+            let listing = Command::new("schtasks.exe").args(["/Query", "/FO", "CSV", "/NH"])
+                .output().map_err(|_| "Moss could not check its sign-in task. Open Task Scheduler and disable this server's task, then press Stop again.")?;
+            if !listing.status.success()
+                || String::from_utf8_lossy(&listing.stdout).contains(&name(&folder))
+            {
+                return Err("Moss could not check its sign-in task. Open Task Scheduler and disable this server's task, then press Stop again.".into());
+            }
+        }
     }
     if folder.join(RUNNING_FILE).exists() {
-        let running = Running::read(&folder)?;
-        private_write(
-            &folder.join(moss_network::tls::STOP_FILE),
-            running.pid.to_string().as_bytes(),
-        )?;
+        let running = Running::read(&folder).map_err(|_| "Moss cannot read this server's running record. Check read permission for its folder, then press Stop again.")?;
+        private_write(&folder.join(moss_network::tls::STOP_FILE), running.pid.to_string().as_bytes())
+            .map_err(|_| "Moss could not send the stop request. Check write permission for this server's folder, then press Stop again.")?;
     }
     let deadline = Instant::now() + Duration::from_secs(200);
-    // The service owns this lock until the server AND its database have stopped.
     loop {
-        let file = service_lock(&folder)?;
-        if portability::file_lock::try_exclusive(&file).map_err(|_| REMEDY)? {
-            break;
+        let file = service_lock(&folder).map_err(|_| "Moss cannot open its shutdown lock. Check write permission for this server's folder, then press Stop again.")?;
+        if portability::file_lock::try_exclusive(&file)
+            .map_err(|_| "Moss cannot check its shutdown lock. Check file locking support for this server's folder, then press Stop again.")? {
+            // Hold the lock until login registration cleanup is complete.
+            return unload(&folder);
         }
         if Instant::now() > deadline {
-            return Err(REMEDY.into());
+            return Err("Moss is still finishing work or stopping its database. Wait a moment, then press Stop again. If it keeps waiting, check server.log and database.log in this server's folder.".into());
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    unload(&folder)
 }
 fn unload(folder: &Path) -> Result<(), String> {
     #[cfg(target_os = "linux")]
-    return checked(Command::new("systemctl").args([
-        "--user",
-        "stop",
-        &format!("{}.service", name(folder)),
-    ]));
+    return checked_remedy(Command::new("systemctl").args([
+        "--user", "stop", &format!("{}.service", name(folder)),
+    ]), "Moss could not stop its sign-in service. Check your sign-in services, then press Stop again.");
     #[cfg(target_os = "macos")]
-    return checked(
-        Command::new("launchctl")
-            .arg("bootout")
-            .arg(domain()?)
-            .arg(registration(folder)?),
-    );
+    {
+        let domain = domain().map_err(|_| {
+            "Moss cannot find your login session. Sign out and back in, then press Stop again."
+        })?;
+        let target = format!("{}/{}", domain, name(folder));
+        let output = Command::new("launchctl").args(["bootout", &target]).output()
+            .map_err(|_| "Moss could not unload its sign-in service. Sign out and back in, then press Stop again.")?;
+        // launchctl returns ESRCH (3) for an already unloaded service. Other errors
+        // must remain visible; never discard the saved registration after a refusal.
+        if !output.status.success() && output.status.code() != Some(3) {
+            return Err("Moss could not unload its sign-in service. Sign out and back in, then press Stop again.".into());
+        }
+        remove_registration(&registration(folder).map_err(|_| {
+            "Moss cannot find its login file. Check your home folder, then press Stop again."
+        })?)
+    }
     #[cfg(windows)]
     {
         let _ = folder;
         Ok(())
-    } // The disabled login action has returned.
+    }
+}
+fn remove_registration(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("Moss could not remove its login file. Check write permission for your LaunchAgents folder, then press Stop again.".into()),
+    }
+}
+
+/// A failed Linux unit stays failed until the owner explicitly asks to start again.
+/// Reconnects must not reset the crash budget and create another endless restart loop.
+pub fn reset_failure(folder: &Path) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if state(folder)? == State::Failed {
+        checked(Command::new("systemctl").args([
+            "--user",
+            "reset-failed",
+            &format!("{}.service", name(&canonical(folder)?)),
+        ]))?;
+    }
+    let _ = folder;
+    Ok(())
+}
+#[derive(Debug, PartialEq, Eq)]
+pub enum State {
+    Starting,
+    Inactive,
+    Failed,
+}
+
+/// Native service activity includes database startup, before running.json exists.
+pub fn state(folder: &Path) -> Result<State, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("systemctl")
+            .args([
+                "--user",
+                "show",
+                &format!("{}.service", name(&canonical(folder)?)),
+                "--property=LoadState,ActiveState",
+            ])
+            .output()
+            .map_err(|_| REMEDY)?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        if text.lines().any(|line| line == "LoadState=not-found") {
+            return Ok(State::Inactive);
+        }
+        if !output.status.success() {
+            return Err(REMEDY.into());
+        }
+        match text
+            .lines()
+            .find_map(|line| line.strip_prefix("ActiveState="))
+        {
+            Some("active" | "activating" | "reloading") => Ok(State::Starting),
+            Some("failed") => Ok(State::Failed),
+            Some("inactive" | "deactivating") => Ok(State::Inactive),
+            _ => Err(REMEDY.into()),
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let file = service_lock(folder)?;
+        if portability::file_lock::try_exclusive(&file).map_err(|_| REMEDY)? {
+            Ok(State::Inactive)
+        } else {
+            Ok(State::Starting)
+        }
+    }
 }
 pub fn remove(install: &Path, folder: &Path) -> Result<(), String> {
     stop(install, folder)?;
@@ -242,7 +332,7 @@ pub fn remove(install: &Path, folder: &Path) -> Result<(), String> {
     ]))?;
     #[cfg(windows)]
     checked(Command::new("schtasks.exe").args(["/Delete", "/TN", &name(&folder), "/F"]))?;
-    std::fs::remove_file(registration(&folder)?).map_err(|_| REMEDY)?;
+    remove_registration(&registration(&folder)?)?;
     #[cfg(target_os = "linux")]
     checked(Command::new("systemctl").args(["--user", "daemon-reload"]))?;
     Ok(())

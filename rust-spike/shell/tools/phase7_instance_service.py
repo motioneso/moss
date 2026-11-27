@@ -43,6 +43,41 @@ def service_name(folder):
     return f'moss-server-{value:016x}'
 
 
+def assert_linux_restart_limit(launcher, scratch):
+    """A real user unit whose database program is broken must stop retrying."""
+    install = scratch / 'broken-programs'
+    install.mkdir()
+    broken_launcher = install / 'moss-launcher'
+    shutil.copy2(launcher, broken_launcher)
+    folder = scratch / 'broken-instance'
+    (folder / 'database').mkdir(parents=True, mode=0o700)
+    name = service_name(folder.resolve())
+    def state():
+        result = subprocess.run(['systemctl', '--user', 'show', name + '.service',
+                                 '--property=ActiveState,Result,NRestarts,StartLimitBurst,StartLimitIntervalUSec'],
+                                capture_output=True, text=True, check=True)
+        return dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
+    try:
+        command([broken_launcher, 'service-start', folder])
+        wait_for(lambda: state().get('Result') == 'start-limit-hit',
+                 'broken database reaches the native restart limit', seconds=30)
+        before = state()
+        assert before['ActiveState'] == 'failed', before
+        assert before['StartLimitBurst'] == '3', before
+        assert before['StartLimitIntervalUSec'] == 'infinity', before
+        time.sleep(6)
+        after = state()
+        assert after['NRestarts'] == before['NRestarts'], (before, after)
+        print('PASS: broken database stays failed without more restarts:', after, flush=True)
+    finally:
+        # This fixture has no server, database process or firewall rule to remove.
+        command([broken_launcher, 'service-stop', folder])
+        unit = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'systemd/user' / (name + '.service')
+        unit.unlink(missing_ok=True)
+        command(['systemctl', '--user', 'daemon-reload'])
+        command(['systemctl', '--user', 'reset-failed', name + '.service'], check=False)
+
+
 def database_failure_summary(folder):
     """Only fixed labels and numeric OS codes: never dump credential-bearing DB output."""
     for relative in ('database', 'database/moss-db.lock', 'database/initdb-unfinished',
@@ -217,16 +252,23 @@ def main():
         command([launcher, 'service-stop', folder])
         wait_for(lambda: stopped() and database_down(), 'Stop shuts down server and private database')
         assert (folder / 'service-stopped').exists()
+        command([launcher, 'service-stop', folder])
+        if platform.system() == 'Darwin':
+            plist = Path.home() / 'Library/LaunchAgents' / (name + '.plist')
+            assert not plist.exists(), 'repeated Stop left the LaunchAgent plist behind'
+        print('PASS: repeated Stop succeeds and leaves no macOS login plist', flush=True)
         # A queued login action cannot undo an explicit Stop, even if invoked directly.
         if args.local_lifecycle_only:
             command([launcher, 'service-run', folder])
-        else:
+        elif platform.system() != 'Darwin':
             restart_registration()
         time.sleep(3)
         assert stopped() and database_down(), 'login action undid Stop'
         print('PASS: Stop stays down across queued login action', flush=True)
         command([launcher, 'service-start', folder])
         wait_for(answering, 'explicit Start enables and starts again')
+        if platform.system() == 'Linux':
+            assert_linux_restart_limit(launcher, args.scratch)
         print('local lifecycle PASS (login restart not exercised)' if args.local_lifecycle_only else 'phase7_instance_service PASS', flush=True)
     finally:
         if not args.negative_app_only:

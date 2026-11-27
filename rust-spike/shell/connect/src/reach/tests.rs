@@ -316,7 +316,14 @@ async fn stop_refuses_to_stop_the_database_without_a_reachable_server() {
     std::fs::write(&supervisor, "#!/bin/sh\ntouch \"$3/stopped\"\n").unwrap();
     std::fs::set_permissions(&supervisor, std::fs::Permissions::from_mode(0o700)).unwrap();
     let result = stop_local(&install, &dir).await;
-    assert_eq!(result, Err(Problem::Unreachable));
+    assert_eq!(
+        result.as_ref().unwrap_err().code(),
+        "app_server_stop_failed"
+    );
+    assert!(result
+        .unwrap_err()
+        .reason()
+        .contains("confirm which server"));
     assert!(!dir
         .join(crate::provision::DATABASE_FOLDER)
         .join("stopped")
@@ -358,4 +365,115 @@ async fn stop_request_file_ends_only_the_server_it_names() {
     let ended = tokio::time::timeout(Duration::from_secs(5), served).await;
     assert!(matches!(ended, Ok(Ok(Ok(())))), "the named server stops");
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// A cold server remains alive past the old twenty-second readiness window.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_cold_start_is_not_failed_while_the_process_is_starting() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("slow-start");
+    let install = dir.join("install");
+    crate::store::private_dir(&install).unwrap();
+    let shell = install.join("moss-server");
+    std::fs::write(&shell, "#!/bin/sh\nexec sleep 22\n").unwrap();
+    std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let folder = dir.join("default");
+    crate::store::private_dir(&folder).unwrap();
+    std::fs::write(folder.join(NETWORK_FILE), b"{}").unwrap();
+    let begun = std::time::Instant::now();
+    let result = local_or_start(&install, &folder).await;
+    stop_test_children(&dir);
+    std::fs::remove_dir_all(dir).unwrap();
+    assert_eq!(result.unwrap_err(), Problem::DidNotStart);
+    assert!(
+        begun.elapsed() >= Duration::from_secs(22),
+        "reported failure while still starting"
+    );
+}
+
+#[tokio::test]
+async fn managed_stop_preserves_the_failed_step_and_remedy_for_the_screen() {
+    let dir = scratch("stop-remedy");
+    let install = dir.join("install");
+    crate::store::private_dir(&install).unwrap();
+    std::fs::write(moss_launcher::launcher(&install), "fixture").unwrap();
+    let folder = dir.join("default");
+    crate::store::private_dir(&folder).unwrap();
+    std::fs::create_dir(folder.join(moss_launcher::service::STOPPED)).unwrap();
+    let problem = stop_local(&install, &folder).await.unwrap_err();
+    assert_eq!(problem.code(), "app_server_stop_failed");
+    assert_eq!(problem.reason(), "Moss could not save Stop. Check write permission for this server's folder, then press Stop again.");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn stop_start_lock_failure_has_its_own_remedy() {
+    let dir = scratch("stop-start-lock");
+    std::fs::create_dir(dir.join("start.lock")).unwrap();
+    let problem = stop_local(&dir, &dir).await.unwrap_err();
+    assert_eq!(problem.code(), "app_server_stop_failed");
+    assert!(problem.reason().contains("start lock"));
+    assert!(problem.reason().contains("permission"));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// Run the native-command fixture in a child so PATH never changes for other app tests.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_failed_service_shows_its_code_without_restarting_on_reconnect() {
+    const FIXTURE: &str = "MOSS_TEST_FAILED_SERVICE";
+    if let Some(root) = std::env::var_os(FIXTURE) {
+        let dir = PathBuf::from(root);
+        let install = dir.join("install");
+        let folder = dir.join("default");
+        for _ in 0..2 {
+            let problem = local_or_start(&install, &folder).await.unwrap_err();
+            assert_eq!(problem, Problem::ServiceFailed);
+            let screen = crate::problem_screen(
+                &crate::store::Target::Local {
+                    instance: "default".into(),
+                    folder: folder.clone(),
+                },
+                &problem,
+            );
+            assert_eq!(screen["code"], "app_server_service_failed");
+            assert_eq!(screen["retry"], false);
+            assert!(problem.reason().contains("database.log"));
+        }
+        assert!(
+            !dir.join("restarted").exists(),
+            "reconnect reset the restart limit"
+        );
+        return;
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("failed-service");
+    crate::store::private_dir(&dir.join("install")).unwrap();
+    crate::store::private_dir(&dir.join("default")).unwrap();
+    std::fs::write(dir.join("install/moss-launcher"), "fixture").unwrap();
+    std::fs::write(dir.join("default/network.json"), "{}").unwrap();
+    let manager = dir.join("install/systemctl");
+    std::fs::write(&manager, "#!/bin/sh\ncase \"$*\" in\n *show*) printf 'LoadState=loaded\\nActiveState=failed\\n';;\n *) touch \"$MOSS_TEST_FAILED_SERVICE/restarted\";;\nesac\n").unwrap();
+    std::fs::set_permissions(manager, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let result = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "reach::tests::a_failed_service_shows_its_code_without_restarting_on_reconnect",
+            "--exact",
+            "--test-threads=1",
+        ])
+        .env(FIXTURE, &dir)
+        .env(
+            "PATH",
+            format!("{}:/usr/bin:/bin", dir.join("install").display()),
+        )
+        .output()
+        .unwrap();
+    std::fs::remove_dir_all(dir).unwrap();
+    assert!(
+        result.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
 }

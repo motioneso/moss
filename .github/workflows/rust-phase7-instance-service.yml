@@ -98,7 +98,10 @@ jobs:
       - name: Build app, server, launcher and native fixture
         run: cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app -p moss-server -p moss-launcher --bins --examples
       - name: Launcher path and service identity tests
-        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-launcher --lib -- --test-threads=1
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-launcher --lib --tests -- --test-threads=1
+      - name: Desktop startup and stop regression tests
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app reach::tests:: -- --test-threads=1
       - name: Start Linux user service manager
         if: runner.os == 'Linux'
         shell: bash
