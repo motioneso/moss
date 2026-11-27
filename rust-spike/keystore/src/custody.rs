@@ -233,14 +233,15 @@ pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CustodyErro
         }
         let mut file = options
             .open(&staging)
-            .map_err(|e| CustodyError::Io(e.to_string()))?;
+            .map_err(|e| CustodyError::Io(format!("open bundle staging file: {e}")))?;
         use std::io::Write;
         file.write_all(bytes)
-            .map_err(|e| CustodyError::Io(e.to_string()))?;
+            .map_err(|e| CustodyError::Io(format!("write bundle staging file: {e}")))?;
         file.sync_all()
-            .map_err(|e| CustodyError::Io(e.to_string()))?;
+            .map_err(|e| CustodyError::Io(format!("sync bundle staging file: {e}")))?;
         drop(file);
-        fs::rename(&staging, path).map_err(|e| CustodyError::Io(e.to_string()))
+        fs::rename(&staging, path)
+            .map_err(|e| CustodyError::Io(format!("replace private file: {e}")))
     })();
     if written.is_err() {
         let _ = fs::remove_file(&staging);
