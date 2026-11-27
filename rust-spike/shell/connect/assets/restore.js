@@ -63,16 +63,7 @@ function restoreScreen(s) {
           restore
         )
       ),
-      el(
-        "div",
-        {},
-        el("p", { class: "jds-eyebrow" }, "This backup"),
-        definition,
-        muted(s.destination),
-        muted(
-          "Your existing Moss stays as it is. Sign in with your restored account after Restore."
-        )
-      )
+      el("div", {}, el("p", { class: "jds-eyebrow" }, "This backup"), definition)
     )
   ];
 }

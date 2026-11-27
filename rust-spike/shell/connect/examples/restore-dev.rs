@@ -167,12 +167,24 @@ async fn main() {
     let install = std::path::absolute(&args[2]).unwrap();
     let port: u16 = args[3].parse().unwrap();
     moss_app::store::private_dir(&data).unwrap();
+    // Match the restored server's HTTPS scheme. A plaintext preview's navigation is
+    // cross-site and correctly refused by Moss's fetch-metadata guard.
+    let origin = format!("https://127.0.0.1:{port}");
+    let tls = data.join("dev-tls");
+    moss_network::tls::local_certificate_with_command(
+        &tls,
+        std::slice::from_ref(&origin),
+        moss_launcher::runtime::command(&install, "openssl"),
+    )
+    .unwrap();
+    let acceptor =
+        moss_network::tls::acceptor(&tls.join("certificate.pem"), &tls.join("key.pem")).unwrap();
     let app = Arc::new(App {
         flow: Mutex::new(Flow::new(&data, &install)),
         install,
         data,
         trace: args[4].clone().into(),
-        origin: format!("http://127.0.0.1:{port}"),
+        origin,
     });
     let html = include_str!("../assets/index.html").replace(
         "<script src=\"/restore.js\"",
@@ -189,5 +201,7 @@ async fn main() {
         .await
         .unwrap();
     println!("restore-dev ready");
-    axum::serve(listener, router).await.unwrap();
+    moss_network::tls::serve(listener, acceptor, router)
+        .await
+        .unwrap();
 }

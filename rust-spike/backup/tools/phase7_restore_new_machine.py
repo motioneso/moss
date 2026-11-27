@@ -164,9 +164,9 @@ class RestoreRunner(Runner):
         self.target_env["MOSS_RESTORE_SERVER_PORT"] = str(target_port)
         app = self.server([self.bin / f"examples/restore-dev{EXE}", self.data, self.install, app_port, trace],
                           self.target_env, self.scratch / "restore-dev.log")
-        wait_http(f"http://127.0.0.1:{app_port}", app)
-        print(f"real Restore dev instance: http://127.0.0.1:{app_port}", flush=True)
-        config = {"origin": f"http://127.0.0.1:{app_port}", "sourceOrigin": origin,
+        wait_http(f"https://127.0.0.1:{app_port}", app)
+        print(f"real Restore dev instance: https://127.0.0.1:{app_port}", flush=True)
+        config = {"origin": f"https://127.0.0.1:{app_port}", "sourceOrigin": origin,
                   "data": str(self.data), "trace": str(trace),
                   "archive": str(archive), "damaged": str(damaged), "partial": str(partial_archive),
                   "words": self.words, "name": name, "email": email, "password": password, "proof": str(Path(self.args.proof).resolve())}
