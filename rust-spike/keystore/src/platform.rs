@@ -333,14 +333,20 @@ mod windows {
         use std::{ffi::OsString, os::windows::ffi::OsStringExt};
         use windows_sys::Win32::{
             System::Com::CoTaskMemFree,
-            UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath},
+            UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath, KF_FLAG_CREATE},
         };
         let mut raw = std::ptr::null_mut();
         // Resolve the actual token's profile, not an environment inherited
-        // from a different account when this process was launched.
+        // from a different account when this process was launched. A fresh
+        // account may not have Local AppData yet; ask Windows to create it.
         // SAFETY: the API writes an allocated, NUL-terminated UTF-16 path.
         let result = unsafe {
-            SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, std::ptr::null_mut(), &mut raw)
+            SHGetKnownFolderPath(
+                &FOLDERID_LocalAppData,
+                KF_FLAG_CREATE as u32,
+                std::ptr::null_mut(),
+                &mut raw,
+            )
         };
         if result < 0 || raw.is_null() {
             if !raw.is_null() {
@@ -348,8 +354,7 @@ mod windows {
                 unsafe { CoTaskMemFree(raw.cast()) };
             }
             return Err(CustodyError::Unavailable(
-                "Windows could not open your account's key store folder. Sign out and in, then try again."
-                    .into(),
+                format!("Windows could not open your account's key store folder (HRESULT {result:#010x}). Sign out and in, then try again."),
             ));
         }
         // SAFETY: successful SHGetKnownFolderPath returns a NUL-terminated
