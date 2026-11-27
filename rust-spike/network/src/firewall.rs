@@ -811,6 +811,10 @@ pub enum State {
     NotAsked,
     Allowed,
     Paused,
+    /// Paused, and Resume cannot work for this record. Sharing must go off, then on.
+    PausedBlocked,
+    /// A record from before ownership tokens. It never deletes a rule.
+    Legacy,
     Disabled,
 }
 
@@ -820,9 +824,20 @@ impl State {
             State::NotAsked => "not_asked",
             State::Allowed => "allowed",
             State::Paused => "paused",
+            State::PausedBlocked => "paused_blocked",
+            State::Legacy => "legacy",
             State::Disabled => "disabled",
         }
     }
+}
+
+/// Whether Resume can work for a paused record, apart from the live check and the port.
+/// The caller checks the port, because only it knows the port the server runs on now.
+fn resumable(record: &Record, program: &Path) -> bool {
+    record.confirmed
+        && record.rule.token.is_some()
+        && !(record.preexisting && !record.mac_disabled)
+        && record.rule.program == program
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -842,6 +857,8 @@ pub enum Refusal {
     /// A record from before ownership tokens. It never deletes, and the owner removes the old rule.
     Legacy,
     ServiceUnavailable,
+    /// A stale record was cleaned up on its own. Nothing was added, so the owner tries again.
+    CleanedUp,
 }
 
 impl Refusal {
@@ -855,6 +872,7 @@ impl Refusal {
             Refusal::NoManager => "no_firewall_manager",
             Refusal::Legacy => "legacy_rule",
             Refusal::ServiceUnavailable => "firewall_service_unavailable",
+            Refusal::CleanedUp => "cleaned_up",
         }
     }
 }
@@ -889,11 +907,14 @@ pub struct Firewall {
 
 impl Firewall {
     pub fn new(folder: &Path, program: PathBuf) -> Self {
-        Self::with_stand_in(
-            folder,
-            program,
-            std::env::var_os(STAND_IN_ENV).map(PathBuf::from),
-        )
+        // The prompt stand-in is a test tool. A release build never honours it, so a stray
+        // setting on a real machine cannot replace the operating system prompt.
+        let stand_in = if cfg!(debug_assertions) {
+            std::env::var_os(STAND_IN_ENV).map(PathBuf::from)
+        } else {
+            None
+        };
+        Self::with_stand_in(folder, program, stand_in)
     }
 
     fn with_stand_in(folder: &Path, program: PathBuf, stand_in: Option<PathBuf>) -> Self {
@@ -1013,10 +1034,25 @@ impl Firewall {
 
     pub fn state(&self) -> State {
         match self.recorded() {
-            Ok(Some(record)) if record.paused => State::Paused,
+            Ok(Some(record)) if record.rule.token.is_none() => State::Legacy,
+            Ok(Some(record)) if record.paused && resumable(&record, &self.program) => State::Paused,
+            Ok(Some(record)) if record.paused => State::PausedBlocked,
             Ok(Some(record)) if record.confirmed && record.mac_disabled => State::Disabled,
             Ok(Some(record)) if record.confirmed && record.rule.token.is_some() => State::Allowed,
             _ => State::NotAsked,
+        }
+    }
+
+    /// Clears a record from before ownership tokens, after the owner removed the old rule by
+    /// hand. This deletes no firewall rule. It only forgets the local record, so the owner can
+    /// turn sharing on again and uninstall without the stale record in the way.
+    pub fn clear_legacy(&self) -> Result<(), Refusal> {
+        match self.recorded()? {
+            Some(record) if record.rule.token.is_none() => {
+                std::fs::remove_file(self.record_path()).map_err(|_| Refusal::Failed)
+            }
+            Some(_) => Err(Refusal::Failed),
+            None => Ok(()),
         }
     }
 
@@ -1068,21 +1104,28 @@ impl Firewall {
             service: Some(format!("moss-{}", self.instance)),
             entry_added: None,
         };
+        rule.check().map_err(|_| Refusal::Failed)?;
+        match self.recorded()? {
+            Some(open) if open.confirmed && open.rule.port == rule.port => return Ok(()),
+            // One owner action authorizes one change. A stale record is cleaned up on its
+            // own, and the owner tries again to add. The two never share one click, so a
+            // retry after a partial failure cannot approve one and refuse the other.
+            Some(_) => {
+                self.close().await?;
+                return Err(Refusal::CleanedUp);
+            }
+            None => {}
+        }
         if this_os() == Os::Mac {
             // The macOS marker is the server path entry. Moss may remove it only when Moss
-            // added it, so the add needs to know whether the entry is already there.
+            // added it, so the add needs to know whether the entry is already there. This is
+            // read after any stale record was cleaned up, because that cleanup can remove
+            // the entry this read would otherwise call preexisting.
             rule.entry_added = match exists(Os::Mac, Linux::Nothing, &rule) {
                 Some(false) => Some(true),
                 Some(true) => Some(false),
                 None => return Err(Refusal::Failed),
             };
-        }
-        rule.check().map_err(|_| Refusal::Failed)?;
-        match self.recorded()? {
-            Some(open) if open.confirmed && open.rule.port == rule.port => return Ok(()),
-            // A different rule, or one that was never confirmed, goes before a new one opens.
-            Some(_) => self.close().await?,
-            None => {}
         }
         // Intent is written before the add, then the add, then the live marker is confirmed.
         // A crash at any step leaves either nothing or a rule the marker can still prove.
@@ -1337,12 +1380,39 @@ fn elevated(stand_in: Option<&Path>, action: Action, rule: &Rule) -> Result<Comm
 }
 
 fn wait(mut command: Command, expected: Option<String>) -> Result<bool, Refusal> {
+    use std::io::Read;
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|_| Refusal::Declined)?;
+    // Both pipes drain while the helper runs. Reading only after it ends would let a helper
+    // that writes a lot fill the pipe and stall until the prompt limit kills it.
+    let drain = |pipe: Option<std::process::ChildStdout>| {
+        let (send, receive) = std::sync::mpsc::channel::<Vec<u8>>();
+        if let Some(mut pipe) = pipe {
+            std::thread::spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = pipe.by_ref().take(1_048_577).read_to_end(&mut bytes);
+                let _ = send.send(bytes);
+            });
+        }
+        receive
+    };
+    let drain_err = |pipe: Option<std::process::ChildStderr>| {
+        let (send, receive) = std::sync::mpsc::channel::<Vec<u8>>();
+        if let Some(mut pipe) = pipe {
+            std::thread::spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = pipe.by_ref().take(1_048_577).read_to_end(&mut bytes);
+                let _ = send.send(bytes);
+            });
+        }
+        receive
+    };
+    let out_receive = drain(child.stdout.take());
+    let err_receive = drain_err(child.stderr.take());
     let started = Instant::now();
     let status = loop {
         match child.try_wait() {
@@ -1358,23 +1428,23 @@ fn wait(mut command: Command, expected: Option<String>) -> Result<bool, Refusal>
             }
         }
     };
+    let out_bytes = out_receive
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap_or_default();
+    let note = String::from_utf8_lossy(
+        &err_receive
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap_or_default(),
+    )
+    .into_owned();
     if status.success() {
         if let Some(expected) = expected {
-            use std::io::Read;
-            let mut text = String::new();
-            if let Some(mut stdout) = child.stdout.take() {
-                let _ = stdout.read_to_string(&mut text);
-            }
+            let text = String::from_utf8_lossy(&out_bytes);
             if !text.lines().any(|line| line == expected) {
                 return Err(Refusal::Stuck);
             }
         }
         return Ok(false);
-    }
-    let mut note = String::new();
-    if let Some(mut err) = child.stderr.take() {
-        use std::io::Read;
-        let _ = err.read_to_string(&mut note);
     }
     match status.code() {
         Some(EXIT_ALREADY) => Ok(true),
@@ -1872,8 +1942,45 @@ mod tests {
             .unwrap();
         assert_eq!(firewall.close().await, Err(Refusal::Legacy));
         assert!(folder.path().join(RECORD_FILE).exists());
-        assert_eq!(firewall.state(), State::NotAsked);
+        assert_eq!(firewall.state(), State::Legacy);
         assert!(!firewall.rule_intact(5198));
+        // The owner who removed the old rule by hand can clear the record. No rule is touched.
+        assert_eq!(firewall.clear_legacy(), Ok(()));
+        assert!(!folder.path().join(RECORD_FILE).exists());
+        assert_eq!(firewall.state(), State::NotAsked);
+        // A live record with a token is never cleared this way.
+        firewall
+            .write_record(&Record {
+                rule: rule(),
+                paused: false,
+                confirmed: true,
+                preexisting: false,
+                mac_disabled: false,
+                added: true,
+            })
+            .unwrap();
+        assert_eq!(firewall.clear_legacy(), Err(Refusal::Failed));
+        assert!(folder.path().join(RECORD_FILE).exists());
+    }
+
+    #[tokio::test]
+    async fn a_paused_record_that_cannot_resume_is_not_offered_resume() {
+        let folder = scratch();
+        let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
+        let mut preexisting = rule();
+        preexisting.manager = Some("ufw".into());
+        firewall
+            .write_record(&Record {
+                rule: preexisting,
+                paused: true,
+                confirmed: true,
+                preexisting: true,
+                mac_disabled: false,
+                added: false,
+            })
+            .unwrap();
+        assert_eq!(firewall.state(), State::PausedBlocked);
+        assert_eq!(firewall.resume(5198).await, Err(Refusal::Failed));
     }
 
     #[tokio::test]
@@ -1991,6 +2098,56 @@ mod tests {
         );
         assert_eq!(firewall.open(5198).await, Err(Refusal::Declined));
         assert!(!folder.path().join(RECORD_FILE).exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_retry_after_a_partial_failure_authorizes_cleanup_only() {
+        let folder = scratch();
+        let seen = folder.path().join("seen.txt");
+        let script = stand_in(
+            &folder,
+            &format!("printf '%s\\n' \"$*\" >> '{}'\nexit 0", seen.display()),
+        );
+        let firewall = Firewall::with_stand_in(
+            folder.path(),
+            std::env::current_exe().unwrap(),
+            Some(script),
+        );
+        let mut stale = rule();
+        stale.manager = Some("ufw".into());
+        firewall
+            .write_record(&Record {
+                rule: stale,
+                paused: false,
+                confirmed: false,
+                preexisting: false,
+                mac_disabled: false,
+                added: true,
+            })
+            .unwrap();
+        // The first retry runs the cleanup alone and adds nothing.
+        assert_eq!(firewall.open(5198).await, Err(Refusal::CleanedUp));
+        assert!(!folder.path().join(RECORD_FILE).exists());
+        let calls = std::fs::read_to_string(&seen).unwrap();
+        assert_eq!(calls.lines().count(), 1, "{calls}");
+        assert!(calls.contains("firewall-rule remove "), "{calls}");
+        assert!(!calls.contains("firewall-rule add "), "{calls}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_helper_that_fills_the_pipe_still_finishes() {
+        // Well over one pipe buffer on both streams. Without draining while waiting, the
+        // helper blocks on write and the wait only ends at the prompt limit.
+        let mut command = Command::new("sh");
+        command.args([
+            "-c",
+            "i=0; while [ $i -lt 4000 ]; do printf 'aaaaaaaaaaaaaaaaaaaa\\n'; printf 'bbbbbbbbbbbbbbbbbbbb\\n' >&2; i=$((i+1)); done; exit 3",
+        ]);
+        let started = Instant::now();
+        assert_eq!(wait(command, None), Err(Refusal::Failed));
+        assert!(started.elapsed() < Duration::from_secs(30), "{started:?}");
     }
 
     #[test]

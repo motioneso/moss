@@ -113,6 +113,11 @@ impl Binder {
             addrs.push(Ipv4Addr::LOCALHOST.into());
             addrs.push(Ipv6Addr::LOCALHOST.into());
         }
+        // An IPv4 wildcard covers every IPv4 address, loopback included, but no IPv6
+        // address at all. Keep the local IPv6 loopback socket in that case.
+        if sharing && self.shared.ip() == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
+            addrs.push(Ipv6Addr::LOCALHOST.into());
+        }
         addrs.dedup();
         for ip in addrs {
             match TcpListener::bind(SocketAddr::new(ip, port)).await {
@@ -327,6 +332,32 @@ async fn rebind(
         .into_iter()
         .map(|l| accept_on(l, tx.clone()))
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn sharing_on_an_ipv4_wildcard_keeps_the_ipv6_loopback() {
+        let binder = Binder {
+            shared: SocketAddr::from(([0, 0, 0, 0], 0)),
+        };
+        let listeners = binder.bind(true).await.unwrap();
+        let addrs: Vec<SocketAddr> = listeners.iter().map(|l| l.local_addr().unwrap()).collect();
+        assert!(
+            addrs
+                .iter()
+                .any(|a| a.ip() == IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            "{addrs:?}"
+        );
+        assert!(
+            addrs
+                .iter()
+                .any(|a| a.ip() == IpAddr::V6(Ipv6Addr::LOCALHOST)),
+            "{addrs:?}"
+        );
+    }
 }
 
 /// Uses the operator's installed OpenSSL. Does not install software or machine trust roots.

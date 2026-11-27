@@ -52,8 +52,12 @@ $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -A
 $user = New-LocalUser -Name $account -Password $password -AccountNeverExpires
 $process = $null
 $ruleArgs = $null
-$server = (Get-Item (Join-Path $install 'moss-server.exe')).FullName
+$server = $null
+$phaseError = $null
+$firewallCleanupFailed = $false
 try {
+    # Inside the try, so a missing server program cannot strand the temporary proof account.
+    $server = (Get-Item (Join-Path $install 'moss-server.exe')).FullName
     Add-LocalGroupMember -Group (Get-LocalGroup -SID 'S-1-5-32-545') -Member $user
     $temp = Join-Path $work 'temp'; New-Item -ItemType Directory -Path $temp -Force | Out-Null
     $data = Join-Path $work 'data'   # the app creates it; the test asserts it starts absent
@@ -127,10 +131,11 @@ try {
         if ($buttons.ExitCode -eq 3) { Write-Warning 'Buttons proof NOT RUN: the web engine never opened its debugging port on this runner' }
         elseif ($buttons.ExitCode -ne 0 -or -not (Select-String -Path $buttonsOut -Pattern 'WINDOWS APP BUTTONS PROOF')) { throw "Buttons proof failed ($($buttons.ExitCode))" }
     }
+} catch {
+    $phaseError = $_
 } finally {
     if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
     Get-Process postgres, moss-server, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
-    $firewallCleanupFailed = $false
     if ($ruleArgs) {
         # Failed phases also remove only a matching live marker, with no private-file access.
         & $server firewall-rule remove @ruleArgs
@@ -139,5 +144,10 @@ try {
     $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
     if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }
     Remove-LocalUser -Name $account
-    if ($firewallCleanupFailed) { throw 'Could not confirm ownership-checked firewall cleanup' }
 }
+# A cleanup failure never hides the phase failure that came before it. Both are reported.
+if ($phaseError -and $firewallCleanupFailed) {
+    throw "Proof phase failed: $($phaseError.Exception.Message) Cleanup also failed: could not confirm ownership-checked firewall cleanup"
+}
+if ($firewallCleanupFailed) { throw 'Could not confirm ownership-checked firewall cleanup' }
+if ($phaseError) { throw $phaseError }
