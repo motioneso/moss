@@ -90,8 +90,14 @@ jobs:
       - name: Archive, ledger and retention unit tests
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p moss-backup --lib -- --test-threads=1
       - name: phase7_backup_engine
+        if: runner.os != 'Windows'
         shell: bash
         run: python rust-spike/backup/tools/phase7_backup_engine.py --scratch "$RUNNER_TEMP/backup-proof"
       - name: Negative controls must each fail their own assertion
+        if: runner.os != 'Windows'
         shell: bash
         run: python rust-spike/backup/tools/backup_negative_controls.py -- --scratch "$RUNNER_TEMP/backup-negative"
+      - name: phase7_backup_engine and negative controls as a standard Windows user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/backup/tools/phase7-backup-windows.ps1 -Repo (Get-Location).Path -Postgres $env:PHASE7_BACKUP_POSTGRES
