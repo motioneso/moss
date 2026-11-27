@@ -120,6 +120,20 @@ test("other modules keep their original gates and every command exists", () => {
     entries.find(({ module }) => module === "meetings").gates,
     "test:rust-meetings test:rust-meetings-oracle test:rust-recording-oracle"
   );
+  for (const [module, gate] of [
+    ["commitments", "test:rust-commitments-live"],
+    ["meals", "test:rust-meals-live"],
+    ["goals", "test:rust-goals-live"],
+    ["wellness", "test:rust-wellness-live"],
+    ["web-research", "test:rust-web-research-live"],
+    ["finance", "test:rust-finance-live"]
+  ]) {
+    assert.equal(
+      entries.find(({ module: m, suite }) => m === module && suite === "server")?.gates,
+      gate,
+      `${module} server entry`
+    );
+  }
 });
 
 test("the CLI emits the JSON consumed by the workflow", () => {

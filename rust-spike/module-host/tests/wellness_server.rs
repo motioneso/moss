@@ -346,6 +346,13 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         (200, Some(true)),
         "owner turns sharing on: {turned_on_body}"
     );
+    assert!(
+        matches!(
+            turned_on_body["firewall"].as_str(),
+            Some("allowed" | "disabled")
+        ),
+        "live firewall rule after turning sharing on: {turned_on_body}"
+    );
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.
     let other = {

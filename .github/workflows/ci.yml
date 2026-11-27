@@ -146,7 +146,7 @@ jobs:
           if grep -qE '^(rust-spike/network/|rust-spike/shell/app/|rust-spike/module-host/src/)' files.txt; then
             touched="$touched calendar commitments finance goals meals notes web-research wellness"
           fi
-          for pair in calendar_server:calendar commitments_server:commitments finance_server:finance goals_server:goals meals_server:meals web_research_server:web-research wellness_server:wellness; do
+          for pair in calendar_server:calendar commitments_server:commitments finance_server:finance finance_plaid_live:finance goals_server:goals meals_server:meals web_research_server:web-research wellness_server:wellness; do
             file=${pair%%:*}; server_module=${pair##*:}
             if grep -q "^rust-spike/module-host/tests/$file\.rs$" files.txt; then
               touched="$touched $server_module"

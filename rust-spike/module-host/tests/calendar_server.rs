@@ -338,6 +338,13 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         (200, Some(true)),
         "owner turns sharing on: {turned_on_body}"
     );
+    assert!(
+        matches!(
+            turned_on_body["firewall"].as_str(),
+            Some("allowed" | "disabled")
+        ),
+        "live firewall rule after turning sharing on: {turned_on_body}"
+    );
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client
             .request(method, format!("{origin}/api/m/calendar{path}"))

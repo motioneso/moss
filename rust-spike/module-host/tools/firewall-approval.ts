@@ -6,7 +6,7 @@
  * Local runs return nothing, so the normal owner prompt still happens.
  */
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export function ciFirewallApproval(target: string): Record<string, string> {
@@ -16,5 +16,6 @@ export function ciFirewallApproval(target: string): Record<string, string> {
   }
   const standIn = join(target, "firewall-approve");
   writeFileSync(standIn, '#!/bin/sh\nexec sudo -n -- "$@"\n', { mode: 0o700 });
+  chmodSync(standIn, 0o700);
   return { MOSS_FIREWALL_STAND_IN: standIn };
 }
