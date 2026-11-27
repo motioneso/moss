@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync("rust-spike/shell/connect/assets/connect.js", "utf8");
+const restoreSource = readFileSync("rust-spike/shell/connect/assets/restore.js", "utf8");
 
 function connectScreen() {
   document.body.innerHTML = '<main id="screen"></main>';
@@ -10,6 +11,7 @@ function connectScreen() {
   Object.assign(window, {
     ipc: { postMessage: (body: string) => messages.push(JSON.parse(body)) }
   });
+  window.eval(restoreSource);
   window.eval(source);
   return { messages };
 }

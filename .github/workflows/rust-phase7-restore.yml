@@ -1,0 +1,139 @@
+name: Rust phase7_restore_new_machine
+on:
+  pull_request:
+    paths:
+      - "rust-spike/backup/**"
+      - "rust-spike/shell/**"
+      - "rust-spike/network/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "rust-spike/bundled-db/**"
+      - "rust-spike/keystore/**"
+      - "rust-spike/portability/**"
+      - "rust-spike/Cargo.toml"
+      - "rust-spike/Cargo.lock"
+      - ".github/workflows/rust-phase7-restore.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_restore_new_machine:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    env:
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+      PYTHONDONTWRITEBYTECODE: "1"
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Keep pinned migration and backfill bytes exact
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Use a shared task browser cache
+        shell: bash
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/restore-browsers" >> "$GITHUB_ENV"
+      - run: pnpm exec playwright install --with-deps chromium
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/phase7-pg/downloads
+          key: phase7-pg-sources-${{ runner.os }}-${{ hashFiles('rust-spike/bundled-db/tools/sources.json') }}
+      - name: Linux build dependencies already declared by the database proof
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bison flex libicu-dev zlib1g-dev libzstd-dev libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev gnome-keyring dbus-x11
+      - name: macOS build dependencies already declared by the database proof
+        if: runner.os == 'macOS'
+        run: |
+          brew list bison flex icu4c zstd >/dev/null || brew install bison flex icu4c zstd
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: Windows source build dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r rust-spike/bundled-db/tools/requirements-ci.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Hash-locked tool install failed' }
+          & C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed bison flex
+          if ($LASTEXITCODE -ne 0) { throw 'Declared parser build dependencies unavailable' }
+      - name: Build pinned sources on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python3 rust-spike/bundled-db/tools/build-pg-bundle.py --scratch "$RUNNER_TEMP/phase7-pg" --out "$RUNNER_TEMP/pg-built"
+      - name: Build pinned sources on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $env:PATH += ';C:\msys64\usr\bin'
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" && python rust-spike/bundled-db/tools/build-pg-bundle.py --scratch `"$env:RUNNER_TEMP\phase7-pg`" --out `"$env:RUNNER_TEMP\pg-built`""
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned database build failed' }
+      - name: Relocate bundle and remove source build trees
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          shutil.move(root / 'pg-built', root / 'postgres relocated')
+          shutil.rmtree(root / 'phase7-pg/build')
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"PHASE7_BACKUP_POSTGRES={root / 'postgres relocated'}\n")
+      - name: Select task-owned Rust paths
+        shell: bash
+        run: |
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/phase7-backup/target" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+      - name: Provision declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
+      - name: Archive, ledger and retention unit tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p moss-backup --lib -- --test-threads=1
+      - name: Build the real desktop, server and restore runner
+        shell: bash
+        run: python -c "import sys; sys.path.insert(0,'rust-spike/backup/tools'); from phase7_restore_new_machine import build; build()"
+      - name: phase7_restore_new_machine on Linux with a private keyring
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dbus-run-session -- bash -e -c '
+            export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+            export HOME="$RUNNER_TEMP/restore-keyring-home"
+            mkdir -p "$HOME/.local/share/keyrings"
+            printf login > "$HOME/.local/share/keyrings/default"
+            printf "fixture-password\n" | gnome-keyring-daemon --unlock --components=secrets
+            python rust-spike/backup/tools/phase7_restore_new_machine.py --no-build --scratch "$RUNNER_TEMP/restore-proof" --proof "$RUNNER_TEMP/restore-screenshots"
+            python rust-spike/backup/tools/restore_negative_controls.py -- --scratch "$RUNNER_TEMP/restore-negative" --proof "$RUNNER_TEMP/restore-negative-screenshots"
+          '
+      - name: phase7_restore_new_machine and controls on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python rust-spike/backup/tools/phase7_restore_new_machine.py --no-build --scratch "$RUNNER_TEMP/restore-proof" --proof "$RUNNER_TEMP/restore-screenshots"
+          python rust-spike/backup/tools/restore_negative_controls.py -- --scratch "$RUNNER_TEMP/restore-negative" --proof "$RUNNER_TEMP/restore-negative-screenshots"
+      - name: phase7_restore_new_machine and controls as a standard Windows user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/backup/tools/phase7-restore-windows.ps1 -Repo (Get-Location).Path -Postgres $env:PHASE7_BACKUP_POSTGRES
+      - name: Real screen proof (no recovery words)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restore-screen-proof-${{ runner.os }}
+          path: ${{ runner.temp }}/restore-screenshots/*.png
+          if-no-files-found: ignore

@@ -37,6 +37,9 @@ function stopRetry() {
 }
 
 const screens = {
+  restore: window.mossRestoreScreens.restore,
+  restoring: window.mossRestoreScreens.restoring,
+  "restore-done": window.mossRestoreScreens.done,
   "first-run": () => [
     heading("Where does your Moss live?"),
     el(

@@ -85,6 +85,7 @@ describe("app-map integrity and truthfulness", () => {
     [
       "../../rust-spike/network/src/web.rs",
       "../../rust-spike/shell/connect/src/reach.rs",
+      "../../rust-spike/backup/src/restore.rs",
       "../../rust-spike/shell/connect/src/main.rs"
     ].flatMap((file) =>
       [...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/"([a-z_]+)"/g)].map(
@@ -128,6 +129,7 @@ describe("app-map integrity and truthfulness", () => {
       "rust-module-detail",
       "rust-sign-in",
       "rust-today",
+      "rust-desktop-restore",
       "rust-desktop-connect",
       "rust-desktop-recovery-key"
     ]);

@@ -290,6 +290,37 @@ fn inspect_drill(args: &[String]) -> Result<Value, String> {
     }))
 }
 
+/// Reads the planted item and attachment after a new-machine restore and real sign-in.
+fn restored(args: &[String]) -> Result<Value, String> {
+    let instance = PathBuf::from(required(args, "--instance")?);
+    let mut client = live(&instance)?;
+    let count: i64 = client
+        .query_one("SELECT count(*) FROM backup_proof.markers", &[])
+        .map_err(db)?
+        .get(0);
+    if count != 1 {
+        return Err("the planted item did not restore".into());
+    }
+    let marker: String = client
+        .query_one("SELECT value FROM backup_proof.markers", &[])
+        .map_err(db)?
+        .get(0);
+    if flag(args, "--marker").is_some_and(|expected| marker != expected) {
+        return Err("the restored item differs from the source item".into());
+    }
+    let row = client
+        .query_one("SELECT path, sha256 FROM backup_proof.attachments", &[])
+        .map_err(db)?;
+    let path: String = row.get(0);
+    let expected: String = row.get(1);
+    let bytes =
+        std::fs::read(moss_backup::safe_join(&instance, &path)?).map_err(|e| e.to_string())?;
+    if sha(&bytes) != expected || flag(args, "--sha256").is_some_and(|source| expected != source) {
+        return Err("the attachment did not restore".into());
+    }
+    Ok(json!({"item": true, "attachment": true}))
+}
+
 /// Pushes `needle` and its common encodings.
 fn encodings(list: &mut Vec<Vec<u8>>, needle: &[u8]) {
     list.push(needle.to_vec());
@@ -428,10 +459,22 @@ fn main() -> ExitCode {
     };
     let result = match command.as_str() {
         "plant" => plant(rest),
+        "restored" => restored(rest),
         "write" => writer(rest),
         "hostile-worker" => hostile_worker(rest),
         "inspect-drill" => inspect_drill(rest),
         "scan" => scan(rest),
+        "forget" => (|| -> Result<Value, String> {
+            let instance = PathBuf::from(required(rest, "--instance")?);
+            let name = instance
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or("missing fixture instance")?;
+            keystore::platform::platform_store()
+                .delete_master(&keystore::platform::service_name(name))
+                .map_err(|_| "cannot remove fixture key")?;
+            Ok(json!({"forgotten": true}))
+        })(),
         "seed-ledger" => seed_ledger(rest),
         "rehash" => rehash(rest),
         "credentials-digest" => credentials_digest(rest),

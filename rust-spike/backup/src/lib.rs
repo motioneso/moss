@@ -6,6 +6,7 @@ pub mod capture;
 pub mod drill;
 pub mod fence;
 pub mod ledger;
+pub mod restore;
 pub mod retention;
 
 use std::path::{Path, PathBuf};

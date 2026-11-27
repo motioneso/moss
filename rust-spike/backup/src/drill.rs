@@ -122,11 +122,32 @@ fn drill(
     check_credentials(header.key_bundle(), &master)?;
     let mut reader = ArchiveReader::new(input, &header, &key);
 
+    materialize(
+        &mut reader,
+        bundle,
+        &entry.id,
+        &folder.join("cluster"),
+        &folder.join("files"),
+        pause,
+        |_| Ok(()),
+    )
+}
+
+/// Shared database/file restore and manifest checks. Roles stay unable to log in until
+/// the caller's final check succeeds. The cluster is always stopped before returning.
+pub(crate) fn materialize<R: Read>(
+    reader: &mut ArchiveReader<R>,
+    bundle: &Bundle,
+    backup_id: &str,
+    cluster_root: &Path,
+    files_root: &Path,
+    pause: Option<&Path>,
+    finish: impl FnOnce(&mut postgres::Client) -> Result<(), String>,
+) -> Result<Report, String> {
+    let folder = cluster_root.parent().ok_or("missing staging parent")?;
     crate::create_private_dir(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    let files_root = folder.join("files");
-    crate::create_private_dir(&files_root).map_err(|e| format!("{}: {e}", files_root.display()))?;
-    let layout =
-        Layout::create(&folder.join("cluster")).map_err(|e| format!("scratch cluster: {e}"))?;
+    crate::create_private_dir(files_root).map_err(|e| format!("{}: {e}", files_root.display()))?;
+    let layout = Layout::create(cluster_root).map_err(|e| format!("scratch cluster: {e}"))?;
     let lock = cluster::lock(&layout)?;
     cluster::initialize(&layout, bundle)?;
     let listen = if cfg!(unix) {
@@ -187,7 +208,7 @@ fn drill(
         let (kind, name) = reader.next_entry().map_err(read_error)?;
         match kind {
             archive::ENTRY_FILE => {
-                let target = crate::safe_join(&files_root, &name)?;
+                let target = crate::safe_join(files_root, &name)?;
                 if restored.contains_key(&name) {
                     return Err(format!("the archive holds {name} twice"));
                 }
@@ -218,7 +239,7 @@ fn drill(
         return Err("the archive continues after its manifest".into());
     }
 
-    if manifest["backupId"] != entry.id.as_str() {
+    if manifest["backupId"] != backup_id {
         return Err("the manifest names a different backup".into());
     }
     if manifest["rolesSha256"] != hex::encode(Sha256::digest(&roles_text)).as_str() {
@@ -270,6 +291,7 @@ fn drill(
         });
         crate::test_pause(marker, &body.to_string())?;
     }
+    finish(&mut client)?;
     drop(client);
     if let Some(mut running) = scratch.running.take() {
         cluster::stop(&scratch.layout, &mut running, Duration::from_secs(30))?;
@@ -284,7 +306,7 @@ fn drill(
 
 /// The archive's key bundle must open with this instance's master key and hold every
 /// database credential.
-fn check_credentials(bundle: &Value, master: &custody::MasterKey) -> Result<(), String> {
+pub(crate) fn check_credentials(bundle: &Value, master: &custody::MasterKey) -> Result<(), String> {
     let payload = custody::unwrap_with_master(bundle, master).map_err(|e| e.to_string())?;
     let value: Value =
         serde_json::from_slice(&payload).map_err(|_| "the wrapped credentials are damaged")?;

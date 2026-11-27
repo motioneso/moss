@@ -122,3 +122,41 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* M5 new-computer restore: layout only, using the authored controls and type. */
+.restore-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--space-7);
+}
+.restore-form {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+}
+.restore-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.restore-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
+}
+.restore-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.restore-split > div:last-child {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .restore-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
