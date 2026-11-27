@@ -4,6 +4,7 @@
 pub mod archive;
 pub mod capture;
 pub mod drill;
+pub mod docker;
 pub mod fence;
 pub mod ledger;
 pub mod retention;

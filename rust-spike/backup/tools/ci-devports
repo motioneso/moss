@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""CI-only implementation of devports claim/release; never used on the shared developer box."""
+import fcntl
+import json
+import os
+from pathlib import Path
+import socket
+import sys
+
+if os.environ.get("CI") != "true":
+    raise SystemExit("Use the shared host's devports command outside CI")
+state = Path(os.environ["RUNNER_TEMP"]) / "docker-export-ports.json"
+with state.open("a+") as file:
+    fcntl.flock(file, fcntl.LOCK_EX)
+    file.seek(0)
+    leases = json.loads(file.read() or "{}")
+    operation, name = sys.argv[1:]
+    if operation == "claim":
+        for port in range(5180, 5300):
+            if str(port) in leases:
+                continue
+            with socket.socket() as probe:
+                try:
+                    probe.bind(("127.0.0.1", port))
+                except OSError:
+                    continue
+            leases[str(port)] = name
+            print(port)
+            break
+        else:
+            raise SystemExit("No devports port available")
+    elif operation == "release":
+        leases.pop(name, None)
+    else:
+        raise SystemExit("Only claim/release supported")
+    file.seek(0)
+    file.truncate()
+    json.dump(leases, file)

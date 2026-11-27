@@ -157,3 +157,12 @@ bash scripts/backup-full.sh
 # Or with overrides:
 JARVIS_PGDATABASE=jarv1s JARVIS_BACKUP_DIR=/mnt/backup bash scripts/backup-full.sh
 ```
+
+## Preparing a move from Docker to Rust
+
+The Linux-host Rust exporter is separate from the legacy daily backup. It disables source
+container restarts, stops the app and workers, dumps through the database container, and writes
+an encrypted move archive with a fresh recovery key and a source fence receipt. See
+[Docker move exporter](../../rust-spike/backup/DOCKER-EXPORT.md) for the explicit source/mount plan,
+credential handling, failure recovery and throwaway-stack proof. Import and activation are later
+parts; creating this archive does not activate another installation.

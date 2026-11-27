@@ -11,6 +11,7 @@
     "test:rust-phase7-pg-bundle": "python3 rust-spike/bundled-db/tools/phase7_pg_bundle.py",
     "test:rust-phase7-instance-service": "python3 rust-spike/shell/tools/phase7_instance_service.py",
     "test:rust-phase7-key-custody": "python3 rust-spike/keystore/tools/phase7_key_custody.py",
+    "test:rust-phase7-docker-export": "python3 rust-spike/backup/tools/phase7_docker_export.py",
     "test:rust-phase7-backup": "python3 rust-spike/backup/tools/phase7_backup_engine.py",
     "test:rust-app-runtime-routing": "cargo test --manifest-path rust-spike/shell/Cargo.toml -p moss-app runtime_proof::staged_runtime_provisions_starts_and_stops_local_server -- --ignored --nocapture",
     "test:rust-linux-runtime": "python3 rust-spike/shell/tools/proof_linux_runtime.py",
