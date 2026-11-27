@@ -141,13 +141,17 @@ try {
         & $server firewall-rule remove @ruleArgs
         $firewallCleanupFailed = $LASTEXITCODE -ne 0
     }
-    $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
-    if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }
-    Remove-LocalUser -Name $account
+    try {
+        $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
+        if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }
+        Remove-LocalUser -Name $account
+    } catch {
+        $firewallCleanupFailed = $true
+    }
 }
 # A cleanup failure never hides the phase failure that came before it. Both are reported.
 if ($phaseError -and $firewallCleanupFailed) {
-    throw "Proof phase failed: $($phaseError.Exception.Message) Cleanup also failed: could not confirm ownership-checked firewall cleanup"
+    throw "Proof phase failed: $($phaseError.Exception.Message) Cleanup also failed: could not confirm cleanup finished"
 }
-if ($firewallCleanupFailed) { throw 'Could not confirm ownership-checked firewall cleanup' }
+if ($firewallCleanupFailed) { throw 'Could not confirm cleanup finished' }
 if ($phaseError) { throw $phaseError }

@@ -219,8 +219,8 @@ async fn windows_server_answers_on_the_network_address_only_when_sharing_is_on()
             firewall.rule_intact(port),
             "sharing on has a live owned marker"
         );
-        // Confirm the record still names the same rule after the live check, so a record
-        // changed between the parent's check and this one cannot pass on the old check.
+        // Read the record back after the live check and confirm it still names the
+        // same rule as confirmed, as the round-nine follow-up asked.
         let record: serde_json::Value =
             serde_json::from_slice(&moss_network::config::private_read(&record_path).unwrap())
                 .unwrap();

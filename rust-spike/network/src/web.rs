@@ -455,7 +455,7 @@ async fn network_status(
         "sharing":n.policy.sharing(),
         "origins":config.origins,
         "fingerprint":fingerprint,
-        "firewall":n.control.as_ref().map(|c| c.firewall.state().word()),
+        "firewall":n.control.as_ref().map(|c| c.firewall.state(c.port).word()),
         "firewall_settings":firewall_settings,
     })))
 }
@@ -522,10 +522,10 @@ async fn clear_legacy(
         return Err(ApiError::http(500, "Sharing could not change. Try again."));
     };
     match control.firewall.clear_legacy() {
-        Ok(()) => Ok(
-            Json(json!({"sharing":false, "firewall":control.firewall.state().word()}))
-                .into_response(),
-        ),
+        Ok(()) => Ok(Json(
+            json!({"sharing":false, "firewall":control.firewall.state(control.port).word()}),
+        )
+        .into_response()),
         Err(refusal) => Ok(firewall_refused(refusal, false)),
     }
 }
@@ -555,7 +555,8 @@ async fn set_sharing(
     };
     let result = control.apply(body.sharing, previous, &n.policy, save).await;
     let reply = |on: bool| {
-        Json(json!({"sharing":on, "firewall":control.firewall.state().word()})).into_response()
+        Json(json!({"sharing":on, "firewall":control.firewall.state(control.port).word()}))
+            .into_response()
     };
     match result {
         Ok(()) => {

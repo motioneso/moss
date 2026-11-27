@@ -1032,10 +1032,18 @@ impl Firewall {
         self.write_record(&record)
     }
 
-    pub fn state(&self) -> State {
+    /// The state for the port the server runs on now. A paused record whose rule was for
+    /// another port cannot resume, so it reports blocked instead of offering Resume.
+    pub fn state(&self, port: u16) -> State {
         match self.recorded() {
             Ok(Some(record)) if record.rule.token.is_none() => State::Legacy,
-            Ok(Some(record)) if record.paused && resumable(&record, &self.program) => State::Paused,
+            Ok(Some(record))
+                if record.paused
+                    && resumable(&record, &self.program)
+                    && record.rule.port == port =>
+            {
+                State::Paused
+            }
             Ok(Some(record)) if record.paused => State::PausedBlocked,
             Ok(Some(record)) if record.confirmed && record.mac_disabled => State::Disabled,
             Ok(Some(record)) if record.confirmed && record.rule.token.is_some() => State::Allowed,
@@ -1106,7 +1114,17 @@ impl Firewall {
         };
         rule.check().map_err(|_| Refusal::Failed)?;
         match self.recorded()? {
-            Some(open) if open.confirmed && open.rule.port == rule.port => return Ok(()),
+            // Only a record Resume could trust may skip the add. A legacy record, a rule
+            // that was already there before Moss, or another program's rule never turns
+            // sharing on through this shortcut.
+            Some(open)
+                if open.confirmed
+                    && !open.paused
+                    && open.rule.port == rule.port
+                    && resumable(&open, &self.program) =>
+            {
+                return Ok(());
+            }
             // One owner action authorizes one change. A stale record is cleaned up on its
             // own, and the owner tries again to add. The two never share one click, so a
             // retry after a partial failure cannot approve one and refuse the other.
@@ -1648,7 +1666,7 @@ mod tests {
         std::fs::write(folder.path().join(RECORD_FILE), b"not json").unwrap();
         assert!(firewall.close().await.is_err());
         assert!(folder.path().join(RECORD_FILE).exists());
-        assert_eq!(firewall.state(), State::NotAsked);
+        assert_eq!(firewall.state(5198), State::NotAsked);
     }
 
     #[tokio::test]
@@ -1664,7 +1682,7 @@ mod tests {
             added: false,
         };
         firewall.write_record(&record).unwrap();
-        assert_eq!(firewall.state(), State::NotAsked);
+        assert_eq!(firewall.state(5198), State::NotAsked);
     }
 
     #[tokio::test]
@@ -1942,12 +1960,12 @@ mod tests {
             .unwrap();
         assert_eq!(firewall.close().await, Err(Refusal::Legacy));
         assert!(folder.path().join(RECORD_FILE).exists());
-        assert_eq!(firewall.state(), State::Legacy);
+        assert_eq!(firewall.state(5198), State::Legacy);
         assert!(!firewall.rule_intact(5198));
         // The owner who removed the old rule by hand can clear the record. No rule is touched.
         assert_eq!(firewall.clear_legacy(), Ok(()));
         assert!(!folder.path().join(RECORD_FILE).exists());
-        assert_eq!(firewall.state(), State::NotAsked);
+        assert_eq!(firewall.state(5198), State::NotAsked);
         // A live record with a token is never cleared this way.
         firewall
             .write_record(&Record {
@@ -1961,6 +1979,76 @@ mod tests {
             .unwrap();
         assert_eq!(firewall.clear_legacy(), Err(Refusal::Failed));
         assert!(folder.path().join(RECORD_FILE).exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn turn_on_never_skips_the_check_for_a_legacy_or_blocked_record() {
+        // A legacy record, confirmed on this port, must not turn sharing on directly.
+        let folder = scratch();
+        let script = stand_in(&folder, "exit 0");
+        let firewall = Firewall::with_stand_in(
+            folder.path(),
+            std::env::current_exe().unwrap(),
+            Some(script.clone()),
+        );
+        let mut legacy = rule();
+        legacy.token = None;
+        firewall
+            .write_record(&Record {
+                rule: legacy,
+                paused: false,
+                confirmed: true,
+                preexisting: false,
+                mac_disabled: false,
+                added: true,
+            })
+            .unwrap();
+        assert_eq!(firewall.open(5198).await, Err(Refusal::Legacy));
+        assert!(folder.path().join(RECORD_FILE).exists());
+
+        // A blocked paused record is cleaned up alone, never turned on through the
+        // confirmed-record shortcut. Its rule was already there before Moss, so the
+        // cleanup needs no helper call and the record goes.
+        let folder = scratch();
+        let firewall = Firewall::with_stand_in(
+            folder.path(),
+            std::env::current_exe().unwrap(),
+            Some(script),
+        );
+        let mut blocked = rule();
+        blocked.manager = Some("ufw".into());
+        firewall
+            .write_record(&Record {
+                rule: blocked,
+                paused: true,
+                confirmed: true,
+                preexisting: true,
+                mac_disabled: false,
+                added: false,
+            })
+            .unwrap();
+        assert_eq!(firewall.state(5198), State::PausedBlocked);
+        assert_eq!(firewall.open(5198).await, Err(Refusal::CleanedUp));
+        assert!(!folder.path().join(RECORD_FILE).exists());
+    }
+
+    #[tokio::test]
+    async fn a_paused_record_for_another_port_is_blocked_not_resumable() {
+        let folder = scratch();
+        let firewall = Firewall::new(folder.path(), std::env::current_exe().unwrap());
+        firewall
+            .write_record(&Record {
+                rule: rule(),
+                paused: true,
+                confirmed: true,
+                preexisting: false,
+                mac_disabled: false,
+                added: true,
+            })
+            .unwrap();
+        assert_eq!(firewall.state(6000), State::PausedBlocked);
+        assert_eq!(firewall.state(5198), State::Paused);
     }
 
     #[tokio::test]
@@ -1979,7 +2067,7 @@ mod tests {
                 added: false,
             })
             .unwrap();
-        assert_eq!(firewall.state(), State::PausedBlocked);
+        assert_eq!(firewall.state(5198), State::PausedBlocked);
         assert_eq!(firewall.resume(5198).await, Err(Refusal::Failed));
     }
 
@@ -2039,7 +2127,7 @@ mod tests {
         // The helper was handed the marker name for this instance.
         let handed = std::fs::read_to_string(&seen).unwrap();
         assert!(handed.contains("add") && handed.contains("moss-"));
-        assert_eq!(firewall.state(), State::NotAsked);
+        assert_eq!(firewall.state(5198), State::NotAsked);
     }
 
     #[cfg(unix)]
@@ -2069,7 +2157,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(firewall.startup(true, 6000), Ok(false));
-        assert_eq!(firewall.state(), State::Paused);
+        assert_eq!(firewall.state(5198), State::Paused);
         assert!(
             !seen.exists(),
             "startup must never invoke authorization, including a stand-in"

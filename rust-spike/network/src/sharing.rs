@@ -35,7 +35,7 @@ impl Control {
         save: impl Fn(bool) -> Result<(), ()>,
     ) -> Result<(), Failure> {
         if on {
-            if self.firewall.state() == State::Paused {
+            if self.firewall.state(self.port) == State::Paused {
                 self.firewall
                     .resume(self.port)
                     .await
