@@ -177,11 +177,30 @@ fn capture<W: Write>(
 ) -> Result<Value, String> {
     let _fence = fence::exclusive(instance).map_err(|e| format!("write fence: {e}"))?;
     let mut client = endpoint.connect(SUPERUSER, password, APP_DATABASE)?;
-    let mut fenced = client.transaction().map_err(|e| cluster::db_error(&e))?;
+    let tables: Vec<String> = client
+        .query(TABLES, &[])
+        .map_err(|e| cluster::db_error(&e))?
+        .iter()
+        .map(|row| {
+            format!(
+                "{}.{}",
+                quote_ident(&row.get::<_, String>(0)),
+                quote_ident(&row.get::<_, String>(1))
+            )
+        })
+        .collect();
+
+    // One snapshot, taken after the locks, serves the counts and pg_dump. A table created
+    // meanwhile is then in both or in neither.
+
+    let mut fenced = client
+        .build_transaction()
+        .isolation_level(postgres::IsolationLevel::RepeatableRead)
+        .start()
+        .map_err(|e| cluster::db_error(&e))?;
     fenced
         .batch_execute("SET LOCAL lock_timeout = '30s'")
         .map_err(|e| cluster::db_error(&e))?;
-    let (tables, _) = row_counts(&mut fenced)?;
     if !tables.is_empty() {
         fenced
             .batch_execute(&format!("LOCK TABLE {} IN SHARE MODE", tables.join(", ")))
@@ -192,6 +211,10 @@ fn capture<W: Write>(
                 )
             })?;
     }
+    let snapshot: String = fenced
+        .query_one("SELECT pg_export_snapshot()", &[])
+        .map_err(|e| cluster::db_error(&e))?
+        .get(0);
     let (_, counts) = row_counts(&mut fenced)?;
     let owner: String = fenced
         .query_one(
@@ -222,7 +245,7 @@ fn capture<W: Write>(
             role: SUPERUSER,
             password,
         };
-        dump::dump(&target, APP_DATABASE, &mut content)?;
+        dump::dump_at(&target, APP_DATABASE, Some(&snapshot), &mut content)?;
         content.flush().map_err(|e| e.to_string())?;
         (content.bytes, content.digest())
     };
@@ -242,8 +265,10 @@ fn capture<W: Write>(
             std::fs::File::open(&file.path).map_err(|e| format!("{}: {e}", file.name))?;
         let (size, sha256) = {
             let mut content = writer.content();
-            archive::copy_hashed(&mut source, &mut content)
-                .map_err(|e| format!("{}: {e}", file.name))?
+            let hashed = archive::copy_hashed(&mut source, &mut content)
+                .map_err(|e| format!("{}: {e}", file.name))?;
+            content.flush().map_err(|e| format!("{}: {e}", file.name))?;
+            hashed
         };
         writer.end_entry().map_err(|e| e.to_string())?;
         listed.push(json!({ "path": file.name, "size": size, "sha256": sha256 }));

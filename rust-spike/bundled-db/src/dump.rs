@@ -59,9 +59,23 @@ impl Target<'_> {
 /// Writes a custom-format dump of `database` to `out`, including the statements that create the
 /// database itself. Returns the bytes written.
 pub fn dump(target: &Target, database: &str, out: &mut dyn Write) -> Result<u64, String> {
+    dump_at(target, database, None, out)
+}
+
+/// Like [`dump`], but reads the snapshot another open transaction exported with
+/// `pg_export_snapshot()`, so the dump sees exactly what that transaction sees.
+pub fn dump_at(
+    target: &Target,
+    database: &str,
+    snapshot: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<u64, String> {
     let (mut command, _pass) = target.command("pg_dump", database)?;
+    command.args(["--format=custom", "--create", "--lock-wait-timeout=60000"]);
+    if let Some(snapshot) = snapshot {
+        command.arg(format!("--snapshot={snapshot}"));
+    }
     command
-        .args(["--format=custom", "--create", "--lock-wait-timeout=60000"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
