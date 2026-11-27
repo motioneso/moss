@@ -91,7 +91,7 @@ try {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
   const session = await page.evaluate(async () => {
-    const response = await fetch("/api/auth/get-session");
+    const response = await fetch("/api/me");
     return { status: response.status, session: await response.json() };
   });
   assert.equal(session.status, 200, "restored server accepts the real sign-in");
