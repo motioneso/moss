@@ -233,10 +233,10 @@ class Runner:
         offset = len(data) // 2
         data[offset] ^= 0x01
         path.write_bytes(bytes(data))
-        refused = self.verify(backup_b["id"], ok=False)
+        refused = self.verify(backup_b["id"], ok=None)
         expect("ledger" in refused["error"], "a flipped byte fails verify")
         self.json("backup-fixture", "rehash", "--instance", self.instance, "--id", backup_b["id"])
-        refused = self.verify(backup_b["id"], ok=False)
+        refused = self.verify(backup_b["id"], ok=None)
         expect(not refused["ok"], "a flipped byte fails verify even when its hash matches the ledger")
         expect(self.ledger()[backup_b["id"]]["verified"] is False, "the damaged backup stays unverified")
 
@@ -303,11 +303,23 @@ class Runner:
         print("phase7_backup_engine PASS", flush=True)
 
 
+def build():
+    command = ["cargo", "+1.95.0", "build", "--locked", "--manifest-path", str(REPO / "rust-spike" / "Cargo.toml"),
+               "-p", "moss-backup", "-p", "bundled-db", "-p", "keystore", "--bins"]
+    print("+", " ".join(command), flush=True)
+    if subprocess.run(command).returncode != 0:
+        fail("the backup tools did not build")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    default_bin = os.path.join(os.environ.get("CARGO_TARGET_DIR", str(REPO / "rust-spike" / "target")), "debug")
-    parser.add_argument("--bin", default=os.environ.get("PHASE7_BACKUP_BIN", default_bin))
-    parser.add_argument("--postgres", default=os.environ.get("PHASE7_BACKUP_POSTGRES"))
+    target = Path(os.environ.get("CARGO_TARGET_DIR", str(REPO / "rust-spike" / "target")))
+    parser.add_argument("--bin", default=os.environ.get("PHASE7_BACKUP_BIN", str(target / "debug")))
+    # A lane keeps its pinned bundle beside its target folder.
+    beside = target.parent / "postgres relocated"
+    parser.add_argument("--postgres", default=os.environ.get("PHASE7_BACKUP_POSTGRES",
+                                                             str(beside) if beside.is_dir() else None))
+    parser.add_argument("--no-build", action="store_true", help="use the tools already in --bin")
     parser.add_argument("--repo", default=str(REPO))
     parser.add_argument("--scratch", default=os.environ.get("PHASE7_BACKUP_SCRATCH",
                                                             os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"),
@@ -315,6 +327,8 @@ def main():
     args = parser.parse_args()
     if not args.postgres:
         fail("--postgres (or PHASE7_BACKUP_POSTGRES) must name the pinned database bundle")
+    if not args.no_build:
+        build()
     runner = Runner(args)
     try:
         runner.main()
