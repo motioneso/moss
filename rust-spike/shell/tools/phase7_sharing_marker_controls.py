@@ -14,6 +14,7 @@ SOURCE = ROOT / 'rust-spike/network/src/firewall.rs'
 COMMAND = ['cargo', '+1.95.0', 'test', '--locked', '--manifest-path',
            'rust-spike/network/Cargo.toml', '--lib']
 CONTROLS = [
+    ('program_for_action', 'true', 'old_version_cleanup_is_limited_to_the_same_canonical_versions_root'),
     ('windows_lookup', 'Ok(true)', 'windows_marker_rejects_near_matches_and_ambiguous_lists'),
     ('ufw_marker', 'true', 'marker_checks_accept_ours_and_refuse_foreign_rules'),
     ('mac_marker', 'true', 'marker_checks_accept_ours_and_refuse_foreign_rules'),

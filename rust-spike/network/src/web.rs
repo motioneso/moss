@@ -473,6 +473,7 @@ struct Sharing {
 fn firewall_refused(refusal: Refusal, sharing: bool) -> Response {
     let message = match refusal {
         Refusal::Declined => "The firewall did not allow Moss.",
+        Refusal::Unknown => "Could not confirm the firewall change. Try again.",
         Refusal::Failed | Refusal::Stuck => "The firewall did not take the change.",
         Refusal::Foreign => {
             "The firewall already has a rule with Moss's name that Moss did not create."

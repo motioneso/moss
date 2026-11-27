@@ -831,6 +831,8 @@ pub enum Refusal {
     Declined,
     /// The prompt was approved but the firewall did not take the change.
     Failed,
+    /// The helper ended without a known outcome. Keep intent so cleanup can be retried.
+    Unknown,
     /// The change failed and the rule may still be open, so its record is kept.
     Stuck,
     /// A rule with Moss's name exists that Moss did not create. It is left alone.
@@ -847,6 +849,7 @@ impl Refusal {
         match self {
             Refusal::Declined => "declined",
             Refusal::Failed => "failed",
+            Refusal::Unknown => "unknown",
             Refusal::Stuck => "stuck",
             Refusal::Foreign => "foreign_rule",
             Refusal::NoManager => "no_firewall_manager",
@@ -1225,6 +1228,60 @@ fn helper_args(action: Action, rule: &Rule) -> Vec<String> {
     args
 }
 
+/// Only removal may name a retained moss-server from this installation's versions root.
+/// On macOS that canonical path is the marker: it must also be the saved added-entry path
+/// and appear exactly in the live ALF list (checked by `owned`). A symlink or `..` is not
+/// that marker. Windows still requires the live token, port and saved program-path match.
+fn program_for_action(action: Action, program: &Path, current: &Path) -> bool {
+    if program == current {
+        return true;
+    }
+    if action != Action::Remove
+        || program
+            .components()
+            .any(|part| part == std::path::Component::ParentDir)
+    {
+        return false;
+    }
+    let (Ok(saved), Ok(current)) = (program.canonicalize(), current.canonicalize()) else {
+        return false;
+    };
+    if !cfg!(windows) && saved != program {
+        return false;
+    }
+    let name = format!("moss-server{}", std::env::consts::EXE_SUFFIX);
+    if saved.file_name() != Some(std::ffi::OsStr::new(&name))
+        || current.file_name() != saved.file_name()
+    {
+        return false;
+    }
+    let (Some(saved_version), Some(current_version)) = (saved.parent(), current.parent()) else {
+        return false;
+    };
+    let Some(versions) = current_version.parent() else {
+        return false;
+    };
+    if versions.file_name() != Some(std::ffi::OsStr::new("versions"))
+        || saved_version.parent() != Some(versions)
+    {
+        return false;
+    }
+    [saved_version, current_version].iter().all(|folder| {
+        folder
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|version| {
+                !version.is_empty()
+                    && version.len() <= 100
+                    && version != "."
+                    && version != ".."
+                    && version
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
+            })
+    })
+}
+
 fn quote_windows(value: &str) -> String {
     format!("\"{}\"", value.replace('"', "\\\""))
 }
@@ -1333,9 +1390,11 @@ fn wait(mut command: Command, expected: Option<String>) -> Result<bool, Refusal>
             Some((_, tail)) if tail.starts_with("6)") => Err(Refusal::Foreign),
             Some((_, tail)) if tail.starts_with("7)") => Err(Refusal::NoManager),
             Some((_, tail)) if tail.starts_with("8)") => Err(Refusal::ServiceUnavailable),
-            _ => Err(Refusal::Failed),
+            Some((_, tail)) if tail.starts_with("3)") => Err(Refusal::Failed),
+            _ => Err(Refusal::Unknown),
         },
-        _ => Err(Refusal::Declined),
+        Some(126 | 127) => Err(Refusal::Declined),
+        _ => Err(Refusal::Unknown),
     }
 }
 
@@ -1354,6 +1413,40 @@ mod tests {
             service: Some("moss-default".into()),
             entry_added: None,
         }
+    }
+
+    #[test]
+    fn old_version_cleanup_is_limited_to_the_same_canonical_versions_root() {
+        let root = std::env::temp_dir().join(format!("moss-version-rule-{}", new_token()));
+        let name = format!("moss-server{}", std::env::consts::EXE_SUFFIX);
+        for version in ["7.0.0", "7.1.0"] {
+            let folder = root.join("versions").join(version);
+            std::fs::create_dir_all(&folder).unwrap();
+            std::fs::write(folder.join(&name), b"fixture").unwrap();
+        }
+        let root = root.canonicalize().unwrap();
+        let old = root.join("versions/7.0.0").join(&name);
+        let current = root.join("versions/7.1.0").join(&name);
+        assert!(program_for_action(Action::Remove, &old, &current));
+        assert!(!program_for_action(Action::Add, &old, &current));
+        assert!(!program_for_action(Action::Check, &old, &current));
+        assert!(!program_for_action(
+            Action::Remove,
+            &root.join("versions/7.1.0/../7.0.0").join(&name),
+            &current
+        ));
+        let foreign = root.join("other/versions/7.0.0").join(&name);
+        std::fs::create_dir_all(foreign.parent().unwrap()).unwrap();
+        std::fs::write(&foreign, b"foreign").unwrap();
+        assert!(!program_for_action(Action::Remove, &foreign, &current));
+        #[cfg(unix)]
+        {
+            let link = root.join("versions/7.2.0").join(&name);
+            std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+            std::os::unix::fs::symlink(&old, &link).unwrap();
+            assert!(!program_for_action(Action::Remove, &link, &current));
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1953,9 +2046,13 @@ pub fn command(args: &[String]) -> i32 {
     let (Some(name), Some(port), Some(program)) = (name, port, program) else {
         return 2;
     };
-    // Only this program may be named, so the elevated helper opens nothing else.
-    if std::env::current_exe().ok().as_deref() != Some(program.as_path()) {
-        return 2;
+    // Opening/checking remains bound to this executable. Cleanup may target a retained
+    // version in this installation only; the live ownership marker is still mandatory.
+    let Ok(current) = std::env::current_exe() else {
+        return EXIT_FAILED;
+    };
+    if !program_for_action(action, &program, &current) {
+        return EXIT_FAILED;
     }
     let rule = Rule {
         name,

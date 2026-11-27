@@ -5,6 +5,7 @@ const say = (message) => {
   status.textContent = message;
 };
 const firewallReasons = {
+  unknown: "Could not confirm the firewall change. Try again.",
   firewall_service_unavailable: "Reinstall Moss or restart the firewall.",
   foreign_rule: "Rename or remove the other rule in your firewall settings, then try again.",
   no_firewall_manager: "Install and turn on ufw or firewalld, then try again.",
