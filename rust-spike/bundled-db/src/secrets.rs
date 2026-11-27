@@ -114,4 +114,93 @@ mod custody_tests {
         assert!(!layout.secrets.join(crate::SUPERUSER).exists());
         drop(layout);
     }
+    #[cfg(windows)]
+    #[test]
+    fn dpapi_migration_works_while_another_process_pins_the_database_layout() {
+        use std::process::{Command, Stdio};
+        let scratch = tempfile::tempdir().unwrap();
+        let instance = scratch.path().join("instance");
+        std::fs::create_dir(&instance).unwrap();
+        let layout = Layout::create(&instance.join("database")).unwrap();
+        let secret = password(&layout, crate::SUPERUSER).unwrap();
+        drop(layout);
+        std::fs::write(instance.join("credentials.json"), b"{}").unwrap();
+        let ready = scratch.path().join("ready");
+        let stop = scratch.path().join("stop");
+        let child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--ignored",
+                "--exact",
+                "secrets::custody_tests::hold_windows_layout",
+                "--test-threads=1",
+            ])
+            .env("MOSS_CUSTODY_PIN_ROOT", instance.join("database"))
+            .env("MOSS_CUSTODY_PIN_READY", &ready)
+            .env("MOSS_CUSTODY_PIN_STOP", &stop)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        struct Child(std::process::Child, std::path::PathBuf);
+        impl Drop for Child {
+            fn drop(&mut self) {
+                let _ = std::fs::write(&self.1, b"stop");
+                let _ = self.0.wait();
+            }
+        }
+        let mut child = Child(child, stop);
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        while !ready.exists() {
+            assert!(
+                child.0.try_wait().unwrap().is_none(),
+                "pin holder exited early"
+            );
+            assert!(
+                std::time::Instant::now() < until,
+                "pin holder did not start"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let mut store = keystore::platform::platform_store();
+        let service = keystore::platform::service_name("instance");
+        let result = (|| {
+            let prepared = prepare_instance(&instance, store.as_mut(), &service)?;
+            prepared.commit_with(store.as_mut(), &service)?;
+            Ok::<(), keystore::custody::CustodyError>(())
+        })();
+        if result.is_ok() {
+            let layout = Layout::open(&instance.join("database")).unwrap();
+            assert!(existing(&layout, crate::SUPERUSER).unwrap().expose() == secret.expose());
+            assert!(!layout.secrets.join(crate::SUPERUSER).exists());
+            drop(layout);
+        }
+        store.delete_master(&service).unwrap();
+        assert!(
+            result.is_ok(),
+            "DPAPI migration failed while database ancestors were pinned: {:?}",
+            result.err()
+        );
+        assert!(
+            child.0.try_wait().unwrap().is_none(),
+            "pin holder must span the migration"
+        );
+        drop(child);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "spawned by the separate-process pinning test"]
+    fn hold_windows_layout() {
+        let root = std::env::var_os("MOSS_CUSTODY_PIN_ROOT").unwrap();
+        let ready = std::env::var_os("MOSS_CUSTODY_PIN_READY").unwrap();
+        let stop = std::env::var_os("MOSS_CUSTODY_PIN_STOP").unwrap();
+        let layout = Layout::open(std::path::Path::new(&root)).unwrap();
+        std::fs::write(ready, b"ready").unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(45);
+        while !std::path::Path::new(&stop).exists() {
+            assert!(std::time::Instant::now() < until, "pin holder timed out");
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        drop(layout);
+    }
 }

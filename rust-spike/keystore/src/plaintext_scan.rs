@@ -6,7 +6,21 @@ use std::{
 };
 
 pub(crate) fn contains(path: &Path, secrets: &[Vec<u8>]) -> io::Result<bool> {
-    let mut file = File::open(path)?;
+    // Sockets and pipes do not contain persistent file bytes. Never open a
+    // pipe here: it can block the scan. Follow links so linked copies count.
+    let metadata = match std::fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    if !metadata.is_file() {
+        return Ok(false);
+    }
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
     let overlap = secrets
         .iter()
         .map(Vec::len)

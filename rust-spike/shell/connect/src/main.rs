@@ -74,6 +74,7 @@ enum UserEvent {
     },
     Connect(String),
     RecoveryPending(Box<PendingCustody>),
+    CustodyReady(String),
     /// A server page failed to load; check whether the server is still there.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     Check(String),
@@ -537,6 +538,12 @@ impl App {
                     self.handle(*event);
                 }
             }
+            UserEvent::CustodyReady(id) => {
+                self.pending_custody_state = None;
+                self.pending_recovery = None;
+                self.pending_custody = None;
+                self.connect(id);
+            }
             UserEvent::RecoveryPending(pending) => {
                 let state = pending.state();
                 self.pending_recovery =
@@ -899,33 +906,45 @@ impl App {
         self.servers.last = Some(id.clone());
         self.save();
         if let Some(Target::Local {
-            folder,
-            instance: name,
-            ..
+            folder, instance, ..
         }) = self.store.find(&self.servers, &id)
         {
-            // An old file beside a bundle is an interrupted migration. It
-            // resumes and shows fresh words before it counts as done.
-            // A finished migration still checks its key store before
-            // opening; an old file beside a bundle resumes the migration.
-            let needs = folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
-                || folder.join(keystore::custody::BUNDLE_FILE).exists();
-            if needs {
-                self.pending_custody = Some((name.clone(), id.clone()));
-                match custody_setup(&folder, &name) {
-                    Ok(Some(pending)) => {
-                        let state = pending.state();
-                        self.pending_recovery =
-                            Some((pending.words(), vec![4, 11, 19], id.clone()));
-                        self.pending_custody_state = Some(pending);
-                        return self.show(state);
-                    }
-                    Ok(None) => {}
-                    Err(state) => return self.show(state),
-                }
+            if folder.join(keystore::custody::LEGACY_CREDENTIALS).exists()
+                || folder.join(keystore::custody::BUNDLE_FILE).exists()
+            {
+                return self.check_custody(instance, id);
             }
         }
         self.connect(id);
+    }
+
+    fn check_custody(&mut self, instance: String, id: String) {
+        self.pending_custody = Some((instance.clone(), id.clone()));
+        self.show(json!({"screen":"connecting", "name":"This computer"}));
+        let folder = self.store.instance_folder(&instance);
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
+        self.runtime.spawn(async move {
+            let (worker_instance, worker_id) = (instance.clone(), id.clone());
+            let result = tokio::task::spawn_blocking(move || {
+                match custody_setup(&folder, &worker_instance) {
+                    Ok(Some(pending)) => UserEvent::RecoveryPending(Box::new(pending)),
+                    Ok(None) => UserEvent::CustodyReady(worker_id),
+                    Err(mut state) => {
+                        state["instance"] = json!(worker_instance);
+                        state["id"] = json!(worker_id);
+                        UserEvent::Show(state)
+                    }
+                }
+            })
+            .await;
+            let event = result.unwrap_or_else(|_| {
+                UserEvent::Show(json!({
+                    "screen":"recovery-key", "code":"app_keystore_unavailable",
+                    "reason":"Check your key store, then try again.", "instance":instance, "id":id
+                }))
+            });
+            let _ = proxy.send_event(UserEvent::Later(turn, Box::new(event)));
+        });
     }
 
     fn recovery_check(&mut self, message: &Value) {
@@ -945,51 +964,42 @@ impl App {
                 }));
             }
         }
-        // The plain file is deleted only now, after the owner checked the words.
+        // Commit and its whole-root scan must not block the window either.
         if let Some(mut pending) = self.pending_custody_state.take() {
-            let service = pending.service.clone();
-            if let Err(error) = pending
-                .prepared
-                .commit_with(pending.store.as_mut(), &service)
-            {
-                // The finish rolled the bundle back. Point the settings at
-                // the plain file again, so a normal start stays retryable.
-                let folder = self.store.instance_folder(&pending.instance);
-                let network_file = folder.join(moss_network::instance::NETWORK_FILE);
-                if let Ok(mut config) = moss_network::config::Config::read(&network_file) {
-                    config.credentials = folder.join(keystore::custody::LEGACY_CREDENTIALS);
-                    let _ = config.write(&network_file);
-                }
-                self.pending_custody = Some((pending.instance.clone(), pending.id.clone()));
-                return self.show(json!({
-                    "screen": "recovery-key", "code": custody_code(&error), "reason": error.reason(),
-                    "instance": pending.instance, "id": pending.id
-                }));
-            }
+            let folder = self.store.instance_folder(&pending.instance);
+            let (proxy, turn) = (self.proxy.clone(), self.turn);
+            self.show(json!({"screen":"connecting", "name":"This computer"}));
+            self.runtime.spawn_blocking(move || {
+                let service = pending.service.clone();
+                let event = match pending.prepared.commit_with(pending.store.as_mut(), &service) {
+                    Ok(()) => UserEvent::CustodyReady(id),
+                    Err(error) => {
+                        let network_file = folder.join(moss_network::instance::NETWORK_FILE);
+                        if let Ok(mut config) = moss_network::config::Config::read(&network_file) {
+                            config.credentials = folder.join(keystore::custody::LEGACY_CREDENTIALS);
+                            let _ = config.write(&network_file);
+                        }
+                        UserEvent::Show(json!({
+                            "screen":"recovery-key", "code":custody_code(&error), "reason":error.reason(),
+                            "instance":pending.instance, "id":pending.id
+                        }))
+                    }
+                };
+                let _ = proxy.send_event(UserEvent::Later(turn, Box::new(event)));
+            });
+        } else {
+            self.pending_recovery = None;
+            self.pending_custody = None;
+            self.connect(id);
         }
-        self.pending_recovery = None;
-        self.pending_custody = None;
-        self.connect(id);
     }
 
     fn recovery_retry(&mut self) {
         if let Some(pending) = &self.pending_custody_state {
-            let state = pending.state();
-            return self.show(state);
+            return self.show(pending.state());
         }
-        let Some((name, id)) = self.pending_custody.clone() else {
-            return;
-        };
-        let folder = self.store.instance_folder(&name);
-        match custody_setup(&folder, &name) {
-            Ok(Some(pending)) => {
-                let state = pending.state();
-                self.pending_recovery = Some((pending.words(), vec![4, 11, 19], id.clone()));
-                self.pending_custody_state = Some(pending);
-                self.show(state)
-            }
-            Ok(None) => self.connect(id),
-            Err(state) => self.show(state),
+        if let Some((instance, id)) = self.pending_custody.clone() {
+            self.check_custody(instance, id);
         }
     }
 

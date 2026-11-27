@@ -616,3 +616,22 @@ fn different_store_retry_cannot_replace_unreadable_database_credentials() {
     assert!(migrate(dir.path(), &mut second, "svc", false).is_err());
     assert!(fs::read(dir.path().join("key-bundle.json")).unwrap() == old_bundle);
 }
+
+#[cfg(unix)]
+#[test]
+fn migration_scans_regular_database_files_beside_a_live_socket() {
+    let dir = tempfile::tempdir().unwrap();
+    let run = dir.path().join("database/run");
+    fs::create_dir_all(&run).unwrap();
+    let _socket = std::os::unix::net::UnixListener::bind(run.join(".s.PGSQL.5432")).unwrap();
+    fs::write(dir.path().join("credentials.json"), CREDS).unwrap();
+    let mut store = MemoryStore::new(FakeMode::Working);
+    keystore::custody::prepare_instance(dir.path(), &mut store, "svc")
+        .unwrap()
+        .commit_with(&mut store, "svc")
+        .unwrap();
+    assert!(find_plaintext(dir.path(), &[CREDS.to_vec()]).is_empty());
+    let stray = dir.path().join("database/run/stray-copy");
+    fs::write(&stray, CREDS).unwrap();
+    assert_eq!(find_plaintext(dir.path(), &[CREDS.to_vec()]), vec![stray]);
+}

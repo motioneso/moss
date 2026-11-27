@@ -614,6 +614,8 @@ pub fn find_plaintext(root: &Path, secrets: &[Vec<u8>]) -> Vec<PathBuf> {
         }
         let entries = match fs::read_dir(&dir) {
             Ok(entries) => entries,
+            // A disappearing live database folder has no bytes left to scan.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             // A folder that cannot be read cannot be cleared, so it counts.
             Err(_) => {
                 hits.push(dir);
