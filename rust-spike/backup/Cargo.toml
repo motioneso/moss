@@ -24,6 +24,7 @@ postgres = "0.19"
 rand = "0.8"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
+tar = "0.4"
 
 [dev-dependencies]
 tempfile = "3"

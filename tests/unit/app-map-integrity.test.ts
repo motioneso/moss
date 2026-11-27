@@ -85,7 +85,8 @@ describe("app-map integrity and truthfulness", () => {
     [
       "../../rust-spike/network/src/web.rs",
       "../../rust-spike/shell/connect/src/reach.rs",
-      "../../rust-spike/shell/connect/src/main.rs"
+      "../../rust-spike/shell/connect/src/main.rs",
+      "../../rust-spike/backup/src/bin/moss-docker-export.rs"
     ].flatMap((file) =>
       [...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/"([a-z_]+)"/g)].map(
         (match) => match[1]
@@ -139,6 +140,8 @@ describe("app-map integrity and truthfulness", () => {
       "rust-network-sharing"
     ]);
     for (const entry of [...rustMap.screens, ...rustMap.settings, ...rustMap.remediations]) {
+      // Host-only remedies have instructions and no screen.
+      if ("scope" in entry && entry.scope === "system" && entry.path === undefined) continue;
       // Catalog, install and lifecycle screens are query views of the declared shell route.
       expect(
         rustRoutes.has((entry.path ?? "").split("?")[0] ?? ""),
@@ -372,6 +375,7 @@ describe("app-map integrity and truthfulness", () => {
     const rustRemediations = CORE_APP_REMEDIATIONS.filter((entry) => entry.runtime === "rust");
     expect(rustRemediations.length).toBeGreaterThan(0);
     for (const entry of rustRemediations) {
+      if ("scope" in entry && entry.scope === "system" && entry.path === undefined) continue;
       const path = entry.path ?? "";
       // A query view must name a declared screen on a real HTTP route.
       expect(

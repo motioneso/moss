@@ -1,3 +1,4 @@
+import { DOCKER_EXPORT_ERRORS, DOCKER_EXPORT_REMEDIATIONS } from "./app-map-docker.js";
 import * as RustModules from "./app-map-rust-modules.js";
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
 import { RUST_CHAT_REMEDIATIONS } from "./app-map-rust-chat.js";
@@ -599,6 +600,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
 ];
 
 export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  ...DOCKER_EXPORT_ERRORS,
   ...RustModules.RUST_MODULE_ERRORS,
   {
     code: "sign_in_body_timeout",
@@ -824,6 +826,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
 ];
 
 export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  ...DOCKER_EXPORT_REMEDIATIONS,
   {
     id: "rust-sign-in-retry",
     runtime: "rust",

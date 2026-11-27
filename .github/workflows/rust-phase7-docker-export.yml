@@ -1,0 +1,55 @@
+name: Rust phase7_docker_export
+on:
+  pull_request:
+    paths:
+      - "rust-spike/backup/**"
+      - "rust-spike/keystore/**"
+      - "rust-spike/Cargo.toml"
+      - "rust-spike/Cargo.lock"
+      - "packages/shared/src/app-map-core.ts"
+      - "packages/shared/src/app-map-docker.ts"
+      - "package.json"
+      - ".github/workflows/rust-phase7-docker-export.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  phase7_docker_export:
+    # The source Docker hosts are Linux. No macOS/Windows Docker-host claim in this part.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: "1"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PHASE7_DOCKER_RESTART_DAEMON: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select task-owned paths and CI port leases
+        run: |
+          mkdir -p "$RUNNER_TEMP/js440-bin" "$RUNNER_TEMP/js440-scratch"
+          ln -s "$GITHUB_WORKSPACE/rust-spike/backup/tools/ci-devports" "$RUNNER_TEMP/js440-bin/devports"
+          echo "$RUNNER_TEMP/js440-bin" >> "$GITHUB_PATH"
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/js440-target" >> "$GITHUB_ENV"
+          echo "PHASE7_DOCKER_SCRATCH=$RUNNER_TEMP/js440-scratch" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$HOME/.rustup" >> "$GITHUB_ENV"
+          echo "PHASE7_DOCKER_RUNNER=${{ runner.environment }}" >> "$GITHUB_ENV"
+      - name: Use declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Archive and receipt tests
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p moss-backup --lib -- --test-threads=1
+      - name: phase7_docker_export from published image
+        run: python3 rust-spike/backup/tools/phase7_docker_export.py
+      - name: Each removed protection must fail its own assertion
+        run: python3 rust-spike/backup/tools/docker_export_negative_controls.py
+      - name: Repeat with production protections restored
+        run: python3 rust-spike/backup/tools/phase7_docker_export.py --no-build
+      - name: Remove task build output
+        if: always()
+        run: rm -rf "$CARGO_TARGET_DIR" "$PHASE7_DOCKER_SCRATCH"
