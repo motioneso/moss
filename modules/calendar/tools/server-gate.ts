@@ -1,7 +1,7 @@
 /** Real Rust server over HTTPS with the installed Calendar package. Run through verify-gate. */
 import { networkInterfaces } from "node:os";
 import { spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getMossDatabaseUrls } from "@moss/db";
 
@@ -147,6 +147,18 @@ cargo([
   "--bin",
   "moss-network"
 ]);
+// Only disposable CI answers the graphical firewall approval with a scripted
+// approval. The production helper still adds, checks and removes the real rule.
+// Local runs keep the normal owner prompt.
+const firewallApproval: Record<string, string> = {};
+if (process.env.GITHUB_ACTIONS === "true") {
+  if (spawnSync("sudo", ["-n", "ufw", "show", "added"], { stdio: "inherit" }).status !== 0) {
+    throw new Error("The CI firewall approval needs passwordless sudo and ufw");
+  }
+  const standIn = join(target, "calendar-firewall-approve");
+  writeFileSync(standIn, '#!/bin/sh\nexec sudo -n -- "$@"\n', { mode: 0o700 });
+  firewallApproval.MOSS_FIREWALL_STAND_IN = standIn;
+}
 cargo(
   [
     "test",
@@ -161,6 +173,7 @@ cargo(
     "--nocapture"
   ],
   {
+    ...firewallApproval,
     MOSS_CALENDAR_PUBLIC_HOST: address,
     MOSS_CALENDAR_SHELL_WEB: shellWeb,
     JS181_CALENDAR_PACKAGE: calendarPackage,

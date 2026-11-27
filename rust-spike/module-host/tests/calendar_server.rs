@@ -109,7 +109,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("0.0.0.0:{}",port.0),"origins":origins,"sharing":true,"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"origins":origins,"sharing":false,"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -322,6 +322,22 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
     );
     let _server = start(true);
+    // A saved sharing flag no longer opens the network on its own. The owner turns
+    // sharing on through the real route, which opens the firewall rule first.
+    let turned_on = client
+        .put(format!("{origin}/api/network"))
+        .header("origin", &origin)
+        .header("cookie", &cookie)
+        .json(&json!({"sharing":true}))
+        .send()
+        .unwrap();
+    let turned_on_status = turned_on.status().as_u16();
+    let turned_on_body: Value = turned_on.json().unwrap_or(Value::Null);
+    assert_eq!(
+        (turned_on_status, turned_on_body["sharing"].as_bool()),
+        (200, Some(true)),
+        "owner turns sharing on: {turned_on_body}"
+    );
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client
             .request(method, format!("{origin}/api/m/calendar{path}"))
@@ -555,7 +571,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     {
         let script = std::env::var("MOSS_CALENDAR_BROWSER_SCRIPT").expect("the gate must supply the browser script");
         let out = std::env::var("MOSS_CALENDAR_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
-        let status = Command::new("pnpm")
+        let output = Command::new("pnpm")
             .args(["exec", "tsx", &script])
             .env("ORIGIN", &origin)
             .env("PUBLIC_ORIGIN", &public)
@@ -564,9 +580,17 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             )
             .env("EVENT_TITLE", event_title)
             .env("OUT", out)
-            .status()
+            .output()
             .unwrap();
-        assert!(status.success(), "browser check failed\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+        print!("{}", String::from_utf8_lossy(&output.stdout));
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "browser check failed\nbrowser stdout:\n{}\nbrowser stderr:\n{}\nserver log:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+            fs::read_to_string(root.join("server.log")).unwrap_or_default()
+        );
     }
     // Optional manual browser check: keep the server up and print where it is.
     if let Ok(seconds) = std::env::var("MOSS_CALENDAR_HOLD_SECONDS") {
